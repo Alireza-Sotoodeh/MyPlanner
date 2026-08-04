@@ -3513,6 +3513,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
     var expandAllDescriptions by remember { mutableStateOf(false) }
+    var sortTodosByPriority by remember { mutableStateOf(false) }
 
     var showFilterChips by remember { mutableStateOf(true) }
     val filterChipScrollConnection = remember {
@@ -3529,6 +3530,19 @@ private fun TodoTab(viewModel: MainViewModel) {
         TodoTabFilter.ALL -> allTodos
         TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
         TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
+    }.let { list ->
+        if (sortTodosByPriority) {
+            list.sortedWith(
+                compareBy {
+                    when (it.priority) {
+                        "High" -> 1
+                        "Medium" -> 2
+                        "Low" -> 3
+                        else -> 4
+                    }
+                }
+            )
+        } else list
     }
 
     Column(
@@ -3594,6 +3608,17 @@ private fun TodoTab(viewModel: MainViewModel) {
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            )
+                        }
+                        IconButton(
+                            onClick = { sortTodosByPriority = !sortTodosByPriority },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sort,
+                                contentDescription = if (sortTodosByPriority) "Sort by Default" else "Sort by Priority",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                         if (allTodos.any { it.description.isNotBlank() }) {
