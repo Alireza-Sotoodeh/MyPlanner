@@ -601,28 +601,52 @@ class MainViewModel(
 
     // Timer Sessions (history)
     private val _historyDateRange = MutableStateFlow("today")
+    private val _historySelectedDate = MutableStateFlow<String?>(null)
 
-    val timerHistorySessions: StateFlow<List<TimerSessionEntity>> = _historyDateRange.flatMapLatest { range ->
+    val timerHistorySessions: StateFlow<List<TimerSessionEntity>> = combine(
+        _historyDateRange,
+        _historySelectedDate
+    ) { range, specificDate ->
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val startDate = when (range) {
-            "today" -> todayStr
+        when (range) {
+            "today" -> todayStr to todayStr
             "week" -> {
                 val cal = Calendar.getInstance()
                 cal.add(Calendar.DAY_OF_YEAR, -7)
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time) to todayStr
             }
             "month" -> {
                 val cal = Calendar.getInstance()
                 cal.add(Calendar.MONTH, -1)
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time) to todayStr
             }
-            else -> todayStr
+            "specific_date" -> {
+                val date = specificDate ?: todayStr
+                date to date
+            }
+            else -> todayStr to todayStr
         }
-        timerRepository.getSessionsForDateRange(startDate, todayStr)
+    }.flatMapLatest { (start, end) ->
+        timerRepository.getSessionsForDateRange(start, end)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setHistoryDateRange(range: String) {
+        if (range != "specific_date") {
+            _historySelectedDate.value = null
+        }
         _historyDateRange.value = range
+    }
+
+    fun selectHistoryDate(gregorianDate: String) {
+        _historySelectedDate.value = gregorianDate
+        _historyDateRange.value = "specific_date"
+    }
+
+    val historySelectedDate: StateFlow<String?> = _historySelectedDate.asStateFlow()
+
+    fun clearHistoryDateSelection() {
+        _historySelectedDate.value = null
+        _historyDateRange.value = "today"
     }
 
     // Pre-selected task for Timer (from Planner)
