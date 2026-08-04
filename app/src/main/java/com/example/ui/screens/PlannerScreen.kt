@@ -3500,6 +3500,7 @@ fun SettingsDialog(
     val eventReminderVibrate by viewModel.eventReminderVibrate.collectAsState()
     val eventReminderSound by viewModel.eventReminderSound.collectAsState()
     val eventReminderEnabled by viewModel.eventReminderEnabled.collectAsState()
+    val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
 
     var enteredBackupEnabled by remember { mutableStateOf(backupEnabled) }
     var enteredBackupTime by remember { mutableStateOf(backupTime) }
@@ -4661,6 +4662,126 @@ fun SettingsDialog(
                     Switch(
                         checked = mottoEnabled,
                         onCheckedChange = { viewModel.updateMottoEnabled(it) }
+                    )
+                }
+            }
+
+            // 7. Calendar
+            SettingsCard(title = "CALENDAR") {
+                Text("Default Calendar Format", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Choose the default calendar for date pickers across all screens",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Button(
+                        onClick = {
+                            if (!usePersianCalendar) viewModel.toggleUsePersianCalendar()
+                        },
+                        shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 0.dp, bottomEnd = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (usePersianCalendar) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (usePersianCalendar) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.height(42.dp),
+                        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp),
+                        border = if (!usePersianCalendar) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null
+                    ) {
+                        Text("FA", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                    Button(
+                        onClick = {
+                            if (usePersianCalendar) viewModel.toggleUsePersianCalendar()
+                        },
+                        shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 10.dp, bottomEnd = 10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!usePersianCalendar) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (!usePersianCalendar) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.height(42.dp),
+                        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp),
+                        border = if (usePersianCalendar) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null
+                    ) {
+                        Text("EN", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (usePersianCalendar) "Currently: Persian (Shamsi)"
+                           else "Currently: Western (Gregorian)",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+
+            // 7. Calendar
+            SettingsCard(title = "CALENDAR") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Default Calendar Format",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "Choose the default calendar for date pickers across all screens",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 0.dp, bottomEnd = 0.dp)
+                        Button(
+                            onClick = { if (!usePersianCalendar) viewModel.toggleUsePersianCalendar() },
+                            shape = shape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (usePersianCalendar) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (usePersianCalendar) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.height(44.dp).width(88.dp),
+                            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp)
+                        ) {
+                            Text("FA", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                        Button(
+                            onClick = { if (usePersianCalendar) viewModel.toggleUsePersianCalendar() },
+                            shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 10.dp, bottomEnd = 10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!usePersianCalendar) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!usePersianCalendar) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.height(44.dp).width(88.dp),
+                            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp)
+                        ) {
+                            Text("EN", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Currently: ${if (usePersianCalendar) "Persian (Shamsi)" else "Western (Gregorian)"}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 }
             }
