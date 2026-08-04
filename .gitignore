@@ -18,4 +18,10 @@ local.properties
 debug.keystore
 AGENTS.md
 opencode.json
+opencode.jsonc
 /docs
+/.vscode
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store

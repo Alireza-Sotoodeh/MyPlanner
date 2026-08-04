@@ -1,6 +1,0 @@
-{
-  "name": "My Planner",
-  "description": "Local-first Bullet Journal, Pomodoro timers, and Habit/Sleep tracking with full offline support.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
