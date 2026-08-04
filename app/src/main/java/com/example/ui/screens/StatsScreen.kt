@@ -79,6 +79,7 @@ import com.example.core.utils.PersianCalendarHelper
 import com.example.core.database.entity.TimerSessionEntity
 import com.example.core.database.entity.HabitLogEntity
 import com.example.core.database.entity.HabitEntity
+import com.example.core.database.entity.TaskEntity
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Path
@@ -623,7 +624,196 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 3. Sleep Logs Card
+        // 3. Habit Consistency Score
+        item {
+            var consistencyRangeMode by remember { mutableStateOf("30D") }
+            var consistencySortBy by remember { mutableStateOf("CONSISTENCY") }
+
+            val habitConsistencyData = remember(habits, allHabitLogs, consistencyRangeMode) {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val cal = Calendar.getInstance()
+                val now = sdf.format(cal.time)
+                val rangeStart = when (consistencyRangeMode) {
+                    "7D" -> { cal.add(Calendar.DAY_OF_MONTH, -6); sdf.format(cal.time) }
+                    "30D" -> { cal.add(Calendar.DAY_OF_MONTH, -29); sdf.format(cal.time) }
+                    else -> { cal.add(Calendar.DAY_OF_MONTH, -29); sdf.format(cal.time) }
+                }
+                computeHabitConsistency(rangeStart, now, habits, allHabitLogs)
+            }
+
+            val sortedConsistency = remember(habitConsistencyData, consistencySortBy) {
+                when (consistencySortBy) {
+                    "STREAK" -> habitConsistencyData.sortedByDescending { it.currentStreak }
+                    "NAME" -> habitConsistencyData.sortedBy { it.habitName.lowercase() }
+                    else -> habitConsistencyData.sortedByDescending { it.consistency }
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "HABIT CONSISTENCY",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.5.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("7D", "30D").forEach { mode ->
+                                val isSel = consistencyRangeMode == mode
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isSel) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.clickable { consistencyRangeMode = mode }
+                                ) {
+                                    Text(
+                                        text = mode,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSel) MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (habitConsistencyData.isEmpty()) {
+                        Text(
+                            text = "No habit data in this period.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Sort:", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(4.dp))
+                            listOf("CONSISTENCY" to "Consistency", "STREAK" to "Streak", "NAME" to "Name").forEach { (key, label) ->
+                                val isSel = consistencySortBy == key
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isSel) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clickable { consistencySortBy = key }
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSel) MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        sortedConsistency.forEach { data ->
+                            val consistencyColor = when {
+                                data.consistency >= 0.75f -> Color(0xFF4CAF50)
+                                data.consistency >= 0.4f -> Color(0xFFFFC107)
+                                else -> Color(0xFFF44336)
+                            }
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(CircleShape)
+                                                .background(consistencyColor)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = data.habitName,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    Text(
+                                        text = "${(data.consistency * 100).toInt()}%",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = consistencyColor
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                LinearProgressIndicator(
+                                    progress = { data.consistency },
+                                    color = consistencyColor,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape)
+                                )
+
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                            val streakLabel = when {
+                                data.currentStreak > 0 -> "${data.currentStreak}-day streak"
+                                else -> "No current streak"
+                            }
+                                    Text(
+                                        text = streakLabel,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "${data.doneDays}/${data.eligibleDays} days",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (data != sortedConsistency.last()) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Sleep Logs Card
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1101,7 +1291,7 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 5. Merged: Task Accomplishments + Time Spent by Label + Time of Day Activity
+        // 5. Task Completion Trend + Time by Label + Time of Day
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1111,9 +1301,27 @@ fun StatsScreen(viewModel: MainViewModel) {
                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    // ── Task Accomplishments ──
+                    // ── Task Completion Trend ──
+                    var taskRangeMode by remember { mutableStateOf("7D") }
+                    var taskGraphYear by remember(usePersianCalendar) { mutableIntStateOf(
+                        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear()
+                        else Calendar.getInstance().get(Calendar.YEAR)
+                    ) }
+                    var taskGraphMonth by remember(usePersianCalendar) { mutableIntStateOf(
+                        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth()
+                        else Calendar.getInstance().get(Calendar.MONTH) + 1
+                    ) }
+
+                    val taskGraphRange = remember(taskGraphYear, taskGraphMonth, usePersianCalendar, taskRangeMode) {
+                        computeLineGraphRange(taskGraphYear, taskGraphMonth, usePersianCalendar, taskRangeMode)
+                    }
+
+                    val taskCompletionData = remember(taskGraphRange, allTasks) {
+                        computeTaskCompletionRate(taskGraphRange.first, taskGraphRange.second, allTasks)
+                    }
+
                     Text(
-                        text = "TASK ACCOMPLISHMENTS",
+                        text = "TASK COMPLETION TREND",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -1122,48 +1330,183 @@ fun StatsScreen(viewModel: MainViewModel) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val tasks = allTasks.filter { it.date == todayDateStr }
-                    if (tasks.isEmpty()) {
+                    // Nav + range toggle row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (taskRangeMode == "MONTH") {
+                            IconButton(
+                                onClick = {
+                                    if (usePersianCalendar) {
+                                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(taskGraphYear, taskGraphMonth, -1)
+                                        taskGraphYear = y; taskGraphMonth = m
+                                    } else {
+                                        if (taskGraphMonth == 1) { taskGraphYear--; taskGraphMonth = 12 }
+                                        else taskGraphMonth--
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, "Previous", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
+                            Text(
+                                text = taskGraphRange.third,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
+                            )
+                            IconButton(
+                                onClick = {
+                                    if (usePersianCalendar) {
+                                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(taskGraphYear, taskGraphMonth, 1)
+                                        taskGraphYear = y; taskGraphMonth = m
+                                    } else {
+                                        if (taskGraphMonth == 12) { taskGraphYear++; taskGraphMonth = 1 }
+                                        else taskGraphMonth++
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, "Next", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = { viewModel.toggleUsePersianCalendar() }, modifier = Modifier.size(28.dp)) {
+                                Text(
+                                    if (usePersianCalendar) "EN" else "FA",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = if (taskRangeMode == "7D") "Last 7 Days" else "Last 30 Days",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("7D", "30D", "MONTH").forEach { mode ->
+                                val isSelected = taskRangeMode == mode
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.clickable {
+                                        taskRangeMode = mode
+                                        if (mode == "MONTH") {
+                                            if (usePersianCalendar) {
+                                                taskGraphYear = PersianCalendarHelper.getCurrentPersianYear()
+                                                taskGraphMonth = PersianCalendarHelper.getCurrentPersianMonth()
+                                            } else {
+                                                val now = Calendar.getInstance()
+                                                taskGraphYear = now.get(Calendar.YEAR)
+                                                taskGraphMonth = now.get(Calendar.MONTH) + 1
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = mode,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Today summary row
+                    val sdfToday = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+                    val tomorrowStr = remember {
+                        val cal = Calendar.getInstance()
+                        cal.add(Calendar.DAY_OF_YEAR, 1)
+                        sdfToday.format(cal.time)
+                    }
+                    val doneToday = allTasks.count { it.date == todayDateStr && it.status == "COMPLETED" && !it.postponed && it.type != "NOTE" }
+                    val postponedToTomorrow = allTasks.count { it.date == tomorrowStr && it.postponed && it.type != "NOTE" }
+                    val remainingToday = allTasks.count { it.date == todayDateStr && it.status == "PENDING" && !it.postponed && it.type != "NOTE" }
+
+                    val summaryPrimary = MaterialTheme.colorScheme.primary
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "DONE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(text = "$doneToday", fontSize = 20.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "POSTPONED", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "$postponedToTomorrow", fontSize = 20.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "REMAINING", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "$remainingToday", fontSize = 20.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Line chart: completion rate over days
+                    if (taskCompletionData.all { it.total == 0 }) {
                         Text(
-                            text = "Create and complete intentions to compile stats.",
+                            text = "No task data in this period.",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        val completed = tasks.count { it.status == "COMPLETED" }
-                        val total = tasks.size
-                        val progress = if (total > 0) completed.toFloat() / total.toFloat() else 0f
+                        val maxRate = 1f
+                        val taskPrimary = MaterialTheme.colorScheme.primary
+                        val rateValues = taskCompletionData.map { it.completionRate }
+                        val avgRate = remember(rateValues) {
+                            val nonZero = rateValues.filter { it > 0f }
+                            if (nonZero.isNotEmpty()) nonZero.average().toFloat() else 0f
+                        }
+
+                        LineChartCanvas(
+                            lines = listOf(LineChartLine(
+                                values = rateValues,
+                                color = taskPrimary,
+                                label = "Completion"
+                            )),
+                            maxY = maxRate,
+                            minY = 0f,
+                            yStep = 0.25f,
+                            yLabelFormatter = { "${(it * 100).toInt()}%" },
+                            xLabels = taskCompletionData.map { it.day.toString() },
+                            dateStrs = taskCompletionData.map { it.dateStr },
+                            gradientFill = true,
+                            height = 160.dp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "${(progress * 100).toInt()}% productivity",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Light,
-                                color = MaterialTheme.colorScheme.primary
+                                text = "Avg: ${"%.0f".format(avgRate * 100)}% completion",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "$completed of $total done",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = "${taskCompletionData.count { it.done > 0 }} of ${taskCompletionData.size} days with completions",
+                                fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(12.dp)
-                                .clip(CircleShape)
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1456,7 +1799,7 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 5. Activity Heatmap
+        // 6. Activity Heatmap
         item {
             ActivityHeatmapSection(
                 lazyListState = lazyListState,
@@ -1862,6 +2205,161 @@ private fun formatDuration(totalSeconds: Int): String {
         if (h > 0) append("${h}h ")
         if (m > 0 || h > 0) append("${m}m ")
         append("${s}s")
+    }
+}
+
+// ── Task Completion Rate Helpers ──
+
+private data class TaskCompletionPoint(
+    val dateStr: String,
+    val day: Int,
+    val total: Int,
+    val done: Int,
+    val completionRate: Float
+)
+
+private fun computeTaskCompletionRate(
+    startDate: String,
+    endDate: String,
+    allTasks: List<TaskEntity>
+): List<TaskCompletionPoint> {
+    if (startDate.isBlank() || endDate.isBlank()) return emptyList()
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+    val start = sdf.parse(startDate) ?: return emptyList()
+    val end = sdf.parse(endDate) ?: return emptyList()
+
+    val tasksByDate = allTasks.groupBy { it.date }
+    val results = mutableListOf<TaskCompletionPoint>()
+    cal.time = start
+    while (!cal.time.after(end)) {
+        val dateStr = sdf.format(cal.time)
+        val dayTasks = tasksByDate[dateStr] ?: emptyList()
+        val total = dayTasks.count { !it.postponed && it.type != "NOTE" }
+        val done = dayTasks.count { !it.postponed && it.status == "COMPLETED" && it.type != "NOTE" }
+        results.add(
+            TaskCompletionPoint(
+                dateStr = dateStr,
+                day = cal.get(Calendar.DAY_OF_MONTH),
+                total = total,
+                done = done,
+                completionRate = if (total > 0) done.toFloat() / total.toFloat() else 0f
+            )
+        )
+        cal.add(Calendar.DAY_OF_MONTH, 1)
+    }
+    return results
+}
+
+// ── Habit Consistency Helpers ──
+
+private data class HabitConsistencyData(
+    val habitName: String,
+    val consistency: Float,
+    val currentStreak: Int,
+    val bestStreak: Int,
+    val doneDays: Int,
+    val eligibleDays: Int
+)
+
+private fun computeHabitConsistency(
+    startDate: String,
+    endDate: String,
+    habits: List<HabitEntity>,
+    allLogs: List<HabitLogEntity>
+): List<HabitConsistencyData> {
+    if (startDate.isBlank() || endDate.isBlank() || habits.isEmpty()) return emptyList()
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+    val start = sdf.parse(startDate) ?: return emptyList()
+    val end = sdf.parse(endDate) ?: return emptyList()
+
+    val logsByHabit = allLogs.filter { it.date in startDate..endDate }.groupBy { it.habitId }
+
+    return habits.mapNotNull { habit ->
+        val habitLogs = logsByHabit[habit.id] ?: emptyList()
+        val logMap = habitLogs.associateBy { it.date }
+
+        val eligibleDaysOfWeek = if (habit.recurrenceMode == "WEEKLY") {
+            habit.recurrenceDaysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+        } else null
+
+        val allDates = mutableListOf<String>()
+        cal.time = start
+        while (!cal.time.after(end)) {
+            val dateStr = sdf.format(cal.time)
+            val isEligible = when (habit.recurrenceMode) {
+                "ALWAYS" -> true
+                "WEEKLY" -> {
+                    val dow = when (cal.get(Calendar.DAY_OF_WEEK)) {
+                        Calendar.SUNDAY -> 1
+                        Calendar.MONDAY -> 2
+                        Calendar.TUESDAY -> 3
+                        Calendar.WEDNESDAY -> 4
+                        Calendar.THURSDAY -> 5
+                        Calendar.FRIDAY -> 6
+                        Calendar.SATURDAY -> 7
+                        else -> -1
+                    }
+                    dow in eligibleDaysOfWeek!!
+                }
+                else -> false
+            }
+            if (isEligible) allDates.add(dateStr)
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
+        val eligibleDays = allDates.size
+        if (eligibleDays == 0) return@mapNotNull null
+
+        val doneDays = allDates.count { dateStr ->
+            val log = logMap[dateStr]
+            log != null && log.value >= habit.target
+        }
+
+        val todayStr = sdf.format(Calendar.getInstance().time)
+        var currentStreak = 0
+        val streakCal = Calendar.getInstance()
+        val todayParsed = sdf.parse(todayStr) ?: return@mapNotNull null
+        streakCal.time = todayParsed
+        while (true) {
+            val dateStr = sdf.format(streakCal.time)
+            val log = logMap[dateStr]
+            if (log != null && log.value >= habit.target) {
+                currentStreak++
+                streakCal.add(Calendar.DAY_OF_MONTH, -1)
+            } else break
+        }
+
+        val doneLogs = habitLogs.filter { it.value >= habit.target }
+            .sortedByDescending { it.date }
+        var bestStreak = 0
+        var run = 0
+        var prevDate: String? = null
+        val dayMs = 86400000L
+        for (log in doneLogs) {
+            if (prevDate == null) {
+                run = 1
+            } else {
+                try {
+                    val cur = sdf.parse(log.date)
+                    val prev = sdf.parse(prevDate)
+                    val diff = (prev.time - cur.time) / dayMs
+                    if (diff == 1L) run++ else run = 1
+                } catch (_: Exception) { run = 1 }
+            }
+            bestStreak = maxOf(bestStreak, run)
+            prevDate = log.date
+        }
+
+        HabitConsistencyData(
+            habitName = habit.name,
+            consistency = if (eligibleDays > 0) doneDays.toFloat() / eligibleDays.toFloat() else 0f,
+            currentStreak = currentStreak,
+            bestStreak = bestStreak,
+            doneDays = doneDays,
+            eligibleDays = eligibleDays
+        )
     }
 }
 
