@@ -165,9 +165,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
 
     LaunchedEffect(selectedTab) {
-        if (selectedTab == 0) {
-            viewModel.selectDate(viewModel.todayDate.value)
-        }
+        viewModel.selectDate(viewModel.todayDate.value)
     }
 
     Column(
