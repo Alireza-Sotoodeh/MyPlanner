@@ -556,6 +556,19 @@ class MainViewModel(
         return id
     }
 
+    private val _preferredTimerTab = MutableStateFlow<Int?>(null)
+    val preferredTimerTab: StateFlow<Int?> = _preferredTimerTab.asStateFlow()
+
+    fun setPreferredTimerTab(tab: Int?) {
+        _preferredTimerTab.value = tab
+    }
+
+    fun consumePreferredTimerTab(): Int? {
+        val tab = _preferredTimerTab.value
+        _preferredTimerTab.value = null
+        return tab
+    }
+
     private var pomodoroJob: Job? = null
     private var originalDndState = false
 
