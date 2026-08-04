@@ -650,9 +650,8 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
             Text(
                 text = formattedDate,
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Light, // Clean elegant thin typography
-                color = MaterialTheme.colorScheme.onBackground,
-                letterSpacing = (-0.5).sp
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
@@ -661,21 +660,10 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
             horizontalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             IconButton(onClick = onHomeClick) {
-                Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
-                )
+                Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
-            // Settings Icon Button
             IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
-                )
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
         }
     }
