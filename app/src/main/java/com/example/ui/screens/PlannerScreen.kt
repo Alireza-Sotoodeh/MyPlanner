@@ -4244,17 +4244,16 @@ fun SettingsDialog(
             }
 
             // 2. Permissions status
-            run {
-                val requiredGranted = (if (permHasNotification) 1 else 0) +
-                    (if (permHasExactAlarm) 1 else 0) +
-                    (if (permHasUsageStats) 1 else 0) +
-                    (if (permHasDndAccess) 1 else 0) +
-                    (if (Build.VERSION.SDK_INT >= 34 && permHasFullScreenIntent) 1 else 0)
-                val totalRequired = 4 + if (Build.VERSION.SDK_INT >= 34) 1 else 0
-                val allGranted = requiredGranted == totalRequired
-                val statusColor = if (allGranted) Color(0xFF4CAF50) else Color(0xFFE53935)
+            val requiredGranted = (if (permHasNotification) 1 else 0) +
+                (if (permHasExactAlarm) 1 else 0) +
+                (if (permHasUsageStats) 1 else 0) +
+                (if (permHasDndAccess) 1 else 0) +
+                (if (Build.VERSION.SDK_INT >= 34 && permHasFullScreenIntent) 1 else 0)
+            val totalRequired = 4 + if (Build.VERSION.SDK_INT >= 34) 1 else 0
+            val allGranted = requiredGranted == totalRequired
+            val statusColor = if (allGranted) Color(0xFF4CAF50) else Color(0xFFE53935)
 
-                SettingsCard(title = "PERMISSIONS") {
+            SettingsCard(title = "PERMISSIONS") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = if (allGranted) Icons.Default.CheckCircle else Icons.Default.Close,
@@ -4393,7 +4392,6 @@ fun SettingsDialog(
                         )
                     }
                 }
-            }
 
             // 3. Timer & Focus
             SettingsCard(title = "TIMER & FOCUS") {
