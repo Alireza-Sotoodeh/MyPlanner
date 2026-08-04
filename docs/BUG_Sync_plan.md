@@ -26,7 +26,7 @@ All issues found during comprehensive codebase audit. Check off as fixed. Items 
 
 - [x] **#41 `IdeaGroupDao` missing `getAllGroupsSync()`** — Backup reads `ideaRepository.allGroups.first()` at line 472, but `IdeaGroupDao` has no `getAllGroupsSync()` suspend method (only a Flow). If Flow is cold (no subscriber for 5s+), could return stale data. Fix: add `suspend fun getAllGroupsSync(): List<IdeaGroupEntity>` to `IdeaGroupDao` and expose through `IdeaRepository`.
 
-- [x] **#42 Restore silently skips TimerSession + TimerTemplate** — `restoreDataFromGoogleDrive()` lines 534-548 inserts 15 entity types but omits `TimerSessionEntity` and `TimerTemplateEntity`. Even after adding them to `BulletCoachBackup` (bug #14), the restore code won't restore them. Fix: add TimerSession and TimerTemplate insert loops to restore function.
+- [x] **#42 Restore silently skips TimerSession + TimerTemplate** — `restoreDataFromGoogleDrive()` lines 534-548 inserts 15 entity types but omits `TimerSessionEntity` and `TimerTemplateEntity`. Even after adding them to `BulletCoachBackup` (bug #14), the restore code won't restore them. Fix: add TimerSession and TimerTemplate insert loops to restore function. **FIXED: Added insert loops in restore function**
 
 - [x] **#43 `HabitRepository` doesn't expose `getAllHabitsSync()` — backup uses stale Flow** — `HabitDao` has `getAllHabitsSync()` but `HabitRepository` never wraps it. Backup reads `habitRepository.allHabits.first()` (line 469) — stale if Flow is cold. Fix: expose `getAllHabitsSync()` through `HabitRepository` and use in backup.
 
