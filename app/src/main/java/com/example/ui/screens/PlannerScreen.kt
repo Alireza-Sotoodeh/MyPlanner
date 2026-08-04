@@ -492,16 +492,16 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
         ) {
             LazyRow(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 item {
                     FilterChip(
                         selected = filterLabels.isEmpty() && !showPostponedOnly,
                         onClick = { onLabelsSelected(emptySet()); onPostponedToggle(false) },
-                        label = { Text("All", fontSize = 12.sp) }
+                        label = { Text("All", fontSize = 10.sp) },
+                        modifier = Modifier.height(26.dp)
                     )
                 }
                 if (postponedCount > 0) {
@@ -509,7 +509,8 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                         FilterChip(
                             selected = showPostponedOnly,
                             onClick = { onPostponedToggle(!showPostponedOnly) },
-                            label = { Text("Postponed ($postponedCount)", fontSize = 12.sp) }
+                            label = { Text("Postponed ($postponedCount)", fontSize = 10.sp) },
+                            modifier = Modifier.height(26.dp)
                         )
                     }
                 }
@@ -529,15 +530,16 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                 if (info.color != null) {
                                     Box(
                                         modifier = Modifier
-                                            .size(8.dp)
+                                            .size(6.dp)
                                             .clip(CircleShape)
                                             .background(Color(info.color))
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
-                                Text("${info.name.uppercase()} (${info.count})", fontSize = 12.sp)
+                                Text("${info.name.uppercase()} (${info.count})", fontSize = 10.sp)
                             }
-                        }
+                        },
+                        modifier = Modifier.height(26.dp)
                     )
                 }
             }
@@ -547,7 +549,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
