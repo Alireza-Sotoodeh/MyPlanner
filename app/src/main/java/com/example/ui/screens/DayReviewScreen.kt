@@ -1,6 +1,6 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -21,7 +22,6 @@ import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DayReviewScreen(
     viewModel: MainViewModel,
@@ -41,6 +41,7 @@ fun DayReviewScreen(
     var score by remember { mutableIntStateOf(review?.score ?: 5) }
     var notes by remember { mutableStateOf(review?.notes ?: "") }
     var savedMessage by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
 
     LaunchedEffect(review) {
         if (review != null) {
@@ -62,9 +63,11 @@ fun DayReviewScreen(
     }
 
     fun save() {
-        if (hasContent()) {
+        if (hasContent() && !isSaving) {
+            isSaving = true
             viewModel.saveDayReview(currentDate, good.trim(), bad.trim(), improve.trim(), gratitude.trim(), moodRating, score, notes.trim())
-            savedMessage = "Saved ✓"
+            savedMessage = "Saved"
+            isSaving = false
         }
     }
 
@@ -77,7 +80,7 @@ fun DayReviewScreen(
         } catch (_: Exception) { false }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -86,7 +89,7 @@ fun DayReviewScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { save(); onBack() }) {
+                IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
                 Column {
@@ -133,63 +136,132 @@ fun DayReviewScreen(
 
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (savedMessage.isNotBlank()) {
                 Text(savedMessage, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End)
             }
 
-            ReviewField("What went well?", good, { good = it })
-            ReviewField("What was bad?", bad, { bad = it })
-            ReviewField("What could improve?", improve, { improve = it })
-            ReviewField("Gratitude", gratitude, { gratitude = it })
+            SectionCard(
+                title = "How was your day?",
+                icon = Icons.Default.EditNote
+            ) {
+                ReviewField("What went well?", good, { good = it })
+                Spacer(Modifier.height(8.dp))
+                ReviewField("What was bad?", bad, { bad = it })
+                Spacer(Modifier.height(8.dp))
+                ReviewField("What could improve?", improve, { improve = it })
+                Spacer(Modifier.height(8.dp))
+                ReviewField("Gratitude", gratitude, { gratitude = it })
+            }
 
-            Text("Mood", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (i in 1..5) {
-                    IconButton(onClick = { moodRating = i }, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            if (i <= moodRating) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = "Star $i",
-                            tint = if (i <= moodRating) Color(0xFFFFB300) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            modifier = Modifier.size(32.dp)
-                        )
+            SectionCard(
+                title = "Mood & Score",
+                icon = Icons.Default.Star
+            ) {
+                Text("Mood", fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (i in 1..5) {
+                        IconButton(
+                            onClick = { moodRating = i },
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Icon(
+                                if (i <= moodRating) Icons.Default.Star else Icons.Default.StarBorder,
+                                contentDescription = "Star $i",
+                                tint = if (i <= moodRating) Color(0xFFFFB300) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                        if (i < 5) {
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Overall:", fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Text(
+                        when {
+                            score <= 3 -> "Rough day"
+                            score <= 6 -> "Okay day"
+                            score >= 8 -> "Great day!"
+                            else -> "Decent day"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Slider(
+                    value = score.toFloat(),
+                    onValueChange = { score = it.toInt() },
+                    valueRange = 1f..10f,
+                    steps = 8,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("1", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                    Text("5", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                    Text("10", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                 }
             }
 
-            Text("Score: $score/10", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-            Slider(
-                value = score.toFloat(),
-                onValueChange = { score = it.toInt() },
-                valueRange = 1f..10f,
-                steps = 8,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Text("Notes", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-            OutlinedTextField(
-                value = notes,
-                onValueChange = { notes = it },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                maxLines = 5,
-                placeholder = { Text("Additional notes...", fontSize = 13.sp) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            SectionCard(
+                title = "Notes",
+                icon = Icons.Default.Notes
+            ) {
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it.take(500) },
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    maxLines = 5,
+                    placeholder = { Text("Write your thoughts...", fontSize = 13.sp) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
                 )
-            )
+                Text(
+                    "${notes.length}/500",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = if (notes.length > 450) 0.7f else 0.35f
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(end = 4.dp),
+                    textAlign = TextAlign.End
+                )
+            }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
 
             Button(
                 onClick = { save(); onBack() },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp),
-                enabled = hasContent()
+                enabled = hasContent() && !isSaving
             ) {
                 Text("SAVE & CLOSE", fontWeight = FontWeight.SemiBold)
             }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -214,13 +286,33 @@ fun DayReviewScreen(
 }
 
 @Composable
+private fun SectionCard(
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
 private fun ReviewField(label: String, value: String, onValueChange: (String) -> Unit) {
-    Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
     OutlinedTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { onValueChange(it.take(200)) },
         modifier = Modifier.fillMaxWidth().height(80.dp),
         maxLines = 3,
+        label = { Text(label, fontSize = 13.sp) },
         placeholder = { Text("Write...", fontSize = 13.sp) },
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
