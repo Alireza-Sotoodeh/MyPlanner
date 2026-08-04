@@ -350,7 +350,8 @@ fun HabitsScreen(viewModel: MainViewModel) {
                         logValue = currentLog?.value ?: 0f,
                         onLog = { value -> viewModel.logHabit(habit.id, value) },
                         onEdit = { editingHabit = habit },
-                        onDelete = { viewModel.deleteHabitWithUndo(habit) }
+                        onDelete = { viewModel.removeTodayLog(habit.id) },
+                        isTodayTab = true
                     )
                 }
             }
@@ -440,7 +441,8 @@ fun HabitRowItem(
     logValue: Float,
     onLog: (Float) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isTodayTab: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -604,7 +606,12 @@ fun HabitRowItem(
                         Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color(0xFF79747E), modifier = Modifier.size(16.dp))
                     }
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFF79747E), modifier = Modifier.size(16.dp))
+                        Icon(
+                            imageVector = if (isTodayTab) Icons.Default.Close else Icons.Default.Delete,
+                            contentDescription = if (isTodayTab) "Remove from today" else "Delete",
+                            tint = Color(0xFF79747E),
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }

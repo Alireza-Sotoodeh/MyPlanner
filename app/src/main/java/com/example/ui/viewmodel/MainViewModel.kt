@@ -2615,6 +2615,12 @@ private val mottoRepository: MottoRepository,
         }
     }
 
+    fun removeTodayLog(habitId: Long) {
+        viewModelScope.launch {
+            habitRepository.deleteLogForDate(habitId, _todayDate.value)
+        }
+    }
+
     fun logHabit(habitId: Long, value: Float, notes: String = "", date: String? = null) {
         viewModelScope.launch {
             val targetDate = date ?: _selectedDate.value
