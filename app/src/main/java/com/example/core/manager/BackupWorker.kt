@@ -1,13 +1,16 @@
 package com.example.core.manager
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ContentResolver
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
 import android.util.Log
+import androidx.core.content.ContextCompat
 import java.io.IOException
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -236,6 +239,14 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
     }
 
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
     private fun notifyNoLocation() {
         val prefs = applicationContext.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("backup_failure_notify", true)) return
@@ -254,6 +265,8 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             .setContentText("No backup location selected — open Settings to choose one")
             .setAutoCancel(true)
             .build()
+
+        if (!hasNotificationPermission()) return
 
         try {
             notificationManager.notify(System.currentTimeMillis().toInt(), notification)
@@ -280,6 +293,8 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             .setContentText(message)
             .setAutoCancel(true)
             .build()
+
+        if (!hasNotificationPermission()) return
 
         try {
             notificationManager.notify(System.currentTimeMillis().toInt(), notification)
