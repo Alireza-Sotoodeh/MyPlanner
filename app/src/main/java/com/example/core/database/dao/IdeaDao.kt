@@ -46,4 +46,7 @@ interface IdeaDao {
     suspend fun updateIdeaSortOrders(ideas: List<IdeaEntity>) {
         ideas.forEach { updateIdea(it) }
     }
+
+    @Query("DELETE FROM ideas")
+    suspend fun deleteAll()
 }

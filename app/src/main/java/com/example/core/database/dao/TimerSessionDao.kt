@@ -26,4 +26,7 @@ interface TimerSessionDao {
 
     @Query("SELECT * FROM timer_sessions WHERE date = :date ORDER BY timestamp DESC")
     fun getByDate(date: String): Flow<List<TimerSessionEntity>>
+
+    @Query("DELETE FROM timer_sessions")
+    suspend fun deleteAll()
 }

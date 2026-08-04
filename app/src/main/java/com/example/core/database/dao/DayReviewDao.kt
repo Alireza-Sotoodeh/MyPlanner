@@ -20,4 +20,7 @@ interface DayReviewDao {
 
     @Query("DELETE FROM day_reviews WHERE date = :date")
     suspend fun deleteReviewByDate(date: String)
+
+    @Query("DELETE FROM day_reviews")
+    suspend fun deleteAll()
 }

@@ -52,4 +52,7 @@ interface TodoDao {
     suspend fun updateTodoSortOrders(todos: List<TodoEntity>) {
         todos.forEach { updateTodo(it) }
     }
+
+    @Query("DELETE FROM todos")
+    suspend fun deleteAllTodos()
 }

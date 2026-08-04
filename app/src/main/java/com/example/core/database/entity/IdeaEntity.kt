@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "ideas",
     foreignKeys = [
@@ -34,5 +36,7 @@ data class IdeaEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val sortOrder: Int = 0,
     val priority: String = "Medium",
-    val linkedTaskId: Long? = null
+    val linkedTaskId: Long? = null,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

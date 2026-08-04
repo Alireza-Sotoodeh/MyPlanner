@@ -25,4 +25,7 @@ interface IdeaGroupDao {
 
     @Delete
     suspend fun deleteGroup(group: IdeaGroupEntity)
+
+    @Query("DELETE FROM idea_groups")
+    suspend fun deleteAll()
 }

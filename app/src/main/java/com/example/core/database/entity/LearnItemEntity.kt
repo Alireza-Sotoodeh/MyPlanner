@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "learn_items",
     foreignKeys = [ForeignKey(
@@ -33,5 +35,7 @@ data class LearnItemEntity(
     val sortOrder: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val scheduleMode: String = "CONTINUOUS",  // CONTINUOUS or WEEKLY
-    val scheduleDaysOfWeek: String = ""       // comma-separated 1=Sun..7=Sat
+    val scheduleDaysOfWeek: String = "",       // comma-separated 1=Sun..7=Sat
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

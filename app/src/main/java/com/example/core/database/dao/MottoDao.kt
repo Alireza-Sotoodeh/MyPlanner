@@ -25,4 +25,7 @@ interface MottoDao {
 
     @Delete
     suspend fun deleteMotto(motto: MottoEntity)
+
+    @Query("DELETE FROM mottos")
+    suspend fun deleteAll()
 }

@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "timer_sessions",
     foreignKeys = [
@@ -24,5 +26,7 @@ data class TimerSessionEntity(
     val timestamp: Long = System.currentTimeMillis(),
     val note: String = "",
     /** Soft reference to TimerTemplateEntity.name (not a foreign key) */
-    val templateName: String? = null
+    val templateName: String? = null,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

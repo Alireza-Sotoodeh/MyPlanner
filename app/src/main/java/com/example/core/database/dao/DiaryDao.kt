@@ -23,4 +23,7 @@ interface DiaryDao {
 
     @Query("DELETE FROM diary_entries WHERE date = :date")
     suspend fun deleteEntryByDate(date: String)
+
+    @Query("DELETE FROM diary_entries")
+    suspend fun deleteAllEntries()
 }

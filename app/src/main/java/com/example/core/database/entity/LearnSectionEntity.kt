@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "learn_sections",
     foreignKeys = [
@@ -47,5 +49,7 @@ data class LearnSectionEntity(
     val reviewTaskId: Long? = null,
     val reviewStage: Int = -1,
     val lastReviewDate: String? = null,
-    val nextReviewDate: String? = null
+    val nextReviewDate: String? = null,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

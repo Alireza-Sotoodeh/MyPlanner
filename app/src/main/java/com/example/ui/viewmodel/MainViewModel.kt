@@ -57,6 +57,7 @@ import com.example.core.repository.TodoRepository
 import com.example.core.utils.PersianCalendarHelper
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,7 +79,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import android.app.PendingIntent
-import kotlinx.coroutines.Dispatchers
 import com.example.core.service.TimerForegroundService
 import com.example.core.service.TimerMode
 
@@ -207,6 +207,11 @@ class MainViewModel(
     private val TAG = "MainViewModel"
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     private val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    private val database = com.example.core.database.AppDatabase.getDatabase(context)
 
     // Undo stack for deleted items
     private val _undoStack = MutableStateFlow<List<UndoEntry>>(emptyList())
@@ -529,7 +534,8 @@ class MainViewModel(
 
     // Google Drive / JSON Backup and Restore
     fun backupDataToGoogleDrive(onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isSyncing.value = true
             try {
                 if (!com.example.core.manager.DriveManager.isSignedIn(context)) {
                     onResult(false, "Not signed in to Google Drive. Please reconnect.")
@@ -593,14 +599,18 @@ class MainViewModel(
             } catch (e: Exception) {
                 Log.e(TAG, "Backup failed", e)
                 onResult(false, "Backup failed: ${e.localizedMessage}")
+            } finally {
+                _isSyncing.value = false
             }
         }
     }
 
     fun restoreDataFromGoogleDrive(onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isSyncing.value = true
             try {
                 var jsonString: String? = null
+                var fromDrive = false
 
                 // Try Drive first
                 if (com.example.core.manager.DriveManager.isSignedIn(context)) {
@@ -613,6 +623,7 @@ class MainViewModel(
                             } catch (_: java.util.zip.ZipException) {
                                 String(driveBytes, StandardCharsets.UTF_8)
                             }
+                            fromDrive = jsonString != null
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Drive download failed, falling back to local", e)
@@ -642,23 +653,51 @@ class MainViewModel(
                     return@launch
                 }
 
-                // Restore to database (learn groups first because items may reference them)
+                // Clear existing data
+                val writableDb = database.openHelper.writableDatabase
+                writableDb.beginTransaction()
+                try {
+                    writableDb.execSQL("DELETE FROM tasks")
+                    writableDb.execSQL("DELETE FROM habits")
+                    writableDb.execSQL("DELETE FROM habit_logs")
+                    writableDb.execSQL("DELETE FROM sleep_logs")
+                    writableDb.execSQL("DELETE FROM timer_sessions")
+                    writableDb.execSQL("DELETE FROM timer_templates")
+                    writableDb.execSQL("DELETE FROM idea_groups")
+                    writableDb.execSQL("DELETE FROM ideas")
+                    writableDb.execSQL("DELETE FROM idea_stages")
+                    writableDb.execSQL("DELETE FROM todos")
+                    writableDb.execSQL("DELETE FROM diary_entries")
+                    writableDb.execSQL("DELETE FROM shop_items")
+                    writableDb.execSQL("DELETE FROM mottos")
+                    writableDb.execSQL("DELETE FROM day_reviews")
+                    writableDb.execSQL("DELETE FROM learn_groups")
+                    writableDb.execSQL("DELETE FROM learn_items")
+                    writableDb.execSQL("DELETE FROM learn_sections")
+                    writableDb.execSQL("DELETE FROM sqlite_sequence")
+                    writableDb.setTransactionSuccessful()
+                } finally {
+                    writableDb.endTransaction()
+                }
+
+                // Restore in FK-safe order: groups before items, parents before children
                 backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
                 backupObj.learnItems.forEach { learnRepository.insertItem(it) }
                 backupObj.learnSections.forEach { learnRepository.insertSection(it) }
+                backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
+                backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
+                backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
                 backupObj.tasks.forEach { taskRepository.insertTask(it) }
                 backupObj.habits.forEach { habitRepository.insertHabit(it) }
                 backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
                 backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
-                backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
-                backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
-                backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
                 backupObj.todos.forEach { todoRepository.insertTodo(it) }
                 backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
                 backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
                 backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
                 backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
 
+                // FK orphan nullification (runs outside transaction to avoid nested transaction in DAO calls)
                 val taskIds = backupObj.tasks.map { it.id }.toSet()
                 val todoIds = backupObj.todos.map { it.id }.toSet()
                 val ideaIds = backupObj.ideas.map { it.id }.toSet()
@@ -688,12 +727,30 @@ class MainViewModel(
 
                 com.example.core.manager.SystemSettingsApplier.reapplyAfterRestore(context)
 
+                // Re-schedule all alarms
+                val eventVibrate = prefs.getBoolean("event_reminder_vibrate", true)
+                val eventSound = prefs.getBoolean("event_reminder_sound", true)
+                backupObj.tasks.forEach { task ->
+                    if (task.type == "EVENT" && task.eventTime != null) {
+                        com.example.core.manager.ReminderManager.scheduleReminders(context, task, eventVibrate, eventSound)
+                    }
+                }
+                backupObj.habits.forEach { habit ->
+                    if (habit.habitTime != null && habit.reminderEnabled) {
+                        com.example.core.manager.ReminderManager.scheduleHabitReminder(context, habit, eventVibrate, eventSound)
+                    }
+                }
+                com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
+
                 delay(1500)
-                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from Google Drive!")
+                val sourceLabel = if (fromDrive) "Google Drive" else "local backup"
+                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from $sourceLabel!")
 
             } catch (e: Exception) {
                 Log.e(TAG, "Restore failed", e)
                 onResult(false, "Restore failed: ${e.localizedMessage}")
+            } finally {
+                _isSyncing.value = false
             }
         }
     }

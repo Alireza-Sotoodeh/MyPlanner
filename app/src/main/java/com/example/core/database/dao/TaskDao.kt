@@ -61,4 +61,7 @@ interface TaskDao {
     suspend fun updateTaskPriorities(tasks: List<TaskEntity>) {
         tasks.forEach { updateTask(it) }
     }
+
+    @Query("DELETE FROM tasks")
+    suspend fun deleteAll()
 }

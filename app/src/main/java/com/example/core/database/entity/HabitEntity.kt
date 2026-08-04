@@ -2,7 +2,9 @@ package com.example.core.database.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(tableName = "habits")
 data class HabitEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -18,5 +20,7 @@ data class HabitEntity(
     val recurrenceEndDate: String? = null,
     val habitTime: String? = null, // notification time "HH:mm"
     val reminderEnabled: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

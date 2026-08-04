@@ -59,7 +59,7 @@ import com.example.core.database.entity.TodoEntity
         LearnItemEntity::class,
         LearnSectionEntity::class
     ],
-    version = 29,
+    version = 30,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -186,6 +186,42 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("PRAGMA foreign_keys=ON")
         }
 
+        private val MIGRATION_29_30 = Migration(29, 30) { db ->
+            db.execSQL("ALTER TABLE tasks ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE tasks ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE habits ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE habits ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE habit_logs ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE habit_logs ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE sleep_logs ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE sleep_logs ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE timer_sessions ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE timer_sessions ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE timer_templates ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE timer_templates ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE idea_groups ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE idea_groups ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE ideas ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE ideas ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE idea_stages ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE idea_stages ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE todos ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE todos ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE diary_entries ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE shop_items ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE shop_items ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE mottos ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE mottos ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE day_reviews ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE day_reviews ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE learn_groups ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE learn_groups ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE learn_items ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE learn_items ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE learn_sections ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE learn_sections ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -193,7 +229,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "bulletcoach_database"
                 )
-                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29)
+                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

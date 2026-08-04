@@ -25,4 +25,7 @@ interface IdeaStageDao {
 
     @Delete
     suspend fun deleteStage(stage: IdeaStageEntity)
+
+    @Query("DELETE FROM idea_stages")
+    suspend fun deleteAll()
 }

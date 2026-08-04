@@ -3,7 +3,9 @@ package com.example.core.database.entity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "day_reviews",
     indices = [Index(value = ["date"], unique = true)]
@@ -18,5 +20,7 @@ data class DayReviewEntity(
     val moodRating: Int = 3,
     val score: Int = 5,
     val notes: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

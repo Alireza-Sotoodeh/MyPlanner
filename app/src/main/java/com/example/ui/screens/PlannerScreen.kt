@@ -3562,6 +3562,8 @@ fun SettingsDialog(
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
     var isExporting by remember { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    val isSyncing by viewModel.isSyncing.collectAsState()
 
     val reviewReminderTime by viewModel.reviewReminderTime.collectAsState()
     val reviewReminderEnabled by viewModel.reviewReminderEnabled.collectAsState()
@@ -3778,39 +3780,44 @@ fun SettingsDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
-                            onClick = {
-                                viewModel.backupDataToGoogleDrive { success, msg ->
-                                    isSuccessStatus = success
-                                    statusMessage = msg
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
+                    Button(
+                        onClick = {
+                            viewModel.backupDataToGoogleDrive { success, msg ->
+                                isSuccessStatus = success
+                                statusMessage = msg
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Backup", fontSize = 12.sp)
                             }
                         }
+                    }
 
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.restoreDataFromGoogleDrive { success, msg ->
-                                    isSuccessStatus = success
-                                    statusMessage = msg
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                        ) {
+                    OutlinedButton(
+                        onClick = { showRestoreConfirm = true },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSyncing,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Restore", fontSize = 12.sp)
                             }
                         }
+                    }
                     }
                 } else {
                     OutlinedTextField(
@@ -3825,6 +3832,35 @@ fun SettingsDialog(
                         )
                     )
                 }
+            }
+
+            if (showRestoreConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showRestoreConfirm = false },
+                    title = { Text("Restore Backup") },
+                    text = {
+                        Text("This will replace ALL current data with the backup. This action cannot be undone. Continue?")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showRestoreConfirm = false
+                                viewModel.restoreDataFromGoogleDrive { success, msg ->
+                                    isSuccessStatus = success
+                                    statusMessage = msg
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Restore")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { showRestoreConfirm = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
 
             // 1b. Export for AI Analysis

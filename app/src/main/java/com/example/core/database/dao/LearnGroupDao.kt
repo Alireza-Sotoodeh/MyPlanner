@@ -25,4 +25,7 @@ interface LearnGroupDao {
 
     @Delete
     suspend fun deleteGroup(group: LearnGroupEntity)
+
+    @Query("DELETE FROM learn_groups")
+    suspend fun deleteAll()
 }

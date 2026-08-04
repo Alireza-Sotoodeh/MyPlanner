@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "tasks",
     foreignKeys = [
@@ -50,5 +52,7 @@ data class TaskEntity(
     val linkedTodoId: Long? = null,
     val linkedIdeaId: Long? = null,
     val linkedLearnSectionId: Long? = null,
-    val postponed: Boolean = false
+    val postponed: Boolean = false,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

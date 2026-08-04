@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 @Entity(
     tableName = "idea_stages",
     foreignKeys = [ForeignKey(
@@ -24,5 +26,7 @@ data class IdeaStageEntity(
     val title: String,
     val isCompleted: Boolean = false,
     val orderIndex: Int = 0,
-    val importance: String = "OPTIONAL"
+    val importance: String = "OPTIONAL",
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
 )

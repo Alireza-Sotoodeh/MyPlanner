@@ -20,4 +20,7 @@ interface SleepLogDao {
 
     @Query("DELETE FROM sleep_logs WHERE date = :date")
     suspend fun deleteSleepLogByDate(date: String)
+
+    @Query("DELETE FROM sleep_logs")
+    suspend fun deleteAll()
 }

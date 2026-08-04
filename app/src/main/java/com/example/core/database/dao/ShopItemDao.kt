@@ -28,4 +28,7 @@ interface ShopItemDao {
 
     @Delete
     suspend fun deleteItem(item: ShopItemEntity)
+
+    @Query("DELETE FROM shop_items")
+    suspend fun deleteAll()
 }

@@ -77,4 +77,10 @@ interface LearnDao {
 
     @Delete
     suspend fun deleteSection(section: LearnSectionEntity)
+
+    @Query("DELETE FROM learn_items")
+    suspend fun deleteAllItems()
+
+    @Query("DELETE FROM learn_sections")
+    suspend fun deleteAllSections()
 }
