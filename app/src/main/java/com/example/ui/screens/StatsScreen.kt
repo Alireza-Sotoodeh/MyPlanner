@@ -47,6 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun StatsScreen(viewModel: MainViewModel) {
@@ -56,6 +59,7 @@ fun StatsScreen(viewModel: MainViewModel) {
     val screenTimeError by viewModel.screenTimeError.collectAsState()
     val habits by viewModel.habits.collectAsState()
     val habitLogs by viewModel.habitLogs.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -244,8 +248,40 @@ fun StatsScreen(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        val loggedCount = habitLogs.count { it.value > 0f }
-                        val totalHabits = habits.size
+                        val activeHabits = remember(habits, selectedDate) {
+                            if (selectedDate.isBlank()) return@remember habits
+                            try {
+                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                val parsedDate = sdf.parse(selectedDate) ?: return@remember habits
+                                val cal = Calendar.getInstance().apply { time = parsedDate }
+                                val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+                                habits.filter { habit ->
+                                    val beforeEnd = if (habit.recurrenceEndDate != null) {
+                                        try {
+                                            val endDate = sdf.parse(habit.recurrenceEndDate)
+                                            !parsedDate.after(endDate)
+                                        } catch (_: Exception) { true }
+                                    } else true
+                                    beforeEnd && when (habit.recurrenceMode) {
+                                        "ALWAYS" -> true
+                                        "WEEKLY" -> {
+                                            val days = habit.recurrenceDaysOfWeek
+                                                .split(",")
+                                                .mapNotNull { it.trim().toIntOrNull() }
+                                                .toSet()
+                                            dayOfWeek in days
+                                        }
+                                        else -> false
+                                    }
+                                }
+                            } catch (_: Exception) { habits }
+                        }
+                        val habitTargetMap = activeHabits.associate { it.id to it.target }
+                        val loggedCount = habitLogs.count { log ->
+                            val target = habitTargetMap[log.habitId] ?: 1f
+                            log.value >= target
+                        }
+                        val totalHabits = activeHabits.size
                         val progress = if (totalHabits > 0) loggedCount.toFloat() / totalHabits.toFloat() else 0f
 
                         Row(
