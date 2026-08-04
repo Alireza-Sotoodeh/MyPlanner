@@ -48,6 +48,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import android.os.Build
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,6 +93,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.nativeCanvas
 import kotlin.math.roundToInt
 import androidx.compose.foundation.rememberScrollState
@@ -105,6 +108,9 @@ fun StatsScreen(viewModel: MainViewModel) {
     val totalScreenTimeMinutes by viewModel.totalScreenTimeMinutes.collectAsState()
     val appUsageItems by viewModel.appUsageItems.collectAsState()
     val screenTimeError by viewModel.screenTimeError.collectAsState()
+    val screenTimeLoading by viewModel.screenTimeLoading.collectAsState()
+    val screenTimeLastUpdated by viewModel.screenTimeLastUpdated.collectAsState()
+    val hasUsageStats = remember { viewModel.hasUsageStatsPermission(context) }
     val habits by viewModel.habits.collectAsState()
     val todayHabitLogs by viewModel.todayHabitLogs.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
@@ -218,9 +224,12 @@ fun StatsScreen(viewModel: MainViewModel) {
         finalLogs.groupBy { it.date }.toSortedMap(compareByDescending { it })
     }
 
-    // Trigger update on screen load
+    // Trigger update on screen load and refresh every 30s
     LaunchedEffect(Unit) {
-        viewModel.updateAppUsage(context)
+        while (true) {
+            viewModel.updateAppUsage(context)
+            delay(30_000)
+        }
     }
 
     val lazyListState = rememberLazyListState()
@@ -264,114 +273,206 @@ fun StatsScreen(viewModel: MainViewModel) {
 
         // 1. Native UsageStatsManager Screen Time
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "TODAY'S SCREEN TIME",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            letterSpacing = 1.5.sp
-                        )
+            if (hasUsageStats) {
+                val hours = totalScreenTimeMinutes / 60
+                val minutes = totalScreenTimeMinutes % 60
+                val formattedTime = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 
-                        Icon(
-                            imageVector = Icons.Default.Leaderboard,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                val lastUpdatedText = screenTimeLastUpdated?.let { ts ->
+                    val elapsed = (System.currentTimeMillis() - ts) / 1000
+                    when {
+                        elapsed < 5 -> "Updated just now"
+                        elapsed < 60 -> "Updated ${elapsed}s ago"
+                        elapsed < 120 -> "Updated 1m ago"
+                        else -> "Updated ${elapsed / 60}m ago"
                     }
+                } ?: if (screenTimeLoading) "Updating..." else null
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                val showApi34Hint = !screenTimeLoading
+                        && appUsageItems.isEmpty()
+                        && screenTimeError == null
+                        && totalScreenTimeMinutes == 0L
+                        && Build.VERSION.SDK_INT >= 34
 
-                    if (screenTimeError != null) {
-                        Text(
-                            text = screenTimeError!!,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
-                        )
-                    } else {
-                        val hours = totalScreenTimeMinutes / 60
-                        val minutes = totalScreenTimeMinutes % 60
-                        val formattedTime = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
-
-                        Text(
-                            text = formattedTime,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Light,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = "TOP APPS LOGGED:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        if (appUsageItems.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "No usage statistics available.",
+                                text = "TODAY'S SCREEN TIME",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                letterSpacing = 1.5.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Leaderboard,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (screenTimeLoading && appUsageItems.isEmpty() && screenTimeError == null) {
+                            Text(
+                                text = formattedTime,
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Light,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Loading...",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        } else if (screenTimeError != null) {
+                            Text(
+                                text = screenTimeError!!,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
                             )
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                appUsageItems.forEach { item ->
-                                    val maxDuration = appUsageItems.maxOfOrNull { it.durationMinutes } ?: 1L
-                                    val progress = item.durationMinutes.toFloat() / maxDuration.toFloat()
+                            Text(
+                                text = formattedTime,
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Light,
+                                color = MaterialTheme.colorScheme.primary
+                            )
 
-                                    Column {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = item.appName,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onBackground
-                                            )
-                                            Text(
-                                                text = "${item.durationMinutes}m",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
+                            if (lastUpdatedText != null) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = lastUpdatedText,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "TOP APPS LOGGED:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (appUsageItems.isEmpty()) {
+                                Text(
+                                    text = "No usage data yet today.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    appUsageItems.forEach { item ->
+                                        val maxDuration = appUsageItems.maxOfOrNull { it.durationMinutes } ?: 1L
+                                        val progress = item.durationMinutes.toFloat() / maxDuration.toFloat()
+
+                                        Column {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = item.appName,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onBackground
+                                                )
+                                                Text(
+                                                    text = "${item.durationMinutes}m",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(
+                                                progress = { progress },
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(8.dp)
+                                                    .clip(CircleShape)
                                             )
                                         }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        LinearProgressIndicator(
-                                            progress = { progress },
-                                            color = MaterialTheme.colorScheme.primary,
-                                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(8.dp)
-                                                .clip(CircleShape)
-                                        )
                                     }
+                                }
+                            }
+
+                            if (showApi34Hint) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Screen time may be limited on this device. " +
+                                                "Try Settings → Apps → MyPlanner → Usage Access → toggle off and on.",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
                                 }
                             }
                         }
                     }
-
+                }
+            } else {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Screen Time",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Enable Usage Access in Settings to see today's screen time.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { viewModel.requestUsagePermission(context) }) {
+                            Text("ENABLE", fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }

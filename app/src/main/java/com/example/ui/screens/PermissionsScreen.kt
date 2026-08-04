@@ -43,7 +43,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     var hasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
     var hasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
 
-    val allGranted = hasNotification && hasExactAlarm && hasUsageStats && hasDndAccess && hasFullScreenIntent
+    val allGranted = hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent
     
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -54,7 +54,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 hasDndAccess = viewModel.checkNotificationPolicyPermission(context)
                 hasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
 
-                if (hasNotification && hasExactAlarm && hasUsageStats && hasDndAccess && hasFullScreenIntent) {
+                if (hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent) {
                     onAllPermissionsGranted()
                 }
             }
@@ -126,7 +126,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             )
 
             PermissionItem(
-                title = "Usage Access",
+                title = "Usage Access (Optional)",
                 description = "Used to track actual device screen time in stats.",
                 icon = Icons.Default.Analytics,
                 isGranted = hasUsageStats,

@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat
 import android.app.NotificationChannel
 import android.provider.Settings
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -909,6 +910,14 @@ class MainViewModel(
 
     private val _screenTimeError = MutableStateFlow<String?>(null)
     val screenTimeError: StateFlow<String?> = _screenTimeError.asStateFlow()
+
+    private val _screenTimeLoading = MutableStateFlow(false)
+    val screenTimeLoading: StateFlow<Boolean> = _screenTimeLoading.asStateFlow()
+
+    private val _screenTimeLastUpdated = MutableStateFlow<Long?>(null)
+    val screenTimeLastUpdated: StateFlow<Long?> = _screenTimeLastUpdated.asStateFlow()
+
+    private val appLabelCache = ConcurrentHashMap<String, String>()
 
     // === Idea List State ===
     val ideaGroups: StateFlow<List<IdeaGroupEntity>> = ideaRepository.allGroups
@@ -2627,17 +2636,20 @@ class MainViewModel(
     fun updateAppUsage(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             _screenTimeError.value = null
+            _screenTimeLoading.value = true
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
                 _appUsageItems.value = emptyList()
                 _totalScreenTimeMinutes.value = 0
                 _screenTimeError.value = "Screen time tracking requires Android 5.0+"
+                _screenTimeLoading.value = false
                 return@launch
             }
 
             if (!hasUsageStatsPermission(context)) {
                 _appUsageItems.value = emptyList()
                 _totalScreenTimeMinutes.value = 0
+                _screenTimeLoading.value = false
                 return@launch
             }
 
@@ -2647,22 +2659,29 @@ class MainViewModel(
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
                 calendar.set(Calendar.MINUTE, 0)
                 calendar.set(Calendar.SECOND, 0)
-                val startTime = calendar.timeInMillis
-                val endTime = System.currentTimeMillis()
+                calendar.set(Calendar.MILLISECOND, 0)
+                val midnight = calendar.timeInMillis
+                val now = System.currentTimeMillis()
 
-                val statsMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+                val stats = usageStatsManager.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    midnight,
+                    now
+                )
 
                 val packageManager = context.packageManager
-                val allItems = statsMap.values
+                val allItems = stats
                     .filter { it.totalTimeInForeground > 0 }
                     .mapNotNull { stat ->
                         val mins = stat.totalTimeInForeground / (1000 * 60)
                         if (mins <= 0) return@mapNotNull null
-                        val label = try {
-                            val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
-                            packageManager.getApplicationLabel(appInfo).toString()
-                        } catch (_: Exception) {
-                            return@mapNotNull null
+                        val label = appLabelCache.getOrPut(stat.packageName) {
+                            try {
+                                val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
+                                packageManager.getApplicationLabel(appInfo).toString()
+                            } catch (_: Exception) {
+                                stat.packageName
+                            }
                         }
                         AppUsageItem(
                             appName = label,
@@ -2677,10 +2696,13 @@ class MainViewModel(
 
                 _appUsageItems.value = topItems
                 _totalScreenTimeMinutes.value = total
+                _screenTimeLastUpdated.value = System.currentTimeMillis()
             } catch (e: Exception) {
                 _appUsageItems.value = emptyList()
                 _totalScreenTimeMinutes.value = 0
                 _screenTimeError.value = "Unable to load screen time"
+            } finally {
+                _screenTimeLoading.value = false
             }
         }
     }
@@ -2706,7 +2728,6 @@ class MainViewModel(
     fun hasAllRequiredPermissions(context: Context): Boolean {
         return hasNotificationPermission(context) && 
                hasExactAlarmPermission(context) && 
-               hasUsageStatsPermission(context) && 
                checkNotificationPolicyPermission(context)
     }
 
