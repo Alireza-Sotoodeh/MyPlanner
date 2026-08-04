@@ -22,6 +22,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,25 +40,24 @@ fun UndoBar(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val startFraction = remember {
-        (countdownSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
-    }
-    val progress = remember { Animatable(startFraction) }
-    val progressValue by progress.asState()
+    key(message) {
+        val startFraction = (countdownSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
+        val progress = remember { Animatable(startFraction) }
+        val progressValue by progress.asState()
 
-    LaunchedEffect(startFraction) {
-        val remainingMs = (startFraction * totalSeconds * 1000).toInt().coerceAtLeast(0)
-        if (remainingMs > 0) {
-            progress.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = remainingMs,
-                    easing = LinearEasing
+        LaunchedEffect(startFraction) {
+            val remainingMs = (startFraction * totalSeconds * 1000).toInt().coerceAtLeast(0)
+            if (remainingMs > 0) {
+                progress.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(
+                        durationMillis = remainingMs,
+                        easing = LinearEasing
+                    )
                 )
-            )
+            }
+            onDismiss()
         }
-        onDismiss()
-    }
 
     val displaySeconds = ceil((progressValue * totalSeconds).toDouble()).toInt().coerceIn(0, totalSeconds)
 
@@ -106,5 +106,6 @@ fun UndoBar(
                 )
             }
         }
+    }
     }
 }

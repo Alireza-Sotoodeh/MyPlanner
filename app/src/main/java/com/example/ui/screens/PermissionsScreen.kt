@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,12 +43,13 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     var hasUsageStats by remember { mutableStateOf(viewModel.hasUsageStatsPermission(context)) }
     var hasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
     var hasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
+    var continueClicked by remember { mutableStateOf(false) }
 
     val allGranted = hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent
     
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
+            if (event == Lifecycle.Event.ON_RESUME && !continueClicked) {
                 hasNotification = viewModel.hasNotificationPermission(context)
                 hasExactAlarm = viewModel.hasExactAlarmPermission(context)
                 hasUsageStats = viewModel.hasUsageStatsPermission(context)
@@ -55,6 +57,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 hasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
 
                 if (hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent) {
+                    continueClicked = true
                     onAllPermissionsGranted()
                 }
             }
@@ -161,7 +164,13 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             
             if (allGranted) {
                 Button(
-                    onClick = onAllPermissionsGranted,
+                    onClick = {
+                        if (!continueClicked) {
+                            continueClicked = true
+                            viewModel.setPermissionsGateSkipped(true)
+                            onAllPermissionsGranted()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(56.dp)
                 ) {
                     Text("CONTINUE", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -173,6 +182,16 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 )
+            }
+
+            TextButton(
+                onClick = {
+                    viewModel.setPermissionsGateSkipped(true)
+                    onAllPermissionsGranted()
+                },
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Text("Skip, I'll grant later", fontSize = 14.sp)
             }
         }
     }

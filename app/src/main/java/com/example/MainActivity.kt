@@ -15,20 +15,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Task
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -36,7 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,8 +47,6 @@ import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,24 +75,23 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.MainViewModelFactory
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableLongStateOf
-import kotlinx.coroutines.delay
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import com.example.core.manager.BackupWorker
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
     private lateinit var dayReviewTriggeredReceiver: BroadcastReceiver
+    private var isReceiverRegistered = false
 
     private val driveSignInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -143,26 +134,8 @@ class MainActivity : ComponentActivity() {
         )
         viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
 
-        scheduleDailyBackup()
-
-        if (intent.getBooleanExtra("open_day_review", false)) {
-            viewModel.checkAndTriggerDayReviewPrompt()
-        }
-        intent.getStringExtra("pomodoro_action")?.let { action ->
-            viewModel.handlePomodoroAction(this@MainActivity, action)
-        }
-        intent.getIntExtra("navigate_to_tab", -1).let { tab ->
-            if (tab >= 0) viewModel.selectTab(tab)
-        }
-        intent.getIntExtra("open_timer_subtab", -1).let { sub ->
-            if (sub >= 0) viewModel.setPreferredTimerTab(sub)
-        }
-        intent.getStringExtra("open_date")?.let { date ->
-            viewModel.selectDate(date)
-        }
-        intent.getStringExtra("open_more_screen")?.let { screen ->
-            viewModel.setPendingMoreScreen(screen)
-        }
+        viewModel.rescheduleAutoBackup(this)
+        handleIntentExtras(intent)
 
         setContent {
             MyApplicationTheme {
@@ -172,100 +145,123 @@ class MainActivity : ComponentActivity() {
                 val snackbarHostState = remember { SnackbarHostState() }
                 var showDayReviewOverlay by remember { mutableStateOf(false) }
                 val undoStack by viewModel.undoStack.collectAsState()
-                var tick by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
                 val context = LocalContext.current
                 val lifecycleOwner = LocalLifecycleOwner.current
-                var showPermissions by remember { mutableStateOf(!viewModel.hasAllRequiredPermissions(context)) }
+                var showPermissions by remember { mutableStateOf(
+                    !viewModel.hasSkippedPermissionsGate() && !viewModel.hasAllRequiredPermissions(context)
+                ) }
 
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
-                            showPermissions = !viewModel.hasAllRequiredPermissions(context)
+                            val skipped = viewModel.hasSkippedPermissionsGate()
+                            showPermissions = !skipped && !viewModel.hasAllRequiredPermissions(context)
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                 }
 
-                LaunchedEffect(undoStack) {
-                    while (undoStack.isNotEmpty()) {
-                        delay(1000)
-                        tick = System.currentTimeMillis()
-                    }
-                }
-
                 val currentUndoEntry = undoStack.lastOrNull()
                 val remaining = currentUndoEntry?.let {
-                    ((it.expiryTime - tick) / 1000).toInt().coerceAtLeast(0)
+                    ((it.expiryTime - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
                 } ?: 0
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (showPermissions) {
-                        PermissionsScreen(
-                            viewModel = viewModel,
-                            onAllPermissionsGranted = { showPermissions = false }
-                        )
-                    } else {
-                        Scaffold(
-                            modifier = Modifier.fillMaxSize(),
-                            snackbarHost = { SnackbarHost(snackbarHostState) },
-                            bottomBar = {
-                                AestheticNavigationBar(
-                                    selectedTab = selectedTab,
-                                    onTabSelected = { viewModel.selectTab(it) }
-                                )
-                            }
-                        ) { innerPadding ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(innerPadding)
-                            ) {
-                                when (selectedTab) {
-                                    0 -> PlannerScreen(viewModel = viewModel)
-                                    1 -> HabitsScreen(viewModel = viewModel)
-                                    2 -> TimerScreen(viewModel = viewModel)
-                                    3 -> StatsScreen(viewModel = viewModel)
-                                    4 -> MoreScreen(
-                                        viewModel = viewModel,
-                                        onNavigateToPlanner = { viewModel.selectTab(0) }
+                    AnimatedContent(
+                        targetState = showPermissions,
+                        transitionSpec = {
+                            fadeIn() togetherWith fadeOut()
+                        },
+                        label = "permissions_gate"
+                    ) { showPerms ->
+                        if (showPerms) {
+                            PermissionsScreen(
+                                viewModel = viewModel,
+                                onAllPermissionsGranted = {
+                                    viewModel.setPermissionsGateSkipped(true)
+                                    showPermissions = false
+                                }
+                            )
+                        } else {
+                            Scaffold(
+                                modifier = Modifier.fillMaxSize(),
+                                snackbarHost = { SnackbarHost(snackbarHostState) },
+                                bottomBar = {
+                                    AestheticNavigationBar(
+                                        selectedTab = selectedTab,
+                                        onTabSelected = { viewModel.selectTab(it) }
                                     )
                                 }
-                                currentUndoEntry?.let { entry ->
-                                    UndoBar(
-                                        message = entry.message,
-                                        countdownSeconds = remaining,
-                                        onRestore = { viewModel.restoreFromUndo(entry.id) },
-                                        onDismiss = { viewModel.dismissUndo(entry.id) },
-                                        modifier = Modifier.align(Alignment.BottomCenter)
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showDayReviewOverlay) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surface),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                com.example.ui.screens.DayReviewScreen(
-                                    viewModel = viewModel,
-                                    initialDate = todayDate,
-                                    onBack = {
-                                        showDayReviewOverlay = false
-                                        viewModel.dismissDayReviewPrompt()
+                            ) { innerPadding ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding)
+                                ) {
+                                    when (selectedTab) {
+                                        0 -> PlannerScreen(viewModel = viewModel)
+                                        1 -> HabitsScreen(viewModel = viewModel)
+                                        2 -> TimerScreen(viewModel = viewModel)
+                                        3 -> StatsScreen(viewModel = viewModel)
+                                        4 -> MoreScreen(
+                                            viewModel = viewModel,
+                                            onNavigateToPlanner = { viewModel.selectTab(0) }
+                                        )
                                     }
-                                )
+                                    currentUndoEntry?.let { entry ->
+                                        UndoBar(
+                                            message = entry.message,
+                                            countdownSeconds = remaining,
+                                            onRestore = { viewModel.restoreFromUndo(entry.id) },
+                                            onDismiss = { viewModel.dismissUndo(entry.id) },
+                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (showDayReviewOverlay) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .clickable(
+                                            indication = null,
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) {
+                                            showDayReviewOverlay = false
+                                            viewModel.dismissDayReviewPrompt()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight(0.9f)
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }
+                                            ) { }
+                                    ) {
+                                        com.example.ui.screens.DayReviewScreen(
+                                            viewModel = viewModel,
+                                            initialDate = todayDate,
+                                            onBack = {
+                                                showDayReviewOverlay = false
+                                                viewModel.dismissDayReviewPrompt()
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                LaunchedEffect(showPrompt) {
-                    if (showPrompt) {
+                LaunchedEffect(showPrompt, showPermissions) {
+                    if (showPrompt && !showPermissions) {
                         val result = snackbarHostState.showSnackbar(
                             message = "Time to review your day!",
                             actionLabel = "Review",
@@ -291,47 +287,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun scheduleDailyBackup() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val dailyBackup = PeriodicWorkRequestBuilder<BackupWorker>(24, java.util.concurrent.TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .addTag("daily_drive_backup")
-            .setInitialDelay(1, java.util.concurrent.TimeUnit.HOURS)
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "daily_drive_backup",
-            ExistingPeriodicWorkPolicy.KEEP,
-            dailyBackup
-        )
-    }
-
     override fun onResume() {
         super.onResume()
         TimerForegroundService.isAppInForeground = true
         if (::viewModel.isInitialized) {
             viewModel.refreshSystemDate()
-            viewModel.checkAndTriggerDayReviewPrompt()
-        }
-        val filter = IntentFilter("com.example.action.DAY_REVIEW_TRIGGERED")
-        dayReviewTriggeredReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
+            val skipped = viewModel.hasSkippedPermissionsGate()
+            if (skipped || viewModel.hasAllRequiredPermissions(this)) {
                 viewModel.checkAndTriggerDayReviewPrompt()
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(dayReviewTriggeredReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(dayReviewTriggeredReceiver, filter)
+        if (!isReceiverRegistered) {
+            val filter = IntentFilter("com.example.action.DAY_REVIEW_TRIGGERED")
+            dayReviewTriggeredReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    viewModel.checkAndTriggerDayReviewPrompt()
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(dayReviewTriggeredReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(dayReviewTriggeredReceiver, filter)
+            }
+            isReceiverRegistered = true
         }
     }
 
     override fun onPause() {
         super.onPause()
-        if (::dayReviewTriggeredReceiver.isInitialized) {
+        if (::dayReviewTriggeredReceiver.isInitialized && isReceiverRegistered) {
             try {
                 unregisterReceiver(dayReviewTriggeredReceiver)
+                isReceiverRegistered = false
             } catch (e: Exception) {
                 Log.e("MainActivity", "Unregister receiver failed", e)
             }
@@ -345,12 +332,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra("open_day_review", false)) {
-            viewModel.checkAndTriggerDayReviewPrompt()
-        }
-        intent.getStringExtra("pomodoro_action")?.let { action ->
-            viewModel.handlePomodoroAction(this@MainActivity, action)
-        }
+        handleIntentExtras(intent)
+    }
+
+    private fun handleIntentExtras(intent: Intent?) {
+        if (intent == null) return
+        // Precedence: navigate_to_tab > open_timer_subtab > open_date > open_more_screen > open_day_review > pomodoro_action
         intent.getIntExtra("navigate_to_tab", -1).let { tab ->
             if (tab >= 0) viewModel.selectTab(tab)
         }
@@ -362,6 +349,12 @@ class MainActivity : ComponentActivity() {
         }
         intent.getStringExtra("open_more_screen")?.let { screen ->
             viewModel.setPendingMoreScreen(screen)
+        }
+        if (intent.getBooleanExtra("open_day_review", false)) {
+            viewModel.checkAndTriggerDayReviewPrompt()
+        }
+        intent.getStringExtra("pomodoro_action")?.let { action ->
+            viewModel.handlePomodoroAction(this@MainActivity, action)
         }
     }
 }
