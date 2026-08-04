@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.HabitEntity
 import com.example.core.database.entity.SleepLogEntity
+import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
 
 @Composable
@@ -115,17 +116,10 @@ fun HabitsScreen(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.onBackground
                         )
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(0.dp)
-                    ) {
-                        IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
-                            Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                        }
-                        IconButton(onClick = { showSettingsDialog = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                        }
-                    }
+                    HeaderActions(
+                        onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
+                        onSettingsClick = { showSettingsDialog = true }
+                    )
                 }
             }
 
