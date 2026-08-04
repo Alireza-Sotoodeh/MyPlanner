@@ -3611,7 +3611,6 @@ fun SettingsDialog(
 
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
-    var isExporting by remember { mutableStateOf(false) }
     var showRestoreMonthPicker by remember { mutableStateOf(false) }
     var restoreMonths by remember { mutableStateOf<List<String>>(emptyList()) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
@@ -4041,33 +4040,6 @@ fun SettingsDialog(
                         }
                     }
                 )
-            }
-
-            // 1b. Export for AI Analysis
-            SettingsCard(title = "EXPORT FOR AI ANALYSIS") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            isExporting = true
-                            viewModel.exportForLlm { success, message ->
-                                isExporting = false
-                                isSuccessStatus = success
-                                statusMessage = message
-                            }
-                        },
-                        enabled = !isExporting,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (isExporting) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        Text("Export for AI Analysis")
-                    }
-                }
             }
 
             // 2. Timer & Focus
