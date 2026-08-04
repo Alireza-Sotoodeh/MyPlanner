@@ -229,13 +229,11 @@ fun PlannerScreen(viewModel: MainViewModel) {
         // Active widgets loaded inside planner screen for high utility context
         ActiveTimerWidget(viewModel)
 
-        val allTasks by viewModel.allTasks.collectAsState(initial = emptyList())
-        val uniqueLabels = allTasks.mapNotNull { it.label.takeIf { label -> label.isNotBlank() } }.distinct().sorted()
-        var selectedFilterLabel by remember { mutableStateOf<String?>(null) }
+        var selectedFilterLabels by remember { mutableStateOf<Set<String>>(emptySet()) }
 
         Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
-                0 -> DailyPlannerView(viewModel, selectedFilterLabel, uniqueLabels) { selectedFilterLabel = it }
+                0 -> DailyPlannerView(viewModel, selectedFilterLabels) { selectedFilterLabels = it }
                 1 -> WeeklyPlannerView(viewModel, null) { date ->
                     selectedTab = 0
                     viewModel.selectDate(date)
@@ -381,14 +379,34 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
 }
 
 @Composable
-fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniqueLabels: List<String> = emptyList(), onLabelSelected: (String?) -> Unit = {}) {
+fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = emptySet(), onLabelsSelected: (Set<String>) -> Unit = {}) {
     val context = LocalContext.current
     val selectedDate by viewModel.selectedDate.collectAsState()
     val todayDate by viewModel.todayDate.collectAsState()
     val rawTasks by viewModel.dailyTasks.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
     val allTodos by viewModel.allTodos.collectAsState()
-    val tasks = if (filterLabel != null) rawTasks.filter { it.label == filterLabel } else rawTasks
+    val tasks = if (filterLabels.isNotEmpty()) rawTasks.filter { it.label in filterLabels } else rawTasks
+
+    val labelInfos = rawTasks
+        .filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") }
+        .groupBy { it.label }
+        .filterKeys { it.isNotBlank() }
+        .map { (label, items) ->
+            LabelInfo(
+                name = label,
+                color = items.firstOrNull { it.labelColor != null }?.labelColor,
+                count = items.size
+            )
+        }
+        .sortedBy { it.name }
+
+    LaunchedEffect(filterLabels, labelInfos) {
+        val validNames = labelInfos.map { it.name }.toSet()
+        if (filterLabels.isNotEmpty() && filterLabels.none { it in validNames }) {
+            onLabelsSelected(emptySet())
+        }
+    }
 
     val expandedSubtasksMap = remember { androidx.compose.runtime.mutableStateMapOf<Long, Boolean>() }
 
@@ -423,10 +441,10 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
             .padding(horizontal = 16.dp)
             .nestedScroll(nestedScrollConnection)
     ) {
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showHeaderExtras && uniqueLabels.isNotEmpty(),
-            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+        AnimatedVisibility(
+            visible = showHeaderExtras && labelInfos.isNotEmpty(),
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
         ) {
             LazyRow(
                 modifier = Modifier
@@ -436,17 +454,37 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 item {
-                    androidx.compose.material3.FilterChip(
-                        selected = filterLabel == null,
-                        onClick = { onLabelSelected(null) },
+                    FilterChip(
+                        selected = filterLabels.isEmpty(),
+                        onClick = { onLabelsSelected(emptySet()) },
                         label = { Text("All", fontSize = 12.sp) }
                     )
                 }
-                items(uniqueLabels) { label ->
-                    androidx.compose.material3.FilterChip(
-                        selected = filterLabel == label,
-                        onClick = { onLabelSelected(if (filterLabel == label) null else label) },
-                        label = { Text(label.uppercase(), fontSize = 12.sp) }
+                items(labelInfos) { info ->
+                    FilterChip(
+                        selected = info.name in filterLabels,
+                        onClick = {
+                            val newSet = if (info.name in filterLabels) {
+                                filterLabels - info.name
+                            } else {
+                                filterLabels + info.name
+                            }
+                            onLabelsSelected(newSet)
+                        },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (info.color != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(info.color))
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Text("${info.name.uppercase()} (${info.count})", fontSize = 12.sp)
+                            }
+                        }
                     )
                 }
             }
@@ -5153,3 +5191,9 @@ private fun AddToPlannerDialog(
         }
     )
 }
+
+private data class LabelInfo(
+    val name: String,
+    val color: Long?,
+    val count: Int
+)
