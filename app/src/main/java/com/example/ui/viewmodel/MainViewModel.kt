@@ -1108,6 +1108,7 @@ class MainViewModel(
     fun deleteHabit(habit: HabitEntity) {
         viewModelScope.launch {
             com.example.core.manager.ReminderManager.cancelHabitReminder(context, habit)
+            habitRepository.deleteLogsForHabit(habit.id)
             habitRepository.deleteHabit(habit)
         }
     }
@@ -1817,7 +1818,9 @@ class MainViewModel(
         viewModelScope.launch {
             try {
                 if (todo.linkedTaskId != null) {
-                    taskRepository.deleteTaskById(todo.linkedTaskId)
+                    taskRepository.getTaskById(todo.linkedTaskId)?.let { linkedTask ->
+                        taskRepository.deleteTaskAndSubtasks(linkedTask)
+                    }
                 }
                 todoRepository.deleteTodo(todo)
             } catch (e: Exception) {
