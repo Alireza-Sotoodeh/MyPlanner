@@ -498,6 +498,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notifications for upcoming events"
+                setBypassDnd(true)
                 if (vibrate) {
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 500, 200, 500)
@@ -519,6 +520,7 @@ class ReminderReceiver : BroadcastReceiver() {
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 

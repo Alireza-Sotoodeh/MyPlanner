@@ -217,6 +217,7 @@ class MainViewModel(
     companion object {
         val HEARTBEAT_PATTERN = longArrayOf(0, 300, 100, 300, 500, 300, 100, 300)
         val HEARTBEAT_PATTERN_SINGLE = longArrayOf(0, 300, 100, 300)
+        private const val PREFS_KEY_ORIGINAL_DND_FILTER = "original_dnd_filter"
     }
 
     private val _pomodoroCompletionState = MutableStateFlow<PomodoroCompletionState?>(null)
@@ -907,7 +908,7 @@ class MainViewModel(
         }
     }
 
-    private var originalDndState = false
+    private var originalInterruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL
 
     // App Usage Stats State
     private val _appUsageItems = MutableStateFlow<List<AppUsageItem>>(emptyList())
@@ -2061,8 +2062,12 @@ class MainViewModel(
         _pomodoroRunning.value = true
 
         if (_dndEnabled.value) {
-            originalDndState = getDndState(context)
-            setDndState(context, true)
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && nm.isNotificationPolicyAccessGranted) {
+                originalInterruptionFilter = getCurrentInterruptionFilter(context)
+                prefs.edit().putInt(PREFS_KEY_ORIGINAL_DND_FILTER, originalInterruptionFilter).apply()
+                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+            }
         }
 
         val intent = Intent(context, TimerForegroundService::class.java).apply {
@@ -2110,7 +2115,7 @@ class MainViewModel(
         _activePomodoroTask.value = null
         _pomodoroSecondsLeft.value = 0
         if (_dndEnabled.value) {
-            setDndState(context, originalDndState)
+            restoreDndState(context)
         }
     }
 
@@ -2185,6 +2190,7 @@ class MainViewModel(
                             _chronoPaused.value = false
                             _chronoSelectedTaskId.value = null
                         }
+                        restoreDndState(context)
                     }
                 }
             }
@@ -2338,7 +2344,7 @@ class MainViewModel(
         context.startService(intent)
 
         if (_dndEnabled.value) {
-            setDndState(context, originalDndState)
+            restoreDndState(context)
         }
     }
 
@@ -2375,8 +2381,12 @@ class MainViewModel(
         _chronoPaused.value = false
         _chronoRunning.value = true
         if (_dndEnabled.value) {
-            originalDndState = getDndState(context)
-            setDndState(context, true)
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && nm.isNotificationPolicyAccessGranted) {
+                originalInterruptionFilter = getCurrentInterruptionFilter(context)
+                prefs.edit().putInt(PREFS_KEY_ORIGINAL_DND_FILTER, originalInterruptionFilter).apply()
+                nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+            }
         }
 
         val intent = Intent(context, TimerForegroundService::class.java).apply {
@@ -2417,7 +2427,7 @@ class MainViewModel(
         _chronoElapsed.value = 0L
         _chronoSelectedTaskId.value = null
         if (_dndEnabled.value) {
-            setDndState(context, originalDndState)
+            restoreDndState(context)
         }
     }
 
@@ -2431,7 +2441,7 @@ class MainViewModel(
         _chronoElapsed.value = 0L
         _chronoSelectedTaskId.value = null
         if (_dndEnabled.value) {
-            setDndState(context, originalDndState)
+            restoreDndState(context)
         }
     }
 
@@ -2749,26 +2759,27 @@ class MainViewModel(
         }
     }
 
-    private fun getDndState(context: Context): Boolean {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun getCurrentInterruptionFilter(context: Context): Int {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            notificationManager.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE
+            nm.currentInterruptionFilter
         } else {
-            false
+            NotificationManager.INTERRUPTION_FILTER_ALL
         }
     }
 
-    private fun setDndState(context: Context, enable: Boolean) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (notificationManager.isNotificationPolicyAccessGranted) {
-                val filter = if (enable) {
-                    NotificationManager.INTERRUPTION_FILTER_NONE
-                } else {
-                    NotificationManager.INTERRUPTION_FILTER_ALL
+    private fun restoreDndState(context: Context) {
+        val prefsFilter = prefs.getInt(PREFS_KEY_ORIGINAL_DND_FILTER, -1)
+        val filter = if (prefsFilter != -1) prefsFilter else originalInterruptionFilter
+        prefs.edit().remove(PREFS_KEY_ORIGINAL_DND_FILTER).apply()
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && nm.isNotificationPolicyAccessGranted) {
+            try {
+                if (nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
+                    nm.setInterruptionFilter(filter)
                 }
-                notificationManager.setInterruptionFilter(filter)
-            }
+            } catch (_: SecurityException) { }
         }
     }
 
