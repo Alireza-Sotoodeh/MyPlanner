@@ -60,7 +60,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.HeaderActions
+import com.example.ui.components.LineChartCanvas
+import com.example.ui.components.LineChartLine
 import com.example.ui.viewmodel.MainViewModel
+import com.example.core.database.entity.SleepLogEntity
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -101,6 +104,7 @@ fun StatsScreen(viewModel: MainViewModel) {
     val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
     val todayDateStr by viewModel.todayDate.collectAsState()
     val allHabitLogs by viewModel.allHabitLogs.collectAsState()
+    val allSleepLogs by viewModel.allSleepLogs.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -123,6 +127,24 @@ fun StatsScreen(viewModel: MainViewModel) {
     }
     var heatmapYear by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear() else Calendar.getInstance().get(Calendar.YEAR)) }
     var heatmapMonth by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth() else Calendar.getInstance().get(Calendar.MONTH) + 1) }
+
+    // Sleep graph state
+    var sleepGraphYear by remember(usePersianCalendar) { mutableIntStateOf(
+        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear()
+        else Calendar.getInstance().get(Calendar.YEAR)
+    ) }
+    var sleepGraphMonth by remember(usePersianCalendar) { mutableIntStateOf(
+        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth()
+        else Calendar.getInstance().get(Calendar.MONTH) + 1
+    ) }
+    var sleepRangeMode by remember { mutableStateOf("MONTH") }
+
+    val sleepGraphRange = remember(sleepGraphYear, sleepGraphMonth, usePersianCalendar, sleepRangeMode) {
+        computeLineGraphRange(sleepGraphYear, sleepGraphMonth, usePersianCalendar, sleepRangeMode)
+    }
+    val sleepDailyData = remember(sleepGraphRange, allSleepLogs) {
+        computeSleepDailyData(sleepGraphRange.first, sleepGraphRange.second, allSleepLogs)
+    }
 
     // Trigger update on screen load
     LaunchedEffect(Unit) {
@@ -479,22 +501,33 @@ fun StatsScreen(viewModel: MainViewModel) {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         val primaryColor = MaterialTheme.colorScheme.primary
-                        val onSurfaceColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
-                        val maxY = remember(dailyData) { dailyData.maxOfOrNull { it.completed } ?: 1 }
+                        val maxYf = remember(dailyData) { dailyData.maxOfOrNull { it.completed }?.toFloat()?.coerceAtLeast(1f) ?: 1f }
                         val trailingAvg = remember(dailyData) {
                             if (dailyData.size >= 7) dailyData.takeLast(7).map { it.completed }.average().toFloat()
                             else null
                         }
                         val monthCompletedDays = remember(dailyData) { dailyData.count { it.completed > 0 } }
+                        val yStep = when {
+                            maxYf <= 3f -> 1f
+                            maxYf <= 8f -> 2f
+                            maxYf <= 20f -> 5f
+                            else -> (maxYf / 4f).roundToInt().coerceAtLeast(5).toFloat()
+                        }
 
-                        HabitLineGraphCanvas(
-                            data = dailyData,
-                            maxY = maxY,
+                        LineChartCanvas(
+                            lines = listOf(LineChartLine(
+                                values = dailyData.map { it.completed.toFloat() },
+                                color = primaryColor,
+                                label = "Completed"
+                            )),
+                            maxY = maxYf,
+                            yStep = yStep,
+                            yLabelFormatter = { it.toInt().toString() },
+                            xLabels = dailyData.map { it.day.toString() },
+                            dateStrs = dailyData.map { it.dateStr },
+                            gradientFill = true,
                             trailingAvg = trailingAvg,
-                            primaryColor = primaryColor,
-                            surfaceVariantColor = surfaceVariantColor,
-                            onSurfaceColor = onSurfaceColor
+                            height = 200.dp
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -519,7 +552,230 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 3. Merged: Task Accomplishments + Time Spent by Label + Time of Day Activity
+        // 3. Sleep Logs Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "SLEEP LOGS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (allSleepLogs.isEmpty()) {
+                        Text(
+                            text = "Log your sleep in the Habits tab to see trends.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        // ── Filter controls (shared by all 3 graphs) ──
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (sleepRangeMode == "MONTH") {
+                                IconButton(
+                                    onClick = {
+                                        if (usePersianCalendar) {
+                                            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(sleepGraphYear, sleepGraphMonth, -1)
+                                            sleepGraphYear = y; sleepGraphMonth = m
+                                        } else {
+                                            if (sleepGraphMonth == 1) { sleepGraphYear--; sleepGraphMonth = 12 }
+                                            else sleepGraphMonth--
+                                        }
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, "Previous", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                }
+                                Text(
+                                    text = sleepGraphRange.third,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center
+                                )
+                                IconButton(
+                                    onClick = {
+                                        if (usePersianCalendar) {
+                                            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(sleepGraphYear, sleepGraphMonth, 1)
+                                            sleepGraphYear = y; sleepGraphMonth = m
+                                        } else {
+                                            if (sleepGraphMonth == 12) { sleepGraphYear++; sleepGraphMonth = 1 }
+                                            else sleepGraphMonth++
+                                        }
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, "Next", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                }
+                                IconButton(onClick = { viewModel.toggleUsePersianCalendar() }, modifier = Modifier.size(28.dp)) {
+                                    Text(
+                                        if (usePersianCalendar) "EN" else "FA",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = if (sleepRangeMode == "7D") "Last 7 Days" else "Last 30 Days",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            Spacer(Modifier.width(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("7D", "30D", "MONTH").forEach { mode ->
+                                    val isSelected = sleepRangeMode == mode
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.clickable {
+                                            sleepRangeMode = mode
+                                            if (mode == "MONTH") {
+                                                if (usePersianCalendar) {
+                                                    sleepGraphYear = PersianCalendarHelper.getCurrentPersianYear()
+                                                    sleepGraphMonth = PersianCalendarHelper.getCurrentPersianMonth()
+                                                } else {
+                                                    val now = Calendar.getInstance()
+                                                    sleepGraphYear = now.get(Calendar.YEAR)
+                                                    sleepGraphMonth = now.get(Calendar.MONTH) + 1
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Text(
+                                            text = mode,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val sleepXLabels = sleepDailyData.map { it.day.toString() }
+                        val sleepDateStrs = sleepDailyData.map { it.date }
+
+                        // ── Duration Graph ──
+                        Text(
+                            text = "Sleep Duration",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        val durationMaxY = remember(sleepDailyData) { sleepDailyData.mapNotNull { it.duration }.maxOrNull()?.coerceAtLeast(1f) ?: 1f }
+                        val durationStep = remember(durationMaxY) {
+                            when {
+                                durationMaxY <= 3f -> 1f
+                                durationMaxY <= 8f -> 2f
+                                else -> (durationMaxY / 4f).roundToInt().coerceAtLeast(2).toFloat()
+                            }
+                        }
+                        LineChartCanvas(
+                            lines = listOf(LineChartLine(
+                                values = sleepDailyData.map { it.duration },
+                                color = MaterialTheme.colorScheme.primary,
+                                label = "Sleep"
+                            )),
+                            maxY = durationMaxY,
+                            yStep = durationStep,
+                            yLabelFormatter = { "${it.toInt()}h" },
+                            xLabels = sleepXLabels,
+                            dateStrs = sleepDateStrs,
+                            gradientFill = true,
+                            height = 160.dp
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ── Mood/Quality Graph ──
+                        Text(
+                            text = "Sleep Quality",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        LineChartCanvas(
+                            lines = listOf(LineChartLine(
+                                values = sleepDailyData.map { it.quality },
+                                color = MaterialTheme.colorScheme.tertiary,
+                                label = "Quality"
+                            )),
+                            maxY = 5f,
+                            minY = 1f,
+                            yStep = 1f,
+                            yLabelFormatter = { it.toInt().toString() },
+                            xLabels = sleepXLabels,
+                            dateStrs = sleepDateStrs,
+                            gradientFill = false,
+                            height = 140.dp
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ── Bedtime/Wake Time Graph ──
+                        Text(
+                            text = "Sleep Schedule",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        LineChartCanvas(
+                            lines = listOf(
+                                LineChartLine(
+                                    values = sleepDailyData.map { it.bedMinutes },
+                                    color = Color(0xFF5C6BC0),
+                                    label = "Bed"
+                                ),
+                                LineChartLine(
+                                    values = sleepDailyData.map { it.wakeMinutes },
+                                    color = Color(0xFFFF7043),
+                                    label = "Wake"
+                                )
+                            ),
+                            maxY = 1440f,
+                            yStep = 120f,
+                            yLabelFormatter = { formatMinutesToTime(it) },
+                            xLabels = sleepXLabels,
+                            dateStrs = sleepDateStrs,
+                            gradientFill = false,
+                            height = 180.dp
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Merged: Task Accomplishments + Time Spent by Label + Time of Day Activity
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1324,195 +1580,61 @@ private fun computeLineGraphRange(
     }
 }
 
-@Composable
-private fun HabitLineGraphCanvas(
-    data: List<DailyCompletion>,
-    maxY: Int,
-    trailingAvg: Float?,
-    primaryColor: Color,
-    surfaceVariantColor: Color,
-    onSurfaceColor: Color
-) {
-    var tooltipIndex by remember { mutableStateOf<Int?>(null) }
-    val labelPaint = remember {
-        android.graphics.Paint().apply {
-            isAntiAlias = true
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
+// ── Sleep Data Helpers ──
 
-    if (data.isEmpty()) {
-        Text(
-            text = "No habit data for this period.",
-            fontSize = 13.sp,
-            color = onSurfaceColor
+private data class SleepDailyPoint(
+    val date: String,
+    val day: Int,
+    val duration: Float?,
+    val quality: Float?,
+    val bedMinutes: Float?,
+    val wakeMinutes: Float?
+)
+
+private fun parseTimeToMinutes(time: String): Float? {
+    if (time.isBlank()) return null
+    val parts = time.split(":")
+    if (parts.size != 2) return null
+    val h = parts[0].toIntOrNull() ?: return null
+    val m = parts[1].toIntOrNull() ?: return null
+    return (h * 60 + m).toFloat()
+}
+
+private fun formatMinutesToTime(minutes: Float): String {
+    val totalMin = minutes.toInt().coerceIn(0, 24 * 60 - 1)
+    val h = totalMin / 60
+    val m = totalMin % 60
+    return "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
+}
+
+private fun computeSleepDailyData(
+    startDate: String,
+    endDate: String,
+    sleepLogs: List<SleepLogEntity>
+): List<SleepDailyPoint> {
+    if (startDate.isBlank() || endDate.isBlank()) return emptyList()
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+    val start = sdf.parse(startDate) ?: return emptyList()
+    val end = sdf.parse(endDate) ?: return emptyList()
+
+    val logMap = sleepLogs.filter { it.date in startDate..endDate }.associateBy { it.date }
+    val results = mutableListOf<SleepDailyPoint>()
+    cal.time = start
+    while (!cal.time.after(end)) {
+        val dateStr = sdf.format(cal.time)
+        val log = logMap[dateStr]
+        results.add(
+            SleepDailyPoint(
+                date = dateStr,
+                day = cal.get(Calendar.DAY_OF_MONTH),
+                duration = log?.hoursSlept,
+                quality = log?.sleepQuality?.toFloat(),
+                bedMinutes = log?.sleepTime?.let { parseTimeToMinutes(it) },
+                wakeMinutes = log?.wakeTime?.let { parseTimeToMinutes(it) }
+            )
         )
-        return
+        cal.add(Calendar.DAY_OF_MONTH, 1)
     }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .pointerInput(data) {
-                    detectTapGestures { offset ->
-                        if (data.size < 2) return@detectTapGestures
-                        val leftPad = 40.dp.toPx()
-                        val drawW = size.width - leftPad - 16.dp.toPx()
-                        val stepW = drawW / (data.size - 1)
-                        val idx = ((offset.x - leftPad) / stepW).roundToInt()
-                            .coerceIn(0, data.size - 1)
-                        tooltipIndex = if (tooltipIndex == idx) null else idx
-                    }
-                }
-        ) {
-            val leftPad = 40.dp.toPx()
-            val rightPad = 16.dp.toPx()
-            val topPad = 8.dp.toPx()
-            val bottomPad = 24.dp.toPx()
-            val drawW = size.width - leftPad - rightPad
-            val drawH = size.height - topPad - bottomPad
-            val maxYf = maxY.toFloat().coerceAtLeast(1f)
-
-            val yStep = when {
-                maxYf <= 3f -> 1
-                maxYf <= 8f -> 2
-                maxYf <= 20f -> 5
-                else -> (maxYf / 4f).roundToInt().coerceAtLeast(5)
-            }
-
-            // Y-axis grid lines and labels
-            var yVal = 0
-            while (yVal <= maxYf.roundToInt()) {
-                val yPos = topPad + drawH - (yVal.toFloat() / maxYf * drawH)
-                drawLine(
-                    color = surfaceVariantColor,
-                    start = Offset(leftPad, yPos),
-                    end = Offset(size.width - rightPad, yPos),
-                    strokeWidth = 1.dp.toPx()
-                )
-                labelPaint.color = onSurfaceColor.hashCode()
-                labelPaint.textSize = 9.sp.toPx()
-                drawContext.canvas.nativeCanvas.drawText(
-                    yVal.toString(),
-                    leftPad - 8.dp.toPx(),
-                    yPos + 3.dp.toPx(),
-                    labelPaint
-                )
-                yVal += yStep
-            }
-
-            // Data points
-            val points = data.mapIndexed { idx, d ->
-                val x = leftPad + (idx.toFloat() / (data.size - 1).coerceAtLeast(1)) * drawW
-                val y = topPad + drawH - (d.completed.toFloat() / maxYf * drawH)
-                Offset(x, y)
-            }
-
-            if (points.size >= 2) {
-                // Gradient fill under line
-                val fillPath = Path().apply {
-                    moveTo(points.first().x, topPad + drawH)
-                    points.forEach { lineTo(it.x, it.y) }
-                    lineTo(points.last().x, topPad + drawH)
-                    close()
-                }
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(primaryColor.copy(alpha = 0.25f), Color.Transparent),
-                        endY = topPad + drawH
-                    )
-                )
-
-                // Straight line segments connecting data points
-                val linePath = Path().apply {
-                    moveTo(points[0].x, points[0].y)
-                    for (i in 1 until points.size) {
-                        lineTo(points[i].x, points[i].y)
-                    }
-                }
-                drawPath(
-                    path = linePath,
-                    color = primaryColor,
-                    style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                )
-
-                // 7-day trailing average dashed line
-                trailingAvg?.let { avg ->
-                    if (data.size >= 7) {
-                        val avgStartIdx = data.size - 7
-                        val avgXStart = leftPad + (avgStartIdx.toFloat() / (data.size - 1)) * drawW
-                        val avgY = topPad + drawH - (avg.toFloat() / maxYf * drawH)
-                        drawLine(
-                            color = primaryColor.copy(alpha = 0.5f),
-                            start = Offset(avgXStart, avgY),
-                            end = Offset(leftPad + drawW, avgY),
-                            strokeWidth = 1.5.dp.toPx(),
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
-                        )
-                    }
-                }
-            }
-
-            // Data point dots
-            points.forEachIndexed { idx, pt ->
-                val isSel = tooltipIndex == idx
-                val radius = if (isSel) 5.dp.toPx() else 3.dp.toPx()
-                drawCircle(color = primaryColor, radius = radius, center = pt)
-                if (isSel) {
-                    drawCircle(color = Color.White, radius = radius - 1.5.dp.toPx(), center = pt)
-                    drawCircle(color = primaryColor, radius = radius - 1.5.dp.toPx(), center = pt)
-                }
-            }
-
-            // X-axis day labels
-            val labelIndices = data.indices.filter { idx ->
-                val day = data[idx].day
-                idx == 0 || idx == data.size - 1 || day % 5 == 0 || day == 1
-            }
-            labelPaint.textSize = 9.sp.toPx()
-            labelPaint.color = onSurfaceColor.hashCode()
-            labelIndices.forEach { idx ->
-                val x = leftPad + (idx.toFloat() / (data.size - 1).coerceAtLeast(1)) * drawW
-                drawContext.canvas.nativeCanvas.drawText(
-                    data[idx].day.toString(),
-                    x,
-                    size.height - 4.dp.toPx(),
-                    labelPaint
-                )
-            }
-
-            // Tooltip on selected point
-            tooltipIndex?.let { idx ->
-                if (idx in points.indices) {
-                    val pt = points[idx]
-                    val d = data[idx]
-                    val tipText = "${d.dateStr}: ${d.completed}"
-                    labelPaint.textSize = 10.sp.toPx()
-                    labelPaint.color = android.graphics.Color.WHITE
-                    val textW = labelPaint.measureText(tipText)
-                    val tipW = textW + 12.dp.toPx()
-                    val tipH = 22.dp.toPx()
-                    val tipX = (pt.x - tipW / 2f)
-                        .coerceIn(4.dp.toPx(), size.width - tipW - 4.dp.toPx())
-                    val tipY = pt.y - 12.dp.toPx() - tipH
-
-                    drawRoundRect(
-                        color = Color(0xDD333333),
-                        topLeft = Offset(tipX, tipY),
-                        size = Size(tipW, tipH),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx())
-                    )
-                    drawContext.canvas.nativeCanvas.drawText(
-                        tipText,
-                        tipX + tipW / 2f,
-                        tipY + tipH - 5.dp.toPx(),
-                        labelPaint
-                    )
-                }
-            }
-        }
-    }
+    return results
 }
