@@ -344,6 +344,42 @@ private fun PomodoroTab(
                     TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
                     TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
                     TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Start button
+                    Button(
+                        onClick = {
+                            val task = selectedTask
+                            if (task != null) {
+                                viewModel.startPomodoro(
+                                    context = context,
+                                    task = task,
+                                    focusMinutes = focusMinutes,
+                                    targetSessions = targetSessions,
+                                    shortBreakMinutes = shortBreakMinutes,
+                                    longBreakMinutes = longBreakMinutes,
+                                    markCompleteOnFinish = markCompleteOnFinish,
+                                    templateName = templates.find { it.id == selectedTemplateId }?.name
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        enabled = selectedTask != null || selectedTaskId != null
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
@@ -353,32 +389,6 @@ private fun PomodoroTab(
                 onSelectedTaskIdChange = onSelectedTaskIdChange,
                 viewModel = viewModel
             )
-
-            // Start button
-            Button(
-                onClick = {
-                    val task = selectedTask
-                    if (task != null) {
-                        viewModel.startPomodoro(
-                            context = context,
-                            task = task,
-                            focusMinutes = focusMinutes,
-                            targetSessions = targetSessions,
-                            shortBreakMinutes = shortBreakMinutes,
-                            longBreakMinutes = longBreakMinutes,
-                            markCompleteOnFinish = markCompleteOnFinish,
-                            templateName = templates.find { it.id == selectedTemplateId }?.name
-                        )
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                enabled = selectedTask != null || selectedTaskId != null
-            ) {
-                Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
         }
 
         // Timer Display & Controls (active state)
