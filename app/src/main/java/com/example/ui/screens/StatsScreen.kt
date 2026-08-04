@@ -67,10 +67,12 @@ import com.example.core.database.entity.SleepLogEntity
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.Date
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.style.TextAlign
 import com.example.core.utils.PersianCalendarHelper
@@ -90,6 +92,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.nativeCanvas
 import kotlin.math.roundToInt
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import com.example.ui.components.CalendarDatePickerDialog
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun StatsScreen(viewModel: MainViewModel) {
@@ -144,6 +151,70 @@ fun StatsScreen(viewModel: MainViewModel) {
     }
     val sleepDailyData = remember(sleepGraphRange, allSleepLogs) {
         computeSleepDailyData(sleepGraphRange.first, sleepGraphRange.second, allSleepLogs)
+    }
+
+    // Dreams & Notes state
+    var dreamsFilterMode by remember { mutableStateOf("ALL") }
+    var dreamsYear by remember(usePersianCalendar) { mutableIntStateOf(
+        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear()
+        else Calendar.getInstance().get(Calendar.YEAR)
+    ) }
+    var dreamsMonth by remember(usePersianCalendar) { mutableIntStateOf(
+        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth()
+        else Calendar.getInstance().get(Calendar.MONTH) + 1
+    ) }
+    var dreamsSelectedDate by remember { mutableStateOf<String?>(null) }
+    var showDreamsDatePicker by remember { mutableStateOf(false) }
+
+    val dreamsMonthLabel = remember(dreamsYear, dreamsMonth, usePersianCalendar) {
+        if (usePersianCalendar) {
+            "${PersianCalendarHelper.monthNames.getOrElse(dreamsMonth - 1) { "" }} $dreamsYear"
+        } else {
+            val names = arrayOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+            "${names.getOrElse(dreamsMonth - 1) { "" }} $dreamsYear"
+        }
+    }
+
+    val dreamDateLabels = remember {
+        val todayCal = Calendar.getInstance()
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val today = sdf.format(todayCal.time)
+        todayCal.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterday = sdf.format(todayCal.time)
+        val currentYear = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date())
+        Triple(today, yesterday, currentYear)
+    }
+
+    val dreamHighlightedDates = remember(allSleepLogs) {
+        allSleepLogs.filter { it.notes.isNotBlank() }.map { it.date }.toSet()
+    }
+
+    val dreamsDisplayData = remember(allSleepLogs, dreamsFilterMode, dreamsYear, dreamsMonth, usePersianCalendar, dreamsSelectedDate) {
+        val dreamsLogs = allSleepLogs.filter { it.notes.isNotBlank() }
+        val filtered = when (dreamsFilterMode) {
+            "ALL" -> dreamsLogs
+            "7D" -> {
+                val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -6) }
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val start = sdf.format(cal.time)
+                dreamsLogs.filter { it.date >= start }
+            }
+            "30D" -> {
+                val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -29) }
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val start = sdf.format(cal.time)
+                dreamsLogs.filter { it.date >= start }
+            }
+            "MONTH" -> {
+                val (start, end, _) = computeLineGraphRange(dreamsYear, dreamsMonth, usePersianCalendar, "MONTH")
+                dreamsLogs.filter { it.date in start..end }
+            }
+            else -> dreamsLogs
+        }
+        val finalLogs = if (dreamsSelectedDate != null) {
+            filtered.filter { it.date == dreamsSelectedDate }
+        } else filtered
+        finalLogs.groupBy { it.date }.toSortedMap(compareByDescending { it })
     }
 
     // Trigger update on screen load
@@ -775,7 +846,262 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 4. Merged: Task Accomplishments + Time Spent by Label + Time of Day Activity
+        // ── Dream/Notes Card ──
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "DREAMS & NOTES",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ── Filter bar ──
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf("ALL" to "All", "7D" to "7d", "30D" to "30d", "MONTH" to "Month").forEach { (key, label) ->
+                            val isSelected = dreamsFilterMode == key
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable {
+                                    dreamsFilterMode = key
+                                    dreamsSelectedDate = null
+                                    if (key == "MONTH") {
+                                        if (usePersianCalendar) {
+                                            dreamsYear = PersianCalendarHelper.getCurrentPersianYear()
+                                            dreamsMonth = PersianCalendarHelper.getCurrentPersianMonth()
+                                        } else {
+                                            val now = Calendar.getInstance()
+                                            dreamsYear = now.get(Calendar.YEAR)
+                                            dreamsMonth = now.get(Calendar.MONTH) + 1
+                                        }
+                                    }
+                                }
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+
+                        if (dreamsFilterMode == "MONTH") {
+                            IconButton(
+                                onClick = {
+                                    if (usePersianCalendar) {
+                                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(dreamsYear, dreamsMonth, -1)
+                                        dreamsYear = y; dreamsMonth = m
+                                    } else {
+                                        if (dreamsMonth == 1) { dreamsYear--; dreamsMonth = 12 }
+                                        else dreamsMonth--
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, "Previous", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
+                            Text(
+                                text = dreamsMonthLabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            IconButton(
+                                onClick = {
+                                    if (usePersianCalendar) {
+                                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(dreamsYear, dreamsMonth, 1)
+                                        dreamsYear = y; dreamsMonth = m
+                                    } else {
+                                        if (dreamsMonth == 12) { dreamsYear++; dreamsMonth = 1 }
+                                        else dreamsMonth++
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, "Next", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        IconButton(onClick = { showDreamsDatePicker = true }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = "Pick date", modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    // ── Selected date chip ──
+                    if (dreamsSelectedDate != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.clickable { dreamsSelectedDate = null }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = dreamsSelectedDate!!,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Summary ──
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val totalDreams = dreamsDisplayData.values.flatten().size
+                    Text(
+                        text = "${totalDreams} dream${if (totalDreams != 1) "s" else ""} recorded",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ── Content ──
+                    if (dreamsDisplayData.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (allSleepLogs.none { it.notes.isNotBlank() })
+                                    "No dreams recorded yet. Add notes to your sleep log."
+                                else
+                                    "No dreams in this period.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            dreamsDisplayData.forEach { (dateStr, logs) ->
+                                val headerText = when (dateStr) {
+                                    dreamDateLabels.first -> "Today"
+                                    dreamDateLabels.second -> "Yesterday"
+                                    else -> {
+                                        val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateStr)
+                                        val year = SimpleDateFormat("yyyy", Locale.getDefault()).format(parsed!!)
+                                        val fmt = if (year == dreamDateLabels.third) "EEE, MMM d" else "EEE, MMM d, yyyy"
+                                        SimpleDateFormat(fmt, Locale.getDefault()).format(parsed)
+                                    }
+                                }
+                                Text(
+                                    text = headerText,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp)
+                                )
+
+                                logs.forEach { log ->
+                                    var expanded by remember { mutableStateOf(false) }
+                                    val needsExpand = log.notes.length > 100
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${log.hoursSlept} hrs",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "${"★".repeat(log.sleepQuality)}${"☆".repeat(5 - log.sleepQuality)}",
+                                                    fontSize = 12.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = log.notes,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = if (expanded || !needsExpand) Int.MAX_VALUE else 4,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = if (needsExpand) Modifier.clickable { expanded = !expanded } else Modifier
+                                            )
+                                            if (needsExpand) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = if (expanded) "Show less" else "Show more",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.clickable { expanded = !expanded }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showDreamsDatePicker) {
+                CalendarDatePickerDialog(
+                    highlightedDates = dreamHighlightedDates,
+                    initialUsePersian = usePersianCalendar,
+                    onDismiss = { showDreamsDatePicker = false },
+                    onDateSelected = { date ->
+                        dreamsSelectedDate = date
+                        dreamsFilterMode = "ALL"
+                        showDreamsDatePicker = false
+                    }
+                )
+            }
+        }
+
+        // 5. Merged: Task Accomplishments + Time Spent by Label + Time of Day Activity
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
