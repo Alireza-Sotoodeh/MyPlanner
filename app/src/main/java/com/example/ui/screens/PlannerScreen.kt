@@ -63,6 +63,8 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Checkbox
@@ -1018,6 +1020,8 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                     onToggleSubtasksExpanded = { expanded ->
                                         expandedSubtasksMap[task.id] = expanded
                                     },
+                                    onMoveToTodo = { viewModel.moveTaskToTodo(task, taskSubtasks) },
+                                    onTurnIntoIdea = { viewModel.turnNoteIntoIdea(task, taskSubtasks) },
                                     onReorder = null
                                 )
                             }
@@ -1100,7 +1104,9 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                             onReorderSubtask = { subtask, subtaskList, delta -> viewModel.reorderTask(subtask, subtaskList, delta, false) },
                                             onToggleSubtasksExpanded = { expanded ->
                                                 expandedSubtasksMap[task.id] = expanded
-                                            }
+                                            },
+                                            onMoveToTodo = { viewModel.moveTaskToTodo(task, taskSubtasks) },
+                                            onTurnIntoIdea = { viewModel.turnNoteIntoIdea(task, taskSubtasks) }
                                         )
                                     }
                                     
@@ -1182,6 +1188,8 @@ fun BulletTaskItem(
     onReorder: ((Float, Boolean) -> Unit)? = null,
     onReorderSubtask: ((TaskEntity, List<TaskEntity>, Int) -> Unit)? = null,
     onStartSubtaskPomodoro: (TaskEntity) -> Unit = {},
+    onMoveToTodo: () -> Unit = {},
+    onTurnIntoIdea: () -> Unit = {},
     isDragging: Boolean = false,
     dragOffsetX: Float = 0f,
     dragOffsetY: Float = 0f,
@@ -1919,6 +1927,24 @@ fun BulletTaskItem(
                         expandedMenu = false
                     }
                 )
+                DropdownMenuItem(
+                    text = { Text("Move to To-Do") },
+                    leadingIcon = { Icon(Icons.Default.Checklist, contentDescription = null) },
+                    onClick = {
+                        onMoveToTodo()
+                        expandedMenu = false
+                    }
+                )
+                if (task.type == "NOTE") {
+                    DropdownMenuItem(
+                        text = { Text("Turn into Idea") },
+                        leadingIcon = { Icon(Icons.Default.Lightbulb, contentDescription = null) },
+                        onClick = {
+                            onTurnIntoIdea()
+                            expandedMenu = false
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Delete Intention") },
                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },

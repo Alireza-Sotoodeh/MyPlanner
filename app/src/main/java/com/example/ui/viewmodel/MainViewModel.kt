@@ -1523,6 +1523,46 @@ class MainViewModel(
         }
     }
 
+    fun moveTaskToTodo(task: TaskEntity, subtasks: List<TaskEntity>) {
+        viewModelScope.launch {
+            val mergedDescription = buildString {
+                append(task.description)
+                if (subtasks.isNotEmpty()) {
+                    append("\n\nSubtasks:\n")
+                    subtasks.forEachIndexed { i, s -> append("${i + 1}. ${s.title}\n") }
+                }
+            }
+            todoRepository.insertTodo(
+                TodoEntity(
+                    title = task.title,
+                    description = mergedDescription.trim(),
+                    priority = task.priorityLevel,
+                    status = "PENDING"
+                )
+            )
+            taskRepository.deleteTaskAndSubtasks(task)
+        }
+    }
+
+    fun turnNoteIntoIdea(task: TaskEntity, subtasks: List<TaskEntity>) {
+        viewModelScope.launch {
+            val ideaId = ideaRepository.insertIdea(
+                IdeaEntity(title = task.title, description = task.description)
+            )
+            subtasks.forEachIndexed { index, subtask ->
+                ideaRepository.insertStage(
+                    IdeaStageEntity(
+                        ideaId = ideaId,
+                        title = subtask.title,
+                        isCompleted = false,
+                        orderIndex = index
+                    )
+                )
+            }
+            taskRepository.deleteTaskAndSubtasks(task)
+        }
+    }
+
     // === Diary CRUD ===
     val diaryAllDates: StateFlow<List<String>> = diaryRepository.getAllDates()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

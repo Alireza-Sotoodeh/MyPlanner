@@ -997,3 +997,121 @@ class HistoryStack(private val maxSize: Int = 50) {
 | Rapid typing | 300ms debounce prevents redundant DB writes |
 | `*` vs `**` at same position | `**` (bold) takes priority over `*` (italic) at same index |
 | Unmatched `**` or `*` | Left as plain text — same as current `parseInlineMarkdown` behavior |
+
+---
+
+## IdeasScreen Layout Fix: Add Idea Button Not Visible
+
+### Issue
+The "Add Idea" button (full-width `Button` pinned at the bottom of the `Column`) was **not visible** on the emulator because:
+
+- Empty-state `Box(modifier = Modifier.fillMaxSize())` consumed **all** remaining height in the parent `Column`
+- The button at line 136 was pushed below the visible viewport (off-screen / behind nav bar)
+
+### Root Cause
+```kotlin
+// BEFORE (lines 95–134)
+if (filteredIdeas.isEmpty()) {
+    Box(modifier = Modifier.fillMaxSize(), ...) {  // ← steals ALL space
+        // empty state content
+    }
+} else {
+    LazyColumn(modifier = Modifier.weight(1f), ...) { ... }
+}
+// Box with Add Idea button → pushed off-screen when empty
+```
+
+The `fillMaxSize()` on the empty-state Box doesn't respect siblings in the `Column` — it fills the entire parent, pushing the button below the visible bottom edge.
+
+### Fix
+Wrap both branches in a `Box(Modifier.weight(1f).fillMaxWidth())` so the content area flexes dynamically, and the button always stays pinned at the bottom:
+
+```kotlin
+// AFTER (lines 95–136)
+Box(modifier = Modifier.weight(1f).fillMaxWidth()) {  // ← flex container
+    if (filteredIdeas.isEmpty()) {
+        Box(Modifier.fillMaxSize(), ...) { ... }
+    } else {
+        LazyColumn(modifier = Modifier.fillMaxSize(), ...) { ... }
+    }
+}
+// Box with Add Idea button → always visible at bottom
+```
+
+**File:** `app/src/main/java/com/example/ui/screens/IdeasScreen.kt`
+
+---
+
+## Daily View: "Move to To-Do" and "Turn into Idea" (3-Dot Menu)
+
+### Feature 1: Move to To-Do
+**Available for:** All types (TASK, EVENT, NOTE)
+
+**Behavior (MOVE):**
+1. Creates a `TodoEntity` with `title = task.title`, `description = task.description + merged subtask titles`, `priority = task.priorityLevel`
+2. Deletes the original task + subtasks via `taskRepository.deleteTaskAndSubtasks(task)`
+
+**Edge case — subtasks:** If the task has subtasks, their titles are appended as a numbered list in the todo's description field:
+```
+Original description
+\n\nSubtasks:\n1. Sub1\n2. Sub2
+```
+
+### Feature 2: Turn into Idea
+**Available for:** NOTE type only
+
+**Behavior (MOVE):**
+1. Creates an `IdeaEntity` with `title = task.title`, `description = task.description`
+2. Each subtask → `IdeaStageEntity` (sequential `orderIndex`, `isCompleted = false`)
+3. Deletes the original note + subtasks via `taskRepository.deleteTaskAndSubtasks(task)`
+
+### Implementation
+
+**File:** `app/src/main/java/com/example/ui/viewmodel/MainViewModel.kt`
+
+```kotlin
+fun moveTaskToTodo(task: TaskEntity, subtasks: List<TaskEntity>) {
+    viewModelScope.launch {
+        val mergedDescription = buildString {
+            append(task.description)
+            if (subtasks.isNotEmpty()) {
+                append("\n\nSubtasks:\n")
+                subtasks.forEachIndexed { i, s -> append("${i + 1}. ${s.title}\n") }
+            }
+        }
+        todoRepository.insertTodo(TodoEntity(
+            title = task.title,
+            description = mergedDescription.trim(),
+            priority = task.priorityLevel,
+            status = "PENDING"
+        ))
+        taskRepository.deleteTaskAndSubtasks(task)
+    }
+}
+
+fun turnNoteIntoIdea(task: TaskEntity, subtasks: List<TaskEntity>) {
+    viewModelScope.launch {
+        val ideaId = ideaRepository.insertIdea(IdeaEntity(title = task.title, description = task.description))
+        subtasks.forEachIndexed { index, subtask ->
+            ideaRepository.insertStage(IdeaStageEntity(ideaId = ideaId, title = subtask.title, isCompleted = false, orderIndex = index))
+        }
+        taskRepository.deleteTaskAndSubtasks(task)
+    }
+}
+```
+
+**File:** `app/src/main/java/com/example/ui/screens/PlannerScreen.kt`
+
+**BulletTaskItem changes:**
+- Added `onMoveToTodo: () -> Unit = {}` and `onTurnIntoIdea: () -> Unit = {}` callback params
+- Added "Move to To-Do" `DropdownMenuItem` (icon: `Checklist`) for all types
+- Added "Turn into Idea" `DropdownMenuItem` (icon: `Lightbulb`) only when `task.type == "NOTE"`
+
+**Call sites wired (2 locations):**
+| Call Site | Lines | Context |
+|-----------|-------|---------|
+| Active tasks | ~1023 | `viewModel.moveTaskToTodo(task, taskSubtasks)` / `viewModel.turnNoteIntoIdea(task, taskSubtasks)` |
+| Completed tasks | ~1105 | Same wiring (allows converting completed items too) |
+
+### Build Verification
+`.\gradlew.bat assembleDebug` — expects BUILD SUCCESSFUL

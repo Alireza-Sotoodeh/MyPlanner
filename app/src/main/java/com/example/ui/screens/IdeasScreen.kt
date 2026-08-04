@@ -92,43 +92,45 @@ fun IdeasScreen(
             onDeleteGroup = { showDeleteGroupConfirm = it }
         )
 
-        if (filteredIdeas.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Lightbulb,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "No ideas yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                    Text(
-                        "Tap + to create your first idea",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                    )
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (filteredIdeas.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "No ideas yet",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            "Tap + to create your first idea",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                        )
+                    }
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(filteredIdeas, key = { it.id }) { idea ->
-                    IdeaCard(
-                        idea = idea,
-                        groups = groups,
-                        viewModel = viewModel,
-                        onEdit = { editingIdea = it },
-                        onDelete = { showDeleteIdeaConfirm = it },
-                        onAddToPlanner = { ideaForPlanner = it }
-                    )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredIdeas, key = { it.id }) { idea ->
+                        IdeaCard(
+                            idea = idea,
+                            groups = groups,
+                            viewModel = viewModel,
+                            onEdit = { editingIdea = it },
+                            onDelete = { showDeleteIdeaConfirm = it },
+                            onAddToPlanner = { ideaForPlanner = it }
+                        )
+                    }
                 }
             }
         }
