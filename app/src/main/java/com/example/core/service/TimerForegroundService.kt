@@ -352,10 +352,13 @@ class TimerForegroundService : Service() {
             null -> CHANNEL_POMODORO_LIVE
         }
 
+        val accentColor = when {
+            current.mode == TimerMode.POMODORO && current.phase == "BREAK" -> 0xFFFF7043.toInt()
+            else -> 0xFF00E676.toInt()
+        }
+
         val title = when (current.mode) {
-            TimerMode.POMODORO -> {
-                "POMODORO · ${current.phase}"
-            }
+            TimerMode.POMODORO -> "POMODORO"
             TimerMode.CHRONOMETER -> "CHRONOMETER"
             null -> "Timer"
         }
@@ -371,6 +374,17 @@ class TimerForegroundService : Service() {
                 val m = (current.elapsedSeconds % 3600) / 60
                 val s = current.elapsedSeconds % 60
                 String.format(Locale.getDefault(), "%02d:%02d:%02d elapsed", h, m, s)
+            }
+            null -> ""
+        }
+
+        val subText = when (current.mode) {
+            TimerMode.POMODORO -> {
+                val sessionStr = "Session ${current.sessionNumber}"
+                "$sessionStr · ${current.phase}"
+            }
+            TimerMode.CHRONOMETER -> {
+                if (current.taskId > 0) "Task linked" else ""
             }
             null -> ""
         }
@@ -394,7 +408,7 @@ class TimerForegroundService : Service() {
             }
         }
 
-        val pauseIcon = if (current.paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+        val pauseIcon = if (current.paused) R.drawable.ic_notification_play else R.drawable.ic_notification_pause
         val pauseLabel = if (current.paused) "Resume" else "Pause"
 
         val contentIntent = Intent(this, MainActivity::class.java).apply {
@@ -431,8 +445,9 @@ class TimerForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, channelId)
+        val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_timer_notification)
+            .setColor(accentColor)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
@@ -441,9 +456,20 @@ class TimerForegroundService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(contentPendingIntent)
             .addAction(pauseIcon, pauseLabel, togglePausePendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
-            .addAction(android.R.drawable.ic_menu_delete, "Discard", discardPendingIntent)
-            .build()
+            .addAction(R.drawable.ic_notification_stop, "Stop", stopPendingIntent)
+            .addAction(R.drawable.ic_notification_delete, "Discard", discardPendingIntent)
+
+        if (subText.isNotBlank()) {
+            builder.setSubText(subText)
+        }
+
+        if (current.mode == TimerMode.POMODORO && current.running) {
+            val total = current.focusMinutes * 60
+            val elapsed = total - current.secondsLeft
+            builder.setProgress(total, elapsed, false)
+        }
+
+        return builder.build()
     }
 
     private fun updateNotification() {
