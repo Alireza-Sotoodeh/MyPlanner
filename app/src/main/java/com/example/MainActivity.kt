@@ -31,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -143,11 +144,6 @@ class MainActivity : ComponentActivity() {
                     !viewModel.hasSkippedPermissionsGate()
                 ) }
 
-                val currentUndoEntry = undoStack.lastOrNull()
-                val remaining = currentUndoEntry?.let {
-                    ((it.expiryTime - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
-                } ?: 0
-
                 Box(modifier = Modifier.fillMaxSize()) {
                     AnimatedContent(
                         targetState = showPermissions,
@@ -192,14 +188,27 @@ class MainActivity : ComponentActivity() {
                                     BackHandler(selectedTab != 0) {
                                         viewModel.selectTab(0)
                                     }
-                                    currentUndoEntry?.let { entry ->
-                                        UndoBar(
-                                            message = entry.message,
-                                            countdownSeconds = remaining,
-                                            onRestore = { viewModel.restoreFromUndo(entry.id) },
-                                            onDismiss = { viewModel.dismissUndo(entry.id) },
-                                            modifier = Modifier.align(Alignment.BottomCenter)
-                                        )
+                                    if (undoStack.isNotEmpty()) {
+                                        Column(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .padding(bottom = 4.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            undoStack.forEach { entry ->
+                                                val remaining = ((entry.expiryTime - System.currentTimeMillis()) / 1000)
+                                                    .toInt().coerceAtLeast(0)
+                                                key(entry.id) {
+                                                    UndoBar(
+                                                        message = entry.message,
+                                                        countdownSeconds = remaining,
+                                                        onRestore = { viewModel.restoreFromUndo(entry.id) },
+                                                        onDismiss = { viewModel.dismissUndo(entry.id) },
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

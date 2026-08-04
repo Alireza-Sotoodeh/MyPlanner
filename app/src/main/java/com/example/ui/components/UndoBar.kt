@@ -4,14 +4,17 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -22,7 +25,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,30 +42,30 @@ fun UndoBar(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    key(message) {
-        val startFraction = (countdownSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
-        val progress = remember { Animatable(startFraction) }
-        val progressValue by progress.asState()
+    val startFraction = (countdownSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
+    val progress = remember { Animatable(startFraction) }
+    val progressValue by progress.asState()
 
-        LaunchedEffect(startFraction) {
-            val remainingMs = (startFraction * totalSeconds * 1000).toInt().coerceAtLeast(0)
-            if (remainingMs > 0) {
-                progress.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = remainingMs,
-                        easing = LinearEasing
-                    )
+    LaunchedEffect(startFraction) {
+        val remainingMs = (startFraction * totalSeconds * 1000).toInt().coerceAtLeast(0)
+        if (remainingMs > 0) {
+            progress.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = remainingMs,
+                    easing = LinearEasing
                 )
-            }
-            onDismiss()
+            )
         }
+        onDismiss()
+    }
 
     val displaySeconds = ceil((progressValue * totalSeconds).toDouble()).toInt().coerceIn(0, totalSeconds)
 
     Card(
         modifier = modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth()
             .navigationBarsPadding(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
@@ -73,6 +75,7 @@ fun UndoBar(
     ) {
         Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .padding(start = 8.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -94,7 +97,16 @@ fun UndoBar(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = message,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(4.dp))
             TextButton(
                 onClick = onRestore,
                 modifier = Modifier.height(32.dp)
@@ -106,6 +118,5 @@ fun UndoBar(
                 )
             }
         }
-    }
     }
 }
