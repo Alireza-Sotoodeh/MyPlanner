@@ -1578,6 +1578,20 @@ fun BulletTaskItem(
                         )
                     }
                 }
+                if (task.postponeCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFFE53935).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "\u00D7${task.postponeCount}",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE53935),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
                 val priorityColor = when(task.priorityLevel) {
                     "High" -> Color(0xFFE53935)
                     "Medium" -> Color(0xFFFB8C00)

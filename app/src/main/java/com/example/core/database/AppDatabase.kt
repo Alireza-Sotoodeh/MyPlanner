@@ -59,7 +59,7 @@ import com.example.core.database.entity.TodoEntity
         LearnItemEntity::class,
         LearnSectionEntity::class
     ],
-    version = 30,
+    version = 31,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -269,6 +269,11 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_30_31 = Migration(30, 31) { db ->
+            db.execSQL("ALTER TABLE tasks ADD COLUMN postpone_count INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("UPDATE tasks SET postpone_count = 1 WHERE postponed = 1")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -276,7 +281,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "bulletcoach_database"
                 )
-                    .addMigrations(MIGRATION_1_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
+                    .addMigrations(MIGRATION_1_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

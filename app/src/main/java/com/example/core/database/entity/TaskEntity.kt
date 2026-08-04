@@ -53,6 +53,7 @@ data class TaskEntity(
     val linkedIdeaId: Long? = null,
     val linkedLearnSectionId: Long? = null,
     val postponed: Boolean = false,
+    val postponeCount: Int = 0,
     val isDeleted: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 ) {

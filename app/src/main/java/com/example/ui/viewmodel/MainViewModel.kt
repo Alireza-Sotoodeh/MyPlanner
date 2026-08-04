@@ -2556,7 +2556,7 @@ private val mottoRepository: MottoRepository,
     fun migrateTask(task: TaskEntity, targetDate: String, postpone: Boolean = true) {
         viewModelScope.launch {
             val updated = if (postpone) {
-                task.copy(date = targetDate, status = "PENDING", postponed = true)
+                task.copy(date = targetDate, status = "PENDING", postponed = true, postponeCount = task.postponeCount + 1)
             } else {
                 task.copy(date = targetDate, status = "PENDING")
             }
