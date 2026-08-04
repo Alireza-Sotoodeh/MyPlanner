@@ -2728,7 +2728,8 @@ class MainViewModel(
     fun hasAllRequiredPermissions(context: Context): Boolean {
         return hasNotificationPermission(context) && 
                hasExactAlarmPermission(context) && 
-               checkNotificationPolicyPermission(context)
+               checkNotificationPolicyPermission(context) &&
+               hasFullScreenIntentPermission(context)
     }
 
     fun hasUsageStatsPermission(context: Context): Boolean {

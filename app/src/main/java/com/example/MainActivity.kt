@@ -73,6 +73,7 @@ import com.example.core.service.TimerForegroundService
 import com.example.ui.components.UndoBar
 import com.example.ui.screens.HabitsScreen
 import com.example.ui.screens.MoreScreen
+import com.example.ui.screens.PermissionsScreen
 import com.example.ui.screens.PlannerScreen
 import com.example.ui.screens.StatsScreen
 import com.example.ui.screens.TimerScreen
@@ -83,6 +84,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableLongStateOf
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
@@ -150,6 +156,20 @@ class MainActivity : ComponentActivity() {
                 val undoStack by viewModel.undoStack.collectAsState()
                 var tick by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
+                val context = LocalContext.current
+                val lifecycleOwner = LocalLifecycleOwner.current
+                var showPermissions by remember { mutableStateOf(!viewModel.hasAllRequiredPermissions(context)) }
+
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            showPermissions = !viewModel.hasAllRequiredPermissions(context)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+
                 LaunchedEffect(undoStack) {
                     while (undoStack.isNotEmpty()) {
                         delay(1000)
@@ -163,58 +183,65 @@ class MainActivity : ComponentActivity() {
                 } ?: 0
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        snackbarHost = { SnackbarHost(snackbarHostState) },
-                        bottomBar = {
-                            AestheticNavigationBar(
-                                selectedTab = selectedTab,
-                                onTabSelected = { viewModel.selectTab(it) }
-                            )
-                        }
-                    ) { innerPadding ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding)
-                        ) {
-                            when (selectedTab) {
-                                0 -> PlannerScreen(viewModel = viewModel)
-                                1 -> HabitsScreen(viewModel = viewModel)
-                                2 -> TimerScreen(viewModel = viewModel)
-                                3 -> StatsScreen(viewModel = viewModel)
-                                4 -> MoreScreen(
-                                    viewModel = viewModel,
-                                    onNavigateToPlanner = { viewModel.selectTab(0) }
+                    if (showPermissions) {
+                        PermissionsScreen(
+                            viewModel = viewModel,
+                            onAllPermissionsGranted = { showPermissions = false }
+                        )
+                    } else {
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            snackbarHost = { SnackbarHost(snackbarHostState) },
+                            bottomBar = {
+                                AestheticNavigationBar(
+                                    selectedTab = selectedTab,
+                                    onTabSelected = { viewModel.selectTab(it) }
                                 )
                             }
-                            currentUndoEntry?.let { entry ->
-                                UndoBar(
-                                    message = entry.message,
-                                    countdownSeconds = remaining,
-                                    onRestore = { viewModel.restoreFromUndo(entry.id) },
-                                    onDismiss = { viewModel.dismissUndo(entry.id) },
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                )
-                            }
-                        }
-                    }
-
-                    if (showDayReviewOverlay) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            com.example.ui.screens.DayReviewScreen(
-                                viewModel = viewModel,
-                                initialDate = todayDate,
-                                onBack = {
-                                    showDayReviewOverlay = false
-                                    viewModel.dismissDayReviewPrompt()
+                        ) { innerPadding ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding)
+                            ) {
+                                when (selectedTab) {
+                                    0 -> PlannerScreen(viewModel = viewModel)
+                                    1 -> HabitsScreen(viewModel = viewModel)
+                                    2 -> TimerScreen(viewModel = viewModel)
+                                    3 -> StatsScreen(viewModel = viewModel)
+                                    4 -> MoreScreen(
+                                        viewModel = viewModel,
+                                        onNavigateToPlanner = { viewModel.selectTab(0) }
+                                    )
                                 }
-                            )
+                                currentUndoEntry?.let { entry ->
+                                    UndoBar(
+                                        message = entry.message,
+                                        countdownSeconds = remaining,
+                                        onRestore = { viewModel.restoreFromUndo(entry.id) },
+                                        onDismiss = { viewModel.dismissUndo(entry.id) },
+                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showDayReviewOverlay) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                com.example.ui.screens.DayReviewScreen(
+                                    viewModel = viewModel,
+                                    initialDate = todayDate,
+                                    onBack = {
+                                        showDayReviewOverlay = false
+                                        viewModel.dismissDayReviewPrompt()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
