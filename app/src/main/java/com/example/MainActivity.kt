@@ -35,9 +35,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.util.Log
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +81,7 @@ import androidx.compose.material.icons.filled.Timer
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
+    private lateinit var dayReviewTriggeredReceiver: BroadcastReceiver
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,34 +114,79 @@ class MainActivity : ComponentActivity() {
         )
         viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
 
+        if (intent.getBooleanExtra("open_day_review", false)) {
+            viewModel.checkAndTriggerDayReviewPrompt()
+        }
+
         setContent {
             MyApplicationTheme {
                 val selectedTab by viewModel.currentTab.collectAsState()
+                val showPrompt by viewModel.showDayReviewPrompt.collectAsState()
+                val todayDate by viewModel.todayDate.collectAsState()
+                val snackbarHostState = remember { SnackbarHostState() }
+                var showDayReviewOverlay by remember { mutableStateOf(false) }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    bottomBar = {
-                        AestheticNavigationBar(
-                            selectedTab = selectedTab,
-                            onTabSelected = { viewModel.selectTab(it) }
-                        )
-                    }
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        when (selectedTab) {
-                            0 -> PlannerScreen(viewModel = viewModel)
-                            1 -> HabitsScreen(viewModel = viewModel)
-                            2 -> PomodoroScreen(viewModel = viewModel)
-                            3 -> StatsScreen(viewModel = viewModel)
-                            4 -> MoreScreen(
-                                viewModel = viewModel,
-                                onNavigateToPlanner = { viewModel.selectTab(0) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        bottomBar = {
+                            AestheticNavigationBar(
+                                selectedTab = selectedTab,
+                                onTabSelected = { viewModel.selectTab(it) }
                             )
                         }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            when (selectedTab) {
+                                0 -> PlannerScreen(viewModel = viewModel)
+                                1 -> HabitsScreen(viewModel = viewModel)
+                                2 -> PomodoroScreen(viewModel = viewModel)
+                                3 -> StatsScreen(viewModel = viewModel)
+                                4 -> MoreScreen(
+                                    viewModel = viewModel,
+                                    onNavigateToPlanner = { viewModel.selectTab(0) }
+                                )
+                            }
+                        }
+                    }
+
+                    if (showDayReviewOverlay) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            com.example.ui.screens.DayReviewScreen(
+                                viewModel = viewModel,
+                                initialDate = todayDate,
+                                onBack = {
+                                    showDayReviewOverlay = false
+                                    viewModel.dismissDayReviewPrompt()
+                                }
+                            )
+                        }
+                    }
+                }
+
+                LaunchedEffect(showPrompt) {
+                    if (showPrompt) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Time to review your day!",
+                            actionLabel = "Review",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            showDayReviewOverlay = true
+                        }
+                    } else {
+                        showDayReviewOverlay = false
+                        snackbarHostState.currentSnackbarData?.dismiss()
                     }
                 }
             }
@@ -139,6 +197,36 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (::viewModel.isInitialized) {
             viewModel.refreshSystemDate()
+            viewModel.checkAndTriggerDayReviewPrompt()
+        }
+        val filter = IntentFilter("com.example.action.DAY_REVIEW_TRIGGERED")
+        dayReviewTriggeredReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                viewModel.checkAndTriggerDayReviewPrompt()
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(dayReviewTriggeredReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(dayReviewTriggeredReceiver, filter)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::dayReviewTriggeredReceiver.isInitialized) {
+            try {
+                unregisterReceiver(dayReviewTriggeredReceiver)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Unregister receiver failed", e)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("open_day_review", false)) {
+            viewModel.checkAndTriggerDayReviewPrompt()
         }
     }
 }
