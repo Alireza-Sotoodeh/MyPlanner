@@ -31,39 +31,30 @@ fun MottoCard(
         exit = fadeOut() + slideOutVertically { -it }
     ) {
         motto?.let {
-            Card(
-                modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                ),
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            Column(
+                modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Text(
+                    "\"${it.text}\"",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 22.sp
+                )
+                if (it.author.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
                     Text(
-                        "\"${it.text}\"",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        fontStyle = FontStyle.Italic,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        "— ${it.author}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         textAlign = TextAlign.Center,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 20.sp
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    if (it.author.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "— ${it.author}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.fillMaxWidth().padding(end = 4.dp)
-                        )
-                    }
                 }
             }
         }
