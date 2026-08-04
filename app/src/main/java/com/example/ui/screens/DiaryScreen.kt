@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -154,14 +156,14 @@ fun DiaryScreen(
     val entry by viewModel.diaryEntryForDate(currentDate).collectAsState(initial = null)
 
     var title by remember { mutableStateOf("") }
-    var content by remember { mutableStateOf("") }
+    var contentValue by remember { mutableStateOf(TextFieldValue("")) }
 
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(currentDate) {
         val savedEntry = viewModel.diaryEntryForDate(currentDate).first()
         title = savedEntry?.title ?: ""
-        content = savedEntry?.content ?: ""
+        contentValue = TextFieldValue(savedEntry?.content ?: "")
     }
 
     var autoSaveJob by remember { mutableStateOf<Job?>(null) }
@@ -170,20 +172,20 @@ fun DiaryScreen(
         autoSaveJob?.cancel()
         autoSaveJob = scope.launch {
             delay(300)
-            viewModel.saveDiaryEntry(currentDate, title.trim(), content.trim())
+            viewModel.saveDiaryEntry(currentDate, title.trim(), contentValue.text.trim())
         }
     }
 
     fun saveNow() {
         autoSaveJob?.cancel()
-        viewModel.saveDiaryEntry(currentDate, title.trim(), content.trim())
+        viewModel.saveDiaryEntry(currentDate, title.trim(), contentValue.text.trim())
     }
 
     fun deleteEntry() {
         autoSaveJob?.cancel()
         viewModel.deleteDiaryEntry(currentDate)
         title = ""
-        content = ""
+        contentValue = TextFieldValue("")
     }
 
     fun navigateDate(offset: Int) {
@@ -193,6 +195,53 @@ fun DiaryScreen(
         try { cal.time = fmt.parse(currentDate) ?: Calendar.getInstance().time } catch (_: Exception) {}
         cal.add(Calendar.DAY_OF_YEAR, offset)
         currentDate = fmt.format(cal.time)
+    }
+
+    fun wrapText(prefix: String, suffix: String) {
+        val t = contentValue.text
+        val sel = contentValue.selection
+        val s = sel.start; val e = sel.end
+        val sb = StringBuilder(t).apply { insert(e, suffix); insert(s, prefix) }
+        val cursor = if (s == e) s + prefix.length else e + prefix.length + suffix.length
+        contentValue = TextFieldValue(text = sb.toString(), selection = TextRange(cursor))
+        triggerAutoSave()
+    }
+
+    fun formatBold() = wrapText("**", "**")
+    fun formatItalic() = wrapText("*", "*")
+    fun formatStrikethrough() = wrapText("~~", "~~")
+
+    fun insertBullet() {
+        val t = contentValue.text
+        val c = contentValue.selection.start
+        val ls = t.lastIndexOf('\n', c - 1) + 1
+        val lEnd = t.indexOf('\n', ls).let { if (it == -1) t.length else it }
+        if (t.substring(ls, lEnd).startsWith("- ")) return
+        contentValue = TextFieldValue(
+            text = t.substring(0, ls) + "- " + t.substring(ls),
+            selection = TextRange(c + 2)
+        )
+        triggerAutoSave()
+    }
+
+    fun insertHeading() {
+        val t = contentValue.text
+        val c = contentValue.selection.start
+        val ls = t.lastIndexOf('\n', c - 1) + 1
+        val lEnd = t.indexOf('\n', ls).let { if (it == -1) t.length else it }
+        val line = t.substring(ls, lEnd)
+        if (line.startsWith("### ")) {
+            contentValue = TextFieldValue(
+                text = t.substring(0, ls) + line.substring(4) + t.substring(lEnd),
+                selection = TextRange((c - 4).coerceAtLeast(ls))
+            )
+        } else {
+            contentValue = TextFieldValue(
+                text = t.substring(0, ls) + "### " + t.substring(ls),
+                selection = TextRange(c + 4)
+            )
+        }
+        triggerAutoSave()
     }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -223,7 +272,7 @@ fun DiaryScreen(
             )
             IconButton(
                 onClick = { showDeleteConfirm = true },
-                enabled = entry != null || content.isNotBlank() || title.isNotBlank()
+                enabled = entry != null || contentValue.text.isNotBlank() || title.isNotBlank()
             ) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete entry")
             }
@@ -274,18 +323,52 @@ fun DiaryScreen(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val buttons = listOf(
+                Triple("B", "Bold") { formatBold() },
+                Triple("I", "Italic") { formatItalic() },
+                Triple("S", "Strikethrough") { formatStrikethrough() },
+                Triple("\u2022", "Bullet") { insertBullet() },
+                Triple("H", "Heading") { insertHeading() },
+            )
+            buttons.forEach { (label, desc, action) ->
+                OutlinedButton(
+                    onClick = action,
+                    modifier = Modifier.height(40.dp).widthIn(min = 40.dp),
+                    contentPadding = PaddingValues(8.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                ) {
+                    Text(
+                        label,
+                        fontSize = 14.sp,
+                        fontWeight = when (label) {
+                            "B" -> FontWeight.ExtraBold
+                            "H" -> FontWeight.Bold
+                            else -> FontWeight.Normal
+                        },
+                        fontStyle = if (label == "I") FontStyle.Italic else FontStyle.Normal,
+                        textDecoration = if (label == "S") TextDecoration.LineThrough else TextDecoration.None
+                    )
+                }
+            }
+        }
+
         Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp)) {
             BasicTextField(
-                value = content,
+                value = contentValue,
                 onValueChange = {
-                    content = it
+                    contentValue = it
                     triggerAutoSave()
                 },
                 modifier = Modifier.fillMaxSize(),
                 textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface),
                 visualTransformation = MarkdownVisualTransformation(),
                 decorationBox = { innerTextField ->
-                    if (content.isEmpty()) {
+                    if (contentValue.text.isEmpty()) {
                         Text(
                             "Write in markdown...",
                             fontSize = 14.sp,
