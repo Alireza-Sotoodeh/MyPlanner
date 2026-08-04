@@ -2882,6 +2882,56 @@ fun MonthlyPlannerView(
                 } else {
                     val activeTasks = mainTasks.filter { it.status != "COMPLETED" }
                     val completedTasks = mainTasks.filter { it.status == "COMPLETED" }
+                    val totalCount = mainTasks.size
+                    val activeCount = activeTasks.size
+                    val completedCount = completedTasks.size
+                    val completionProgress = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0f
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("$totalCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurface)
+                                Text("TOTAL", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(32.dp)
+                                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("$activeCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
+                                Text("PENDING", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(32.dp)
+                                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("$completedCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = Color(0xFF43A047))
+                                Text("DONE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047), letterSpacing = 0.5.sp)
+                            }
+                        }
+                        if (totalCount > 0) {
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { completionProgress },
+                                color = Color(0xFF43A047),
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
+                            )
+                        }
+                    }
 
                     LazyColumn(
                         modifier = Modifier
