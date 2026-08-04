@@ -308,6 +308,7 @@ class TimerForegroundService : Service() {
                 putExtra("ringtoneUri", prefs.getString("pomodoro_ringtone_uri", "") ?: "")
                 putExtra("ringtoneEnabled", prefs.getBoolean("pomodoro_ringtone_enabled", true))
                 putExtra("vibrateEnabled", prefs.getBoolean("pomodoro_vibrate_enabled", true))
+                putExtra("vibratePattern", prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat")
             }
             startActivity(intent)
         } catch (e: Exception) {
@@ -354,6 +355,7 @@ class TimerForegroundService : Service() {
                 putExtra("ringtoneUri", prefs.getString("pomodoro_ringtone_uri", "") ?: "")
                 putExtra("ringtoneEnabled", prefs.getBoolean("pomodoro_ringtone_enabled", true))
                 putExtra("vibrateEnabled", prefs.getBoolean("pomodoro_vibrate_enabled", true))
+                putExtra("vibratePattern", prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat")
             }
             val pendingIntent = PendingIntent.getActivity(
                 this, 4003, activityIntent,

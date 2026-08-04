@@ -76,6 +76,7 @@ class PomodoroFinishActivity : ComponentActivity() {
         val ringtoneUriStr = intent.getStringExtra("ringtoneUri") ?: ""
         val ringtoneEnabled = intent.getBooleanExtra("ringtoneEnabled", true)
         val vibrateEnabled = intent.getBooleanExtra("vibrateEnabled", true)
+        val vibratePattern = intent.getStringExtra("vibratePattern") ?: "heartbeat"
 
         val durationMinutes = durationSeconds / 60
         val isTest = phase == "TEST"
@@ -131,12 +132,12 @@ class PomodoroFinishActivity : ComponentActivity() {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator?.vibrate(
-                    VibrationEffect.createWaveform(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0),
+                    VibrationEffect.createWaveform(com.example.ui.viewmodel.MainViewModel.getVibrationPattern(vibratePattern), 0),
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
                 )
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0)
+                vibrator?.vibrate(com.example.ui.viewmodel.MainViewModel.getVibrationPattern(vibratePattern), 0)
             }
         }
 

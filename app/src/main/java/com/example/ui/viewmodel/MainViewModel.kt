@@ -256,9 +256,32 @@ class MainViewModel(
     private val _pomodoroVibrateEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_vibrate_enabled", true))
     val pomodoroVibrateEnabled: StateFlow<Boolean> = _pomodoroVibrateEnabled.asStateFlow()
 
+    private val _pomodoroVibratePattern = MutableStateFlow(prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat")
+    val pomodoroVibratePattern: StateFlow<String> = _pomodoroVibratePattern.asStateFlow()
+
+    data class VibrationPreset(val name: String, val displayName: String, val pattern: LongArray) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is VibrationPreset) return false
+            return name == other.name
+        }
+        override fun hashCode() = name.hashCode()
+    }
+
     companion object {
-        val HEARTBEAT_PATTERN = longArrayOf(0, 300, 100, 300, 500, 300, 100, 300)
-        val HEARTBEAT_PATTERN_SINGLE = longArrayOf(0, 300, 100, 300)
+        val VIBRATION_PRESETS = listOf(
+            VibrationPreset("heartbeat", "Heartbeat", longArrayOf(0, 300, 100, 300, 500, 300, 100, 300)),
+            VibrationPreset("heartbeat_single", "Single Beat", longArrayOf(0, 300, 100, 300)),
+            VibrationPreset("pulse", "Pulse", longArrayOf(0, 200, 100, 200)),
+            VibrationPreset("siren", "Siren", longArrayOf(0, 500, 200, 500, 200, 500)),
+            VibrationPreset("buzzer", "Buzzer", longArrayOf(0, 100, 50, 100, 50, 100)),
+            VibrationPreset("ripple", "Ripple", longArrayOf(0, 100, 100, 200, 200, 300)),
+            VibrationPreset("staccato", "Staccato", longArrayOf(0, 50, 50, 50, 50, 50))
+        )
+        private val VIBRATION_PATTERN_MAP by lazy { VIBRATION_PRESETS.associateBy { it.name } }
+        fun getVibrationPattern(name: String): LongArray =
+            VIBRATION_PATTERN_MAP[name]?.pattern ?: VIBRATION_PRESETS.first().pattern
+
         private const val PREFS_KEY_ORIGINAL_DND_FILTER = "original_dnd_filter"
         val LEITNER_INTERVALS = intArrayOf(1, 3, 7, 16, 35, 90)
     }
@@ -507,6 +530,11 @@ class MainViewModel(
     fun updatePomodoroVibrateEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("pomodoro_vibrate_enabled", enabled).apply()
         _pomodoroVibrateEnabled.value = enabled
+    }
+
+    fun updatePomodoroVibratePattern(name: String) {
+        prefs.edit().putString("pomodoro_vibrate_pattern", name).apply()
+        _pomodoroVibratePattern.value = name
     }
 
     fun getCurrentRingtoneName(context: Context): String {
@@ -1029,6 +1057,7 @@ jsonString = backupFile.readText()
                 "dndEnabled" to _dndEnabled.value,
                 "ringtoneEnabled" to _pomodoroRingtoneEnabled.value,
                 "vibrateEnabled" to _pomodoroVibrateEnabled.value,
+                "vibratePattern" to _pomodoroVibratePattern.value,
                 "defaultBreakMinutes" to _defaultBreakMinutes.value
             ),
             "eventReminders" to mapOf(
@@ -3338,7 +3367,8 @@ jsonString = backupFile.readText()
                 putExtra("breakDuration", state.breakDuration ?: -1)
                 putExtra("ringtoneUri", _pomodoroRingtoneUri.value)
                 putExtra("ringtoneEnabled", _pomodoroRingtoneEnabled.value)
-                putExtra("vibrateEnabled", _pomodoroVibrateEnabled.value)
+            putExtra("vibrateEnabled", _pomodoroVibrateEnabled.value)
+            putExtra("vibratePattern", _pomodoroVibratePattern.value)
             }
             val pendingIntent = PendingIntent.getActivity(context, 4003, activityIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 

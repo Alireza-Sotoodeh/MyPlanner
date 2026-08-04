@@ -61,7 +61,9 @@ class AlarmActivity : ComponentActivity() {
                 @Suppress("DEPRECATION")
                 getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
-            val pattern = longArrayOf(0, 1000, 1000)
+            val prefs = getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+            val patternName = prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat"
+            val pattern = com.example.ui.viewmodel.MainViewModel.getVibrationPattern(patternName)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
             } else {

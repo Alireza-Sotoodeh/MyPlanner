@@ -553,6 +553,9 @@ class ReminderReceiver : BroadcastReceiver() {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "event_reminders"
+        val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+        val patternName = prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat"
+        val vibePattern = com.example.ui.viewmodel.MainViewModel.getVibrationPattern(patternName)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notificationManager.deleteNotificationChannel(channelId)
@@ -565,7 +568,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 setBypassDnd(true)
                 if (vibrate) {
                     enableVibration(true)
-                    vibrationPattern = longArrayOf(0, 500, 200, 500)
+                    vibrationPattern = vibePattern
                 }
                 if (sound) {
                     setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), null)
@@ -601,7 +604,7 @@ class ReminderReceiver : BroadcastReceiver() {
         }
 
         if (vibrate && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            builder.setVibrate(longArrayOf(0, 500, 200, 500))
+            builder.setVibrate(vibePattern)
         }
         if (sound && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             builder.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))

@@ -98,6 +98,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.BorderStroke
@@ -3649,10 +3650,12 @@ fun SettingsDialog(
     val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
     val pomodoroRingtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
     val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
+    val pomodoroVibratePattern by viewModel.pomodoroVibratePattern.collectAsState()
     val defaultBreakMinutes by viewModel.defaultBreakMinutes.collectAsState()
     var enteredPomodoroRingtoneUri by remember { mutableStateOf(pomodoroRingtoneUri) }
     var enteredPomodoroRingtoneEnabled by remember { mutableStateOf(pomodoroRingtoneEnabled) }
     var enteredPomodoroVibrateEnabled by remember { mutableStateOf(pomodoroVibrateEnabled) }
+    var enteredPomodoroVibratePattern by remember { mutableStateOf(pomodoroVibratePattern) }
     var enteredDefaultBreakMinutes by remember { mutableStateOf(defaultBreakMinutes.toString()) }
     val reviewTimePickerState = rememberTimePickerState(
         initialHour = enteredReviewTime.substringBefore(":").toIntOrNull() ?: 21,
@@ -3749,6 +3752,7 @@ fun SettingsDialog(
             viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
             viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
             viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
+            viewModel.updatePomodoroVibratePattern(enteredPomodoroVibratePattern)
             viewModel.updateReviewReminderTime(enteredReviewTime)
             viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
             viewModel.updateSleepReminderTime(enteredSleepTime)
@@ -4087,8 +4091,29 @@ fun SettingsDialog(
                         onCheckedChange = { enteredPomodoroVibrateEnabled = it; dirty = true }
                     )
                 }
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Text("Pattern: Heartbeat 🫀", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AnimatedVisibility(visible = enteredPomodoroVibrateEnabled) {
+                    Column(modifier = Modifier.padding(top = 4.dp)) {
+                        Text(
+                            text = "Vibration Pattern",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            com.example.ui.viewmodel.MainViewModel.VIBRATION_PRESETS.forEach { preset ->
+                                FilterChip(
+                                    selected = enteredPomodoroVibratePattern == preset.name,
+                                    onClick = { enteredPomodoroVibratePattern = preset.name; dirty = true },
+                                    label = { Text(preset.displayName, fontSize = 10.sp) },
+                                    modifier = Modifier.height(28.dp)
+                                )
+                            }
+                        }
+                    }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 Row(
@@ -4123,6 +4148,7 @@ fun SettingsDialog(
                     viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
                     viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
                     viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
+                    viewModel.updatePomodoroVibratePattern(enteredPomodoroVibratePattern)
                     viewModel.testPomodoroAlarm(context)
                 }) {
                     Text("Test Alarm", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
@@ -4350,6 +4376,7 @@ fun SettingsDialog(
                         viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
                         viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
                         viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
+                        viewModel.updatePomodoroVibratePattern(enteredPomodoroVibratePattern)
                         viewModel.updateReviewReminderTime(enteredReviewTime)
                         viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
                         viewModel.updateSleepReminderTime(enteredSleepTime)
