@@ -2,6 +2,7 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -203,6 +204,9 @@ class MainActivity : ComponentActivity() {
                                             viewModel = viewModel,
                                             onNavigateToPlanner = { viewModel.selectTab(0) }
                                         )
+                                    }
+                                    BackHandler(selectedTab != 0) {
+                                        viewModel.selectTab(0)
                                     }
                                     currentUndoEntry?.let { entry ->
                                         UndoBar(

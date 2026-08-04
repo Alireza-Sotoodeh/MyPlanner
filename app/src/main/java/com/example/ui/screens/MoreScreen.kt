@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import com.example.ui.components.MottoCard
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
@@ -62,6 +63,14 @@ fun MoreScreen(
     LaunchedEffect(currentScreen) {
         if (currentScreen !is MoreSubScreen.None) {
             viewModel.consumePendingMoreScreen()
+        }
+    }
+
+    BackHandler {
+        if (currentScreen != MoreSubScreen.None) {
+            currentScreen = MoreSubScreen.None
+        } else {
+            viewModel.selectTab(0)
         }
     }
 

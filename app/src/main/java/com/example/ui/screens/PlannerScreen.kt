@@ -172,6 +172,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import com.example.core.utils.PersianCalendarHelper
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
@@ -211,6 +212,11 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val selectedDate by viewModel.selectedDate.collectAsState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showYearOverview by rememberSaveable { mutableStateOf(true) }
+
+    BackHandler(selectedTab != 0) {
+        selectedTab = 0
+    }
+
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showTaskManager by remember { mutableStateOf(false) }
     var taskManagerInitialType by remember { mutableStateOf<TaskManagerType>(TaskManagerType.Task) }
