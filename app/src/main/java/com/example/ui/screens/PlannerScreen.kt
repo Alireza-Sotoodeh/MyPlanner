@@ -202,6 +202,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.launch
 
 private sealed class TaskManagerType {
@@ -1304,6 +1305,12 @@ fun BulletTaskItem(
     var reschedulePMonth by remember { mutableIntStateOf(0) }
     var reschedulePDay by remember { mutableIntStateOf(0) }
 
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+    val currentOnDragCancel by rememberUpdatedState(onDragCancel)
+    val currentOnReorder by rememberUpdatedState(onReorder)
+
     val actualIsDragging = if (onDragStart != null) isDragging else isDraggingInternal
     val actualOffsetX = if (onDragStart != null) dragOffsetX else offsetXInternal
     val actualOffsetY = if (onDragStart != null) dragOffsetY else offsetYInternal
@@ -1370,12 +1377,12 @@ fun BulletTaskItem(
                 if (onDragStart != null && !isCompleted) {
                     Modifier.pointerInput(task.id) {
                         detectDragGesturesAfterLongPress(
-                            onDragStart = { _ -> onDragStart() },
-                            onDragEnd = { onDragEnd?.invoke() },
-                            onDragCancel = { onDragCancel?.invoke() },
+                            onDragStart = { _ -> currentOnDragStart?.invoke() },
+                            onDragEnd = { currentOnDragEnd?.invoke() },
+                            onDragCancel = { currentOnDragCancel?.invoke() },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                onDrag?.invoke(dragAmount)
+                                currentOnDrag?.invoke(dragAmount)
                             }
                         )
                     }
@@ -1390,7 +1397,7 @@ fun BulletTaskItem(
                                 offsetXInternal = 0f
                                 offsetYInternal = 0f
                                 if (finalOffsetY != 0f || isSubtask) {
-                                    onReorder(finalOffsetY, isSubtask)
+                                    currentOnReorder?.invoke(finalOffsetY, isSubtask)
                                 }
                             },
                             onDragCancel = {
