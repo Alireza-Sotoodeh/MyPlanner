@@ -106,6 +106,7 @@ class ReminderReceiver : BroadcastReceiver() {
             "com.example.action.HABITS_REMINDER" -> { handleHabitsReminder(context); return }
             "com.example.action.TOMORROW_PLANNER_REMINDER" -> { handleTomorrowPlannerReminder(context); return }
             "com.example.action.LEARN_REVIEW_REMINDER" -> { handleLearnReviewReminder(context); return }
+            "com.example.action.SNOOZE_ALARM" -> { showSnoozedAlarm(context, intent); return }
         }
 
         val title = intent.getStringExtra("title") ?: "Event Reminder"
@@ -607,5 +608,26 @@ class ReminderReceiver : BroadcastReceiver() {
         }
 
         notificationManager.notify(taskId.toInt(), builder.build())
+    }
+
+    private fun showSnoozedAlarm(context: Context, intent: Intent) {
+        val title = intent.getStringExtra("title") ?: "Event Reminder"
+        val message = intent.getStringExtra("message") ?: "Starting soon"
+        val vibrate = intent.getBooleanExtra("vibrate", true)
+        val sound = intent.getBooleanExtra("sound", true)
+
+        val alarmIntent = Intent(context, AlarmActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("title", title)
+            putExtra("message", message)
+            putExtra("vibrate", vibrate)
+            putExtra("sound", sound)
+        }
+        val pendingIntent = PendingIntent.getActivity(context, 9999, alarmIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        try {
+            pendingIntent.send()
+        } catch (e: PendingIntent.CanceledException) {
+            e.printStackTrace()
+        }
     }
 }
