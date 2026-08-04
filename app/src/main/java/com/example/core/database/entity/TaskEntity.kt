@@ -24,7 +24,8 @@ data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val description: String = "",
-    val date: String, // "yyyy-MM-dd" for daily planner, "yyyy-MM" for monthly, "yyyy-Www" for weekly
+    /** Date string: "yyyy-MM-dd" for daily, "yyyy-MM" for monthly, "yyyy-'W'ww" for weekly tasks */
+    val date: String,
     val status: String = "PENDING", // PENDING, COMPLETED, MIGRATED, CANCELLED
     val type: String = "TASK", // TASK (•), EVENT (o), NOTE (-)
     val durationMinutes: Int = 0, // custom Pomodoro duration (0 = unset, use Pomodoro/Chronometer)

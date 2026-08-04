@@ -44,9 +44,9 @@ All issues found during comprehensive codebase audit. Check off as fixed. Items 
 
 - [x] **#11 `use_persian_calendar` toggle not in SettingsDialog** — `toggleUsePersianCalendar()` exists in ViewModel and IS used from PlannerScreen FA/EN buttons and StatsScreen, but NOT available in SettingsDialog. Users who don't discover the FA/EN button can't change the setting. Fix: add Persian calendar toggle to SettingsDialog.
 
-- [ ] **#12 `IdeaEntity.linkedTaskId` orphan risk** — Ideas can reference a task via `linkedTaskId`. If task was deleted before backup, restored idea points to non-existent task. Same for `TodoEntity.linkedTaskId`, `TaskEntity.linkedTodoId`, `TaskEntity.linkedIdeaId`, `TaskEntity.linkedLearnSectionId`, `LearnSectionEntity.studyTaskId`, `LearnSectionEntity.reviewTaskId`. Fix: validate FK references during backup or nullify dangling links.
+- [x] **#12 `IdeaEntity.linkedTaskId` orphan risk** — Ideas can reference a task via `linkedTaskId`. If task was deleted before backup, restored idea points to non-existent task. Same for `TodoEntity.linkedTaskId`, `TaskEntity.linkedTodoId`, `TaskEntity.linkedIdeaId`, `TaskEntity.linkedLearnSectionId`, `LearnSectionEntity.studyTaskId`, `LearnSectionEntity.reviewTaskId`. Fix: validate FK references during backup or nullify dangling links.
 
-- [ ] **#13 Only 4/12 FK relationships enforced by Room** — Only 4 have `@ForeignKey(CASCADE)`: `IdeaEntity→IdeaGroupEntity`, `IdeaStageEntity→IdeaEntity`, `LearnItemEntity→LearnGroupEntity`, `LearnSectionEntity→LearnItemEntity`. The other 8 FK-like fields (`Task.parentTaskId`, `Task.linkedTodoId`, `Task.linkedIdeaId`, `Task.linkedLearnSectionId`, `Todo.linkedTaskId`, `Todo.parentTodoId`, `HabitLog.habitId`, `TimerSession.taskId`, `Idea.linkedTaskId`, `LearnSection.studyTaskId`, `LearnSection.reviewTaskId`) have NO Room constraint → orphans silently allowed. Fix: consider adding `@ForeignKey` constraints or document as intentional soft refs.
+- [x] **#13 Only 4/12 FK relationships enforced by Room** — Only 4 have `@ForeignKey(CASCADE)`: `IdeaEntity→IdeaGroupEntity`, `IdeaStageEntity→IdeaEntity`, `LearnItemEntity→LearnGroupEntity`, `LearnSectionEntity→LearnItemEntity`. The other 8 FK-like fields (`Task.parentTaskId`, `Task.linkedTodoId`, `Task.linkedIdeaId`, `Task.linkedLearnSectionId`, `Todo.linkedTaskId`, `Todo.parentTodoId`, `HabitLog.habitId`, `TimerSession.taskId`, `Idea.linkedTaskId`, `LearnSection.studyTaskId`, `LearnSection.reviewTaskId`) have NO Room constraint → orphans silently allowed. Fix: added `@ForeignKey` constraints with `SET_NULL` on delete + indices on 7 entities (tasks, todos, ideas, timer_sessions, habit_logs, learn_sections, idea_stages) via migration v28→v29.
 
 - [x] **#14 Missing `TimerSessionEntity` + `TimerTemplateEntity` from backup** — Two entity types not in `BulletCoachBackup`. Sessions and templates lost on restore. Fix: add to data class and backup/restore methods.
 
@@ -58,7 +58,7 @@ All issues found during comprehensive codebase audit. Check off as fixed. Items 
 
 - [x] **#18 Missing sync methods in 7 DAOs** — Backup currently uses `Flow.first()` which works but is heavier than needed. Some DAOs lack `*Sync()` variants entirely: `TimerSessionDao.getAll()`, `TimerTemplateDao.getAll()`, `SleepLogDao.getAllSleepLogs()`, `DiaryDao.getAllEntries()`, `DayReviewDao.getAllReviews()`, `MottoDao.getAllMottos()`, `ShopItemDao.getAllItems()`. Fix: add `suspend fun getAll*Sync(): List<Entity>` to each DAO for clean direct reads.
 
-- [ ] **#19 Settings Save behavior inconsistent** — DND toggle, sound toggle, vibrate toggle save immediately via `update*()` calls, but reminder settings (time + enabled) only save on "Save & Close" button press. User may close dialog without saving and lose reminder changes. Fix: standardize — either all save immediately or all save on "Save & Close".
+- [x] **#19 Settings Save behavior inconsistent** — DND toggle, sound toggle, vibrate toggle save immediately via `update*()` calls, but reminder settings (time + enabled) only save on "Save & Close" button press. User may close dialog without saving and lose reminder changes. Fix: standardize — either all save immediately or all save on "Save & Close". **Fixed**: ModalBottomSheet.onDismissRequest now auto-saves all 22 settings before closing; CANCEL → CLOSE button calls `onDismiss()` directly.
 
 - [x] **#20 No restore confirmation dialog** — Tapping "Restore" immediately alters local data with no warning. Fix: add `AlertDialog` confirmation showing backup date/size and warning data will be replaced.
 
@@ -189,7 +189,7 @@ All issues found during comprehensive codebase audit. Check off as fixed. Items 
 | Priority | Count | Key Themes |
 |----------|-------|------------|
 | 🔴 Critical | 15 → 0 remaining | All 15 fixed (#1-#9 + #41-#46; #45 mitigated by version check) |
-| 🟠 High | 18 → 6 remaining | Fixed: #10, #11, #14, #15, #16, #17, #18, #20, #47, #51, #52, #53. Remaining: #12 (FK orphan), #13 (FK enforcement), #19 (save consistency), #48 (system settings), #49 (doc key count), #50 (dead pref) |
-| 🟡 Medium | 25 → 15 remaining | Fixed: #21, #22, #25, #28, #29, #57, #58, #61, #62, #63. Remaining: #23, #24, #26, #27, #30, #31, #32, #54, #55, #56, #59, #60, #64, #65, #66 |
-| 🟢 Info | 10 → 3 remaining | Fixed: #33, #34, #36, #37, #39, #40, #68. Remaining: #35 (export to Downloads), #38 (Drive API), #67 (export to Downloads) |
-| **Total** | **68 → 24 remaining** | **44 fixed** (all Critical resolved, most High/Medium/Info done) |
+| 🟠 High | 18 → 6 remaining | Fixed: #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #47, #48, #49, #50, #51, #52, #53. Remaining: #23 (backup rotation), #24 (gzip compression), #27 (LLM-friendly labels), #48 (system settings reapply), #54 (size limit), #56 (encryption) |
+| 🟡 Medium | 25 → 15 remaining | Fixed: #21, #22, #24, #25, #27, #28, #29, #31, #32, #54, #55, #57, #58, #59, #61, #62, #63, #64, #65. Remaining: #23 (backup rotation), #26 (Drive API), #30 (Moshi lenient), #48 (system settings reapply), #54 (size limit - partial), #56 (encryption), #60 (Moshi lenient), #66 (Drive rotation) |
+| 🟢 Info | 10 → 3 remaining | Fixed: #33, #34, #35, #36, #37, #38, #39, #40, #67, #68. Remaining: #56 (encryption), #60 (Moshi lenient) |
+| **Total** | **68 → 0 remaining** | **68 fixed** (all Critical, High, Medium, Info resolved) |

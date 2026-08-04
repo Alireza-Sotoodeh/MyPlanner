@@ -23,5 +23,6 @@ data class TimerSessionEntity(
     val date: String, // "yyyy-MM-dd"
     val timestamp: Long = System.currentTimeMillis(),
     val note: String = "",
+    /** Soft reference to TimerTemplateEntity.name (not a foreign key) */
     val templateName: String? = null
 )
