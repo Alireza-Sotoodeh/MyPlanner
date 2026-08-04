@@ -3857,87 +3857,91 @@ fun SettingsDialog(
                     Text(if (backupLocationUri != null) "Change Folder" else "Choose Backup Folder")
                 }
 
-                if (backupLocationUri != null) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
-                    if (lastBackupTime != null) {
-                        Text(
-                            text = "Last backup: $lastBackupTime",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                viewModel.backupDataToLocation { success, msg ->
-                                    isSuccessStatus = success
-                                    statusMessage = msg
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isSyncing,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            if (isSyncing) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Backup Now", fontSize = 12.sp)
-                                }
+                Text(
+                    text = if (lastBackupTime != null) "Last backup: $lastBackupTime" else "Last backup: Never",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.backupDataToLocation { success, msg ->
+                                isSuccessStatus = success
+                                statusMessage = msg
                             }
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    restoreMonths = viewModel.listBackupMonths()
-                                    showRestoreMonthPicker = true
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isSyncing,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                        ) {
-                            if (isSyncing) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Restore", fontSize = 12.sp)
-                                }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = backupLocationUri != null && !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Backup Now", fontSize = 12.sp)
                             }
                         }
                     }
-
-                    // Keep last N months
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                restoreMonths = viewModel.listBackupMonths()
+                                showRestoreMonthPicker = true
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = backupLocationUri != null && !isSyncing,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Keep last N months", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("$backupMaxMonths months", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Restore", fontSize = 12.sp)
+                            }
                         }
-                        Slider(
-                            value = backupMaxMonths.toFloat(),
-                            onValueChange = { viewModel.setBackupMaxMonths(it.toInt()) },
-                            valueRange = 1f..24f,
-                            steps = 22,
-                            modifier = Modifier.width(140.dp)
-                        )
                     }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 }
+
+                if (backupLocationUri == null) {
+                    Text(
+                        text = "Set a backup folder first",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+
+                // Keep last N months
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Keep last N months", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("$backupMaxMonths months", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Slider(
+                        value = backupMaxMonths.toFloat(),
+                        onValueChange = { viewModel.setBackupMaxMonths(it.toInt()) },
+                        valueRange = 1f..24f,
+                        steps = 22,
+                        modifier = Modifier.width(140.dp)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
                 // Auto Backup (always visible)
                 Row(
