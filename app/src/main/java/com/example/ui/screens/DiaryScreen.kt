@@ -31,51 +31,10 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-
-private enum class Field { TITLE, CONTENT }
-
-private class HistoryStack(private val maxSize: Int = 50) {
-    private val items = mutableListOf<String>()
-    private var index = -1
-
-    fun push(item: String) {
-        if (index < items.size - 1) {
-            items.subList(index + 1, items.size).clear()
-        }
-        items.add(item)
-        if (items.size > maxSize) {
-            items.removeAt(0)
-        }
-        index = items.size - 1
-    }
-
-    fun undo(): String? {
-        if (index > 0) {
-            index--
-            return items[index]
-        }
-        return null
-    }
-
-    fun redo(): String? {
-        if (index < items.size - 1) {
-            index++
-            return items[index]
-        }
-        return null
-    }
-
-    val canUndo: Boolean get() = index > 0
-    val canRedo: Boolean get() = index < items.size - 1
-
-    fun reset() {
-        items.clear()
-        index = -1
-    }
-}
 
 private class MarkdownVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
@@ -194,25 +153,15 @@ fun DiaryScreen(
     var currentDate by remember { mutableStateOf(todayDate) }
     val entry by viewModel.diaryEntryForDate(currentDate).collectAsState(initial = null)
 
-    var title by remember { mutableStateOf(entry?.title ?: "") }
-    var content by remember { mutableStateOf(entry?.content ?: "") }
+    var title by remember { mutableStateOf("") }
+    var content by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
 
-    val titleHistory = remember { HistoryStack() }
-    val contentHistory = remember { HistoryStack() }
-    var lastModifiedField by remember { mutableStateOf(Field.CONTENT) }
-
-    LaunchedEffect(entry) {
-        val savedTitle = entry?.title ?: ""
-        val savedContent = entry?.content ?: ""
-        title = savedTitle
-        content = savedContent
-        titleHistory.reset()
-        contentHistory.reset()
-        lastModifiedField = Field.CONTENT
-        titleHistory.push(savedTitle)
-        contentHistory.push(savedContent)
+    LaunchedEffect(currentDate) {
+        val savedEntry = viewModel.diaryEntryForDate(currentDate).first()
+        title = savedEntry?.title ?: ""
+        content = savedEntry?.content ?: ""
     }
 
     var autoSaveJob by remember { mutableStateOf<Job?>(null) }
@@ -272,48 +221,6 @@ fun DiaryScreen(
                 letterSpacing = 1.5.sp,
                 modifier = Modifier.weight(1f)
             )
-            val canUndo = when (lastModifiedField) {
-                Field.TITLE -> titleHistory.canUndo
-                Field.CONTENT -> contentHistory.canUndo
-            }
-            val canRedo = when (lastModifiedField) {
-                Field.TITLE -> titleHistory.canRedo
-                Field.CONTENT -> contentHistory.canRedo
-            }
-            IconButton(
-                onClick = {
-                    val result = when (lastModifiedField) {
-                        Field.TITLE -> titleHistory.undo()
-                        Field.CONTENT -> contentHistory.undo()
-                    }
-                    result?.let {
-                        when (lastModifiedField) {
-                            Field.TITLE -> title = it
-                            Field.CONTENT -> content = it
-                        }
-                    }
-                },
-                enabled = canUndo
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-            }
-            IconButton(
-                onClick = {
-                    val result = when (lastModifiedField) {
-                        Field.TITLE -> titleHistory.redo()
-                        Field.CONTENT -> contentHistory.redo()
-                    }
-                    result?.let {
-                        when (lastModifiedField) {
-                            Field.TITLE -> title = it
-                            Field.CONTENT -> content = it
-                        }
-                    }
-                },
-                enabled = canRedo
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-            }
             IconButton(
                 onClick = { showDeleteConfirm = true },
                 enabled = entry != null || content.isNotBlank() || title.isNotBlank()
@@ -353,8 +260,6 @@ fun DiaryScreen(
             value = title,
             onValueChange = {
                 title = it
-                titleHistory.push(it)
-                lastModifiedField = Field.TITLE
                 triggerAutoSave()
             },
             placeholder = { Text("Title", fontSize = 16.sp) },
@@ -374,8 +279,6 @@ fun DiaryScreen(
                 value = content,
                 onValueChange = {
                     content = it
-                    contentHistory.push(it)
-                    lastModifiedField = Field.CONTENT
                     triggerAutoSave()
                 },
                 modifier = Modifier.fillMaxSize(),
