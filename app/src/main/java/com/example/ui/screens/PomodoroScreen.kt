@@ -83,8 +83,7 @@ fun PomodoroScreen(viewModel: MainViewModel) {
         // Top Header
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -102,13 +101,7 @@ fun PomodoroScreen(viewModel: MainViewModel) {
                     fontWeight = FontWeight.Light,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
-                // Session counter chips
+                Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
@@ -122,6 +115,12 @@ fun PomodoroScreen(viewModel: MainViewModel) {
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
                 IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
                     Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                 }
