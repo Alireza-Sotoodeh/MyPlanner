@@ -4692,21 +4692,23 @@ private fun IdeaCard(
 
             if (stages.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
-                stages.forEach { stage ->
+                stages.forEachIndexed { index, stage ->
                     StageRow(
                         stage = stage,
                         stages = stages,
                         viewModel = viewModel,
                         onDelete = { viewModel.deleteStage(it) }
                     )
-                    Spacer(Modifier.height(4.dp))
+                    if (index < stages.lastIndex) {
+                        Spacer(Modifier.height(4.dp))
+                    }
                 }
             }
 
             if (showAddStage && addStageIdeaId == idea.id) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = 2.dp)
                 ) {
                     OutlinedTextField(
                         value = newStageTitle,
@@ -4740,7 +4742,7 @@ private fun IdeaCard(
             } else {
                 TextButton(
                     onClick = { showAddStage = true; addStageIdeaId = idea.id },
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = 2.dp)
                 ) {
                     Text("+ Add Stage", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
