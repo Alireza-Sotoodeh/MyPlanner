@@ -1,5 +1,6 @@
 package com.example.core.receiver
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -12,6 +13,7 @@ import androidx.core.app.NotificationCompat
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.example.core.database.AppDatabase
 import java.util.Calendar
@@ -34,12 +36,49 @@ class ReminderReceiver : BroadcastReceiver() {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
+
+                    // Reschedule day review alarm if enabled
+                    val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+                    if (prefs.getBoolean("review_reminder_enabled", false)) {
+                        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+                        val timeStr = prefs.getString("review_reminder_time", "21:00") ?: "21:00"
+                        val timeParts = timeStr.split(":")
+                        val hour = timeParts[0].toInt()
+                        val minute = timeParts[1].toInt()
+                        val calendar = Calendar.getInstance().apply {
+                            set(Calendar.HOUR_OF_DAY, hour)
+                            set(Calendar.MINUTE, minute)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                            if (before(Calendar.getInstance())) {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                            }
+                        }
+                        val reviewIntent = Intent(context, ReminderReceiver::class.java).apply {
+                            this.action = "com.example.action.DAY_REVIEW"
+                        }
+                        val reviewPendingIntent = PendingIntent.getBroadcast(
+                            context, 5000, reviewIntent,
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                        alarmManager.setRepeating(
+                            AlarmManager.RTC_WAKEUP,
+                            calendar.timeInMillis,
+                            AlarmManager.INTERVAL_DAY,
+                            reviewPendingIntent
+                        )
+                    }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
                     pendingResult.finish()
                 }
             }
+            return
+        }
+
+        if (action == "com.example.action.DAY_REVIEW") {
+            handleDayReview(context)
             return
         }
 
@@ -76,6 +115,54 @@ class ReminderReceiver : BroadcastReceiver() {
         } else {
             // Alarm clock style using Full Screen Intent
             showNotification(context, title, message, vibrate, sound, taskId, true)
+        }
+    }
+
+    private fun handleDayReview(context: Context) {
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(
+                        "day_review_reminder",
+                        "Day Review Reminder",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    ).apply {
+                        description = "Daily reminder to review your day"
+                    }
+                    notificationManager.createNotificationChannel(channel)
+                }
+
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val todayStr = sdf.format(Calendar.getInstance().time)
+                val database = AppDatabase.getDatabase(context)
+                val existing = database.dayReviewDao().getReviewForDate(todayStr).first()
+                if (existing != null) return@launch
+
+                val openIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    putExtra("open_day_review", true)
+                }
+                val pendingIntent = PendingIntent.getActivity(context, 5000, openIntent, PendingIntent.FLAG_IMMUTABLE)
+
+                val notification = NotificationCompat.Builder(context, "day_review_reminder")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("Day Review Reminder")
+                    .setContentText("Time to review your day!")
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build()
+
+                notificationManager.notify(5000, notification)
+
+                context.sendBroadcast(Intent("com.example.action.DAY_REVIEW_TRIGGERED"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 
