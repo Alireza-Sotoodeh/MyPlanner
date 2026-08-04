@@ -10,7 +10,6 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartReader
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -44,7 +43,12 @@ object DriveManager {
     }
 
     fun handleSignInResult(data: Intent?): GoogleSignInAccount? {
-        return GoogleSignIn.getSignedInAccountFromIntent(data).result
+        return try {
+            GoogleSignIn.getSignedInAccountFromIntent(data).result
+        } catch (e: Exception) {
+            Log.e(TAG, "Sign-in result failed", e)
+            null
+        }
     }
 
     fun isSignedIn(context: Context): Boolean {
@@ -53,7 +57,13 @@ object DriveManager {
 
     fun signOut(context: Context) {
         cachedToken = null
+        tokenExpiry = 0L
         GoogleSignIn.getClient(context, GoogleSignInOptions.DEFAULT_SIGN_IN).signOut()
+    }
+
+    fun invalidateToken() {
+        cachedToken = null
+        tokenExpiry = 0L
     }
 
     private fun getToken(context: Context): String? {
@@ -68,104 +78,126 @@ object DriveManager {
             token
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get token", e)
+            cachedToken = null
+            tokenExpiry = 0L
             null
         }
     }
 
     private fun getFolderId(context: Context, token: String): String? {
-        val listUrl = "$DRIVE_API/files?q=name='$APP_FOLDER_NAME' and mimeType='application/vnd.google-apps.folder' and trashed=false&pageSize=1"
-        val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
-        val listResp = client.newCall(listReq).execute()
-        val listBody = listResp.body?.string() ?: return null
-        val listJson = JSONObject(listBody)
-        val files = listJson.optJSONArray("files")
-        if (files != null && files.length() > 0) return files.getJSONObject(0).getString("id")
+        return try {
+            val listUrl = "$DRIVE_API/files?q=name='$APP_FOLDER_NAME' and mimeType='application/vnd.google-apps.folder' and trashed=false&pageSize=1"
+            val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
+            val listResp = client.newCall(listReq).execute()
+            val listBody = listResp.body?.string() ?: return null
+            val listJson = JSONObject(listBody)
+            val files = listJson.optJSONArray("files")
+            if (files != null && files.length() > 0) return files.getJSONObject(0).getString("id")
 
-        val createJson = JSONObject().apply {
-            put("name", APP_FOLDER_NAME)
-            put("mimeType", "application/vnd.google-apps.folder")
+            val createJson = JSONObject().apply {
+                put("name", APP_FOLDER_NAME)
+                put("mimeType", "application/vnd.google-apps.folder")
+            }
+            val createReq = Request.Builder().url("$DRIVE_API/files")
+                .header("Authorization", "Bearer $token")
+                .header("Content-Type", "application/json")
+                .post(createJson.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                .build()
+            val createResp = client.newCall(createReq).execute()
+            val createBody = createResp.body?.string() ?: return null
+            JSONObject(createBody).optString("id", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Folder lookup/creation failed", e)
+            null
         }
-        val createReq = Request.Builder().url("$DRIVE_API/files")
-            .header("Authorization", "Bearer $token")
-            .header("Content-Type", "application/json")
-            .post(createJson.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-            .build()
-        val createResp = client.newCall(createReq).execute()
-        val createBody = createResp.body?.string() ?: return null
-        return JSONObject(createBody).optString("id", null)
     }
 
     fun uploadBackup(context: Context, data: ByteArray, filename: String): String? {
-        val token = getToken(context) ?: return null
-        val folderId = getFolderId(context, token) ?: return null
+        return try {
+            val token = getToken(context) ?: return null
+            val folderId = getFolderId(context, token) ?: return null
 
-        val metadata = JSONObject().apply {
-            put("name", filename)
-            put("parents", JSONArray().put(folderId))
+            val metadata = JSONObject().apply {
+                put("name", filename)
+                put("parents", JSONArray().put(folderId))
+            }
+
+            val boundary = "drive_boundary_${System.currentTimeMillis()}"
+            val bodyBuilder = StringBuilder()
+            bodyBuilder.append("--$boundary\r\n")
+            bodyBuilder.append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+            bodyBuilder.append(metadata.toString())
+            bodyBuilder.append("\r\n--$boundary\r\n")
+            bodyBuilder.append("Content-Type: application/octet-stream\r\n\r\n")
+
+            val prefixBytes = bodyBuilder.toString().toByteArray(Charsets.UTF_8)
+            val suffixBytes = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
+            val bodyBytes = prefixBytes + data + suffixBytes
+
+            val request = Request.Builder()
+                .url("$DRIVE_UPLOAD/files?uploadType=multipart")
+                .header("Authorization", "Bearer $token")
+                .header("Content-Type", "multipart/related; boundary=$boundary")
+                .post(bodyBytes.toRequestBody("multipart/related".toMediaTypeOrNull()))
+                .build()
+
+            val response = client.newCall(request).execute()
+            val respBody = response.body?.string() ?: return null
+            JSONObject(respBody).optString("id", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Upload failed", e)
+            null
         }
-
-        val boundary = "drive_boundary_${System.currentTimeMillis()}"
-        val bodyBuilder = StringBuilder()
-        bodyBuilder.append("--$boundary\r\n")
-        bodyBuilder.append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
-        bodyBuilder.append(metadata.toString())
-        bodyBuilder.append("\r\n--$boundary\r\n")
-        bodyBuilder.append("Content-Type: application/octet-stream\r\n\r\n")
-
-        val prefixBytes = bodyBuilder.toString().toByteArray(Charsets.UTF_8)
-        val suffixBytes = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
-        val bodyBytes = prefixBytes + data + suffixBytes
-
-        val request = Request.Builder()
-            .url("$DRIVE_UPLOAD/files?uploadType=multipart")
-            .header("Authorization", "Bearer $token")
-            .header("Content-Type", "multipart/related; boundary=$boundary")
-            .post(bodyBytes.toRequestBody("multipart/related".toMediaTypeOrNull()))
-            .build()
-
-        val response = client.newCall(request).execute()
-        val respBody = response.body?.string() ?: return null
-        return JSONObject(respBody).optString("id", null)
     }
 
     fun downloadLatest(context: Context): ByteArray? {
-        val token = getToken(context) ?: return null
-        val listUrl = "$DRIVE_API/files?q=name contains 'bulletcoach_' and trashed=false&orderBy=createdTime desc&pageSize=1"
-        val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
-        val listResp = client.newCall(listReq).execute()
-        val listBody = listResp.body?.string() ?: return null
-        val listJson = JSONObject(listBody)
-        val files = listJson.optJSONArray("files")
-        if (files == null || files.length() == 0) return null
+        return try {
+            val token = getToken(context) ?: return null
+            val listUrl = "$DRIVE_API/files?q=name contains 'bulletcoach_' and trashed=false&orderBy=createdTime desc&pageSize=1"
+            val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
+            val listResp = client.newCall(listReq).execute()
+            val listBody = listResp.body?.string() ?: return null
+            val listJson = JSONObject(listBody)
+            val files = listJson.optJSONArray("files")
+            if (files == null || files.length() == 0) return null
 
-        val fileId = files.getJSONObject(0).getString("id")
-        val downloadReq = Request.Builder()
-            .url("$DRIVE_API/files/$fileId?alt=media")
-            .header("Authorization", "Bearer $token")
-            .build()
-        val downloadResp = client.newCall(downloadReq).execute()
-        return downloadResp.body?.bytes()
+            val fileId = files.getJSONObject(0).getString("id")
+            val downloadReq = Request.Builder()
+                .url("$DRIVE_API/files/$fileId?alt=media")
+                .header("Authorization", "Bearer $token")
+                .build()
+            val downloadResp = client.newCall(downloadReq).execute()
+            downloadResp.body?.bytes()
+        } catch (e: Exception) {
+            Log.e(TAG, "Download failed", e)
+            null
+        }
     }
 
-    data class BackupInfo(val id: String, val name: String, val createdTime: Long)
+    data class DriveFileInfo(val id: String, val name: String, val createdTime: Long)
 
-    fun listBackups(context: Context): List<BackupInfo> {
-        val token = getToken(context) ?: return emptyList()
-        val listUrl = "$DRIVE_API/files?q=name contains 'bulletcoach_' and trashed=false&orderBy=createdTime desc&pageSize=10&fields=files(id,name,createdTime)"
-        val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
-        val listResp = client.newCall(listReq).execute()
-        val listBody = listResp.body?.string() ?: return emptyList()
-        val files = JSONObject(listBody).optJSONArray("files") ?: return emptyList()
-        return (0 until files.length()).map { i ->
-            val f = files.getJSONObject(i)
-            BackupInfo(
-                id = f.getString("id"),
-                name = f.optString("name", ""),
-                createdTime = try {
-                    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
-                        .parse(f.optString("createdTime", ""))?.time ?: 0L
-                } catch (_: Exception) { 0L }
-            )
+    fun listBackups(context: Context): List<DriveFileInfo> {
+        return try {
+            val token = getToken(context) ?: return emptyList()
+            val listUrl = "$DRIVE_API/files?q=name contains 'bulletcoach_' and trashed=false&orderBy=createdTime desc&pageSize=10&fields=files(id,name,createdTime)"
+            val listReq = Request.Builder().url(listUrl).header("Authorization", "Bearer $token").build()
+            val listResp = client.newCall(listReq).execute()
+            val listBody = listResp.body?.string() ?: return emptyList()
+            val files = JSONObject(listBody).optJSONArray("files") ?: return emptyList()
+            (0 until files.length()).map { i ->
+                val f = files.getJSONObject(i)
+                DriveFileInfo(
+                    id = f.getString("id"),
+                    name = f.optString("name", ""),
+                    createdTime = try {
+                        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+                            .parse(f.optString("createdTime", ""))?.time ?: 0L
+                    } catch (_: Exception) { 0L }
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "List backups failed", e)
+            emptyList()
         }
     }
 
@@ -195,10 +227,5 @@ object DriveManager {
         } catch (e: Exception) {
             Log.w(TAG, "Rotation failed", e)
         }
-    }
-
-    fun invalidateToken() {
-        cachedToken = null
-        tokenExpiry = 0L
     }
 }

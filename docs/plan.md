@@ -165,95 +165,18 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 - [x] Added `settings.gradle.kts`: `mavenLocal()` + `resolutionStrategy` for AGP plugin resolution
 - [x] **Verify:** `assembleDebug` succeeds with no resolution errors
 
-### 4.2 — Create DriveManager.kt
+### 4.2 — Create DriveManager.kt `[x] DONE`
 
-- [ ] **New file:** `app/src/main/java/com/example/core/manager/DriveManager.kt`
-
-- [ ] **Class doc:** `object DriveManager` (singleton, no DI needed)
-
-- [ ] **Internal state:**
-  
-  ```kotlin
-  private var driveService: Drive? = null
-  private const val APP_FOLDER_NAME = "bulletcoach_backups"
-  private const val MAX_BACKUPS = 3
-  ```
-
-- [ ] **Method `signIn(context: Context): Boolean`:**
-  
-  ```kotlin
-  // 1. Build CredentialManager request
-  // 2. Use GetCredentialRequest with GoogleIdTokenCredential
-  //     and DriveScopes.DRIVE_FILE scope
-  // 3. On success, create Drive service via NetHttpTransport + GsonFactory
-  // 4. Store account email in prefs
-  // 5. Return true/false
-  ```
-
-- [ ] **Edge cases:**
-  
-  - User cancels → return false, don't show error
-  - Network error → show "No internet" message
-  - Account already signed in → skip auth, use existing token
-
-- [ ] **Method `signOut(context: Context)`:**
-  
-  ```kotlin
-  // 1. Clear CredentialManager credential
-  // 2. Clear driveService reference
-  // 3. Clear stored email
-  ```
-
-- [ ] **Method `isSignedIn(): Boolean`:**
-  
-  ```kotlin
-  // Returns driveService != null
-  ```
-
-- [ ] **Method `uploadBackup(context: Context, gzipBytes: ByteArray, filename: String): String?`:**
-  
-  ```kotlin
-  // 1. Ensure authenticated
-  // 2. Find or create APP_FOLDER_NAME folder
-  // 3. Create file metadata: name=filename, parents=[folderId], mimeType="application/gzip"
-  // 4. drive.files().create(metadata, AbstractInputStreamContent("application/gzip", ByteArrayContent(...))).execute()
-  // 5. Return file ID
-  ```
-
-- [ ] **Edge cases:**
-  
-  - Token expired → call `signIn()` again silently (retry once)
-  - Quota exceeded → return null, caller shows warning
-  - File already exists with same name → create with new name (timestamp suffix handles uniqueness)
-
-- [ ] **Method `downloadLatest(context: Context): ByteArray?`:**
-  
-  ```kotlin
-  // 1. List files: drive.files().list().setQ("name contains 'bulletcoach_' and trashed=false").setOrderBy("createdTime desc").setPageSize(1).execute()
-  // 2. If no files → return null (no backup exists)
-  // 3. Download: drive.files().get(latestFile.id).executeMediaAsInputStream()
-  // 4. Read all bytes → return
-  ```
-
-- [ ] **Edge cases:**
-  
-  - First-time user, no backup → return null, show "No backup found"
-  - Network timeout → retry once with 5s timeout
-  - Corrupted file on Drive → download fails, catch exception, return null
-
-- [ ] **Method `listBackups(context: Context): List<DriveFileInfo>`:**
-  
-  ```kotlin
-  // List all files matching "bulletcoach_" prefix, sorted by createdTime desc
-  // Return id + name + createdTime for each (used by rotation)
-  ```
-
-- [ ] **Method `deleteBackup(context: Context, fileId: String): Boolean`:**
-  
-  ```kotlin
-  // drive.files().delete(fileId).execute()
-  // Return true on success
-  ```
+- [x] **File:** `app/src/main/java/com/example/core/manager/DriveManager.kt` — singleton, GoogleSignIn + OkHttp REST
+- [x] Auth: `GoogleSignIn` with `drive.file` scope, token via `GoogleAuthUtil.getToken()`, cached with 55min expiry
+- [x] `getSignInIntent(context)` / `handleSignInResult(data)` / `isSignedIn(context)` / `signOut(context)` / `invalidateToken()`
+- [x] `uploadBackup(context, data, filename)` — multipart upload to folder, returns file ID or null
+- [x] `downloadLatest(context)` — queries latest `bulletcoach_*` file, returns bytes or null
+- [x] `listBackups(context): List<DriveFileInfo>` — lists backups with id/name/createdTime
+- [x] `deleteBackup(context, fileId)` — deletes by ID, returns success
+- [x] `rotateBackups(context)` — keeps max 3, deletes oldest extras
+- [x] **Edge cases:** Token expiry → getToken retries; network error → catch/return null; no backup → return null; quota exceeded → catch; deletion failure → log warning
+- [x] **Verify:** `assembleDebug` succeeds
 
 - [ ] **Method `getLastSyncAt(): Long`:**
   
