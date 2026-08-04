@@ -1607,10 +1607,49 @@ class MainViewModel(
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
-                todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority))
+                val allTodos = todoRepository.getAllTodosSync()
+                val nextOrder = (allTodos.maxOfOrNull { it.sortOrder } ?: -1) + 1
+                todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority, sortOrder = nextOrder))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add todo", e)
             }
+        }
+    }
+
+    fun reorderTodo(todo: TodoEntity, activeTodos: List<TodoEntity>, deltaIndex: Int) {
+        viewModelScope.launch {
+            val currentIndex = activeTodos.indexOf(todo)
+            if (currentIndex == -1) return@launch
+            val newIndex = (currentIndex + deltaIndex).coerceIn(0, activeTodos.size - 1)
+            if (deltaIndex != 0) {
+                val mutableTodos = activeTodos.toMutableList()
+                mutableTodos.removeAt(currentIndex)
+                mutableTodos.add(newIndex, todo)
+                val updatedTodos = mutableTodos.mapIndexed { index, t ->
+                    t.copy(sortOrder = index)
+                }
+                todoRepository.updateTodoSortOrders(updatedTodos)
+            }
+        }
+    }
+
+    fun triggerReorderTodosByPriority() {
+        viewModelScope.launch {
+            val currentTodos = todoRepository.getAllTodosSync()
+            val sorted = currentTodos.sortedWith(
+                compareBy<TodoEntity> {
+                    when (it.priority) {
+                        "High" -> 1
+                        "Medium" -> 2
+                        "Low" -> 3
+                        else -> 4
+                    }
+                }.thenBy { it.sortOrder }
+            )
+            val updated = sorted.mapIndexed { index, todo ->
+                todo.copy(sortOrder = index)
+            }
+            todoRepository.updateTodoSortOrders(updated)
         }
     }
 
