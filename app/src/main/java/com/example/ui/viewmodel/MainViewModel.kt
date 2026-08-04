@@ -55,7 +55,6 @@ import com.example.core.repository.TaskRepository
 import com.example.core.repository.TimerRepository
 import com.example.core.repository.TodoRepository
 import com.example.core.utils.PersianCalendarHelper
-import com.example.core.manager.BackupFileManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -68,6 +67,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -597,7 +597,15 @@ private val mottoRepository: MottoRepository,
                 val learnItemsList = learnItems.value
                 val learnSectionsList = learnItemsList.flatMap { learnRepository.getSectionsForItemSync(it.id) }
 
-                val currentMonth = backupMonthLabel()
+                val currentMonth = backupFileManager.getCurrentMonth()
+
+                // Filter date-based entities by current month
+                val monthTasks = tasksList.filter { backupFileManager.isTaskInMonth(it, currentMonth) }
+                val monthHabitLogs = habitLogsList.filter { it.date.startsWith(currentMonth) }
+                val monthSleepLogs = sleepLogsList.filter { it.date.startsWith(currentMonth) }
+                val monthDiaryEntries = diaryEntriesList.filter { it.date.startsWith(currentMonth) }
+                val monthDayReviews = dayReviewsList.filter { it.date.startsWith(currentMonth) }
+                val monthTimerSessions = timerSessionsList.filter { it.date.startsWith(currentMonth) }
 
                 // Get or create _permanent directory
                 val permanentDir = backupFileManager.getOrCreateDir(rootDir, "_permanent")
@@ -631,7 +639,7 @@ private val mottoRepository: MottoRepository,
                 backupFileManager.rotateOldBackups(rootDir, maxMonths)
 
                 val lastSync = System.currentTimeMillis()
-                prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
+                backupFileManager.setLastSyncTimestamp(lastSync)
                 _lastBackupTimestamp.value = lastSync
                 onResult(true, "Backup successful — ${monthTasks.size} tasks, ${habitsList.size} habits, ${todosList.size} todos backed up")
             } catch (e: Exception) {
@@ -643,110 +651,19 @@ private val mottoRepository: MottoRepository,
         }
     }
 
-    private fun rotateOldBackups(rootUri: android.net.Uri) {
-        val maxMonths = _backupMaxMonths.value
-        val monthDirs = listChildren(rootUri)
-            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(Regex("""^\d{4}-\d{2}$""")) }
-            .sortedByDescending { it.name }
-        if (monthDirs.size > maxMonths) {
-            monthDirs.drop(maxMonths).forEach { deleteRecursive(it.uri) }
-        }
-    }
-
-    private fun deleteRecursive(dirUri: android.net.Uri) {
-        for (child in listChildren(dirUri)) {
-            if (child.mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                deleteRecursive(child.uri)
-            } else {
-                deleteDocument(child.uri)
-            }
-        }
-        deleteDocument(dirUri)
-    }
-
     fun listBackupMonths(): List<String> {
-        val rootUri = backupRootDir ?: return emptyList()
-        return listChildren(rootUri)
+        val rootUri = backupFileManager.getBackupRootDir() ?: return emptyList()
+        return backupFileManager.listChildren(rootUri)
             .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(Regex("""^\d{4}-\d{2}$""")) }
             .map { it.name }
             .sortedDescending()
-    }
-
-    private fun <T : Any> readEntityFile(parentUri: android.net.Uri?, name: String, clazz: Class<T>): List<T> {
-        val fileUri = parentUri?.let { findChildUri(it, name) } ?: return emptyList()
-        return try {
-            val json = context.contentResolver.openInputStream(fileUri)?.use {
-                it.reader(Charsets.UTF_8).readText()
-            } ?: return emptyList()
-            entityListAdapter(clazz).fromJson(json) ?: emptyList()
-        } catch (_: Exception) { emptyList() }
-    }
-
-    // DocumentFile replacement helpers
-
-    private fun documentExists(uri: android.net.Uri): Boolean {
-        return try {
-            val docId = DocumentsContract.getDocumentId(uri)
-            val docUri = DocumentsContract.buildDocumentUriUsingTree(
-                DocumentsContract.buildTreeDocumentUri(uri.authority ?: return false, docId),
-                docId
-            )
-            val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            context.contentResolver.query(docUri, projection, null, null, null)?.use { it.moveToFirst() } ?: false
-        } catch (_: Exception) { false }
-    }
-
-    private fun findChildUri(parentUri: android.net.Uri, name: String): android.net.Uri? {
-        val parentId = DocumentsContract.getTreeDocumentId(parentUri)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, parentId)
-        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val docId = cursor.getString(0)
-                val displayName = cursor.getString(1)
-                if (displayName == name) {
-                    return DocumentsContract.buildDocumentUriUsingTree(parentUri, docId)
-                }
-            }
-        }
-        return null
-    }
-
-    private data class ChildInfo(val uri: android.net.Uri, val name: String, val mimeType: String)
-
-    private fun listChildren(parentUri: android.net.Uri): List<ChildInfo> {
-        val parentId = DocumentsContract.getTreeDocumentId(parentUri)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, parentId)
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE
-        )
-        val result = mutableListOf<ChildInfo>()
-        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val docId = cursor.getString(0)
-                val name = cursor.getString(1) ?: continue
-                val mimeType = cursor.getString(2) ?: ""
-                result.add(ChildInfo(DocumentsContract.buildDocumentUriUsingTree(parentUri, docId), name, mimeType))
-            }
-        }
-        return result
-    }
-
-    private fun deleteDocument(uri: android.net.Uri) {
-        try {
-            DocumentsContract.deleteDocument(context.contentResolver, uri)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to delete document: $uri", e)
-        }
     }
 
     fun restoreFromMonth(month: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             _isSyncing.value = true
             try {
-                val rootDir = backupRootDir
+                val rootDir = backupFileManager.getBackupRootDir()
                 if (rootDir == null) {
                     onResult(false, "Backup location not available")
                     return@launch
@@ -786,25 +703,25 @@ private val mottoRepository: MottoRepository,
                 }
 
                 // Read all entity files from _permanent (non-date entities)
-                val habits = backupFileManager.readEntityFile(permanentDir, "HabitEntity.json", HabitEntity::class.java)
-                val todos = backupFileManager.readEntityFile(permanentDir, "TodoEntity.json", TodoEntity::class.java)
-                val mottos = backupFileManager.readEntityFile(permanentDir, "MottoEntity.json", MottoEntity::class.java)
-                val shopItems = backupFileManager.readEntityFile(permanentDir, "ShopItemEntity.json", ShopItemEntity::class.java)
-                val ideaGroups = backupFileManager.readEntityFile(permanentDir, "IdeaGroupEntity.json", IdeaGroupEntity::class.java)
-                val ideas = backupFileManager.readEntityFile(permanentDir, "IdeaEntity.json", IdeaEntity::class.java)
-                val ideaStages = backupFileManager.readEntityFile(permanentDir, "IdeaStageEntity.json", IdeaStageEntity::class.java)
-                val learnGroups = backupFileManager.readEntityFile(permanentDir, "LearnGroupEntity.json", LearnGroupEntity::class.java)
-                val learnItems = backupFileManager.readEntityFile(permanentDir, "LearnItemEntity.json", LearnItemEntity::class.java)
-                val learnSections = backupFileManager.readEntityFile(permanentDir, "LearnSectionEntity.json", LearnSectionEntity::class.java)
-                val timerTemplates = backupFileManager.readEntityFile(permanentDir, "TimerTemplateEntity.json", TimerTemplateEntity::class.java)
+                val habits = backupFileManager.readEntityFile(permanentDir, "HabitEntity.json", HabitEntity::class.java) as List<HabitEntity>
+                val todos = backupFileManager.readEntityFile(permanentDir, "TodoEntity.json", TodoEntity::class.java) as List<TodoEntity>
+                val mottos = backupFileManager.readEntityFile(permanentDir, "MottoEntity.json", MottoEntity::class.java) as List<MottoEntity>
+                val shopItems = backupFileManager.readEntityFile(permanentDir, "ShopItemEntity.json", ShopItemEntity::class.java) as List<ShopItemEntity>
+                val ideaGroups = backupFileManager.readEntityFile(permanentDir, "IdeaGroupEntity.json", IdeaGroupEntity::class.java) as List<IdeaGroupEntity>
+                val ideas = backupFileManager.readEntityFile(permanentDir, "IdeaEntity.json", IdeaEntity::class.java) as List<IdeaEntity>
+                val ideaStages = backupFileManager.readEntityFile(permanentDir, "IdeaStageEntity.json", IdeaStageEntity::class.java) as List<IdeaStageEntity>
+                val learnGroups = backupFileManager.readEntityFile(permanentDir, "LearnGroupEntity.json", LearnGroupEntity::class.java) as List<LearnGroupEntity>
+                val learnItems = backupFileManager.readEntityFile(permanentDir, "LearnItemEntity.json", LearnItemEntity::class.java) as List<LearnItemEntity>
+                val learnSections = backupFileManager.readEntityFile(permanentDir, "LearnSectionEntity.json", LearnSectionEntity::class.java) as List<LearnSectionEntity>
+                val timerTemplates = backupFileManager.readEntityFile(permanentDir, "TimerTemplateEntity.json", TimerTemplateEntity::class.java) as List<TimerTemplateEntity>
 
                 // Read all entity files from month (date-filtered entities)
-                val tasks = backupFileManager.readEntityFile(monthDir, "TaskEntity.json", TaskEntity::class.java)
-                val habitLogs = backupFileManager.readEntityFile(monthDir, "HabitLogEntity.json", HabitLogEntity::class.java)
-                val sleepLogs = backupFileManager.readEntityFile(monthDir, "SleepLogEntity.json", SleepLogEntity::class.java)
-                val diaryEntries = backupFileManager.readEntityFile(monthDir, "DiaryEntryEntity.json", DiaryEntryEntity::class.java)
-                val dayReviews = backupFileManager.readEntityFile(monthDir, "DayReviewEntity.json", DayReviewEntity::class.java)
-                val timerSessions = backupFileManager.readEntityFile(monthDir, "TimerSessionEntity.json", TimerSessionEntity::class.java)
+                val tasks = backupFileManager.readEntityFile(monthDir, "TaskEntity.json", TaskEntity::class.java) as List<TaskEntity>
+                val habitLogs = backupFileManager.readEntityFile(monthDir, "HabitLogEntity.json", HabitLogEntity::class.java) as List<HabitLogEntity>
+                val sleepLogs = backupFileManager.readEntityFile(monthDir, "SleepLogEntity.json", SleepLogEntity::class.java) as List<SleepLogEntity>
+                val diaryEntries = backupFileManager.readEntityFile(monthDir, "DiaryEntryEntity.json", DiaryEntryEntity::class.java) as List<DiaryEntryEntity>
+                val dayReviews = backupFileManager.readEntityFile(monthDir, "DayReviewEntity.json", DayReviewEntity::class.java) as List<DayReviewEntity>
+                val timerSessions = backupFileManager.readEntityFile(monthDir, "TimerSessionEntity.json", TimerSessionEntity::class.java) as List<TimerSessionEntity>
 
                 val backupObj = BulletCoachBackup(
                     tasks = tasks,

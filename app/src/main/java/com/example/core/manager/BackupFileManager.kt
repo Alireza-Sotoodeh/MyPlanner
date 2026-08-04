@@ -13,13 +13,12 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.IOException
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.List
-import kotlin.collections.MutableList
 
 class BackupFileManager(private val context: Context) {
 
@@ -51,20 +50,21 @@ class BackupFileManager(private val context: Context) {
 
     fun isTaskInMonth(task: TaskEntity, month: String): Boolean {
         val d = task.date
-        return when {
-            d.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$")) -> d.startsWith(month)
-            d.matches(Regex("^\\d{4}-\\d{2}$")) -> d == month
-            d.matches(Regex("^\\d{4}-W\\d{2}$")) -> {
-                try {
-                    val cal = Calendar.getInstance()
-                    cal.set(Calendar.YEAR, d.substring(0, 4).toInt())
-                    cal.set(Calendar.WEEK_OF_YEAR, d.substring(6).toInt())
-                    cal.firstDayOfWeek = Calendar.MONDAY
-                    cal.minimalDaysInFirstWeek = 4
-                    SimpleDateFormat("yyyy-MM", Locale.US).format(cal.time) == month
-                } catch (_: Exception) { false
-            }
-            else -> false
+        return if (d.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))) {
+            d.startsWith(month)
+        } else if (d.matches(Regex("^\\d{4}-\\d{2}$"))) {
+            d == month
+        } else if (d.matches(Regex("^\\d{4}-W\\d{2}$"))) {
+            try {
+                val cal = Calendar.getInstance()
+                cal.set(Calendar.YEAR, d.substring(0, 4).toInt())
+                cal.set(Calendar.WEEK_OF_YEAR, d.substring(6).toInt())
+                cal.firstDayOfWeek = Calendar.MONDAY
+                cal.minimalDaysInFirstWeek = 4
+                SimpleDateFormat("yyyy-MM", Locale.US).format(cal.time) == month
+            } catch (_: Exception) { false }
+        } else {
+            false
         }
     }
 
@@ -90,7 +90,7 @@ class BackupFileManager(private val context: Context) {
 
         try {
             contentResolver.openOutputStream(tempUri)?.use {
-                it.write(json.toByteArray(Charsets.UTF_8))
+                it.write(json.toByteArray(StandardCharsets.UTF_8))
             } ?: throw IOException("Failed to open output stream for temp $name")
 
             val existing = findChildUri(parentUri, name)
@@ -112,7 +112,7 @@ class BackupFileManager(private val context: Context) {
             ?: throw IOException("Parent directory or file not found: $name")
 
         val json = contentResolver.openInputStream(fileUri)?.use {
-            it.reader(Charsets.UTF_8).readText()
+            it.reader(StandardCharsets.UTF_8).readText()
         } ?: throw IOException("Failed to read file: $name")
 
         val list = listAdapter(clazz as Class<Any>).fromJson(json)
@@ -134,6 +134,7 @@ class BackupFileManager(private val context: Context) {
             val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
             contentResolver.query(docUri, projection, null, null, null)?.use { it.moveToFirst() } ?: false
         } catch (_: Exception) { false
+    }
     }
 
     fun findChildUri(parentUri: Uri, name: String): Uri? {
@@ -218,7 +219,11 @@ class BackupFileManager(private val context: Context) {
         return try {
             val uri = Uri.parse(uriStr)
             if (documentExists(uri)) uri else null
-        } catch (_: Exception) { null
+        } catch (_: Exception) { null }
+    }
+
+    fun clearBackupLocation() {
+        prefs.edit().remove("backup_location_uri").apply()
     }
 
     fun hasNotificationPermission(): Boolean {
@@ -261,8 +266,7 @@ class BackupFileManager(private val context: Context) {
 
     fun getBackupMaxMonths(): Int = prefs.getInt("backup_max_months", 5)
 
-    fun toJson(list: List<Any>, clazz: Class<*>): String {
-        val type = Types.newParameterizedType(List::class.java, clazz)
-        return moshi.adapter<List<Any>>(type).indent("  ").toJson(list)
+    fun setLastSyncTimestamp(timestamp: Long) {
+        prefs.edit().putLong("drive_last_sync_at", timestamp).apply()
     }
 }
