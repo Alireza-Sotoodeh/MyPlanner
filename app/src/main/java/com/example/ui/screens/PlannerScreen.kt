@@ -2383,19 +2383,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                                             )
                                         }
                                     }
-                                    if (isToday) {
-                                        IconButton(
-                                            onClick = { onNavigateToDaily(task.date) },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ArrowForwardIos,
-                                                contentDescription = "View details",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
+
                                 }
                             }
                         }
