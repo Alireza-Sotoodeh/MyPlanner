@@ -309,7 +309,7 @@ private fun PomodoroTab(
                 "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
                 else -> false
             }
-        }
+        }.sortedBy { it.priority }
     }
     val selectedTask = remember(selectedTaskId, tasks) {
         tasks.find { it.id == selectedTaskId }
@@ -566,7 +566,7 @@ private fun CronometerTab(
                 "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
                 else -> false
             }
-        }
+        }.sortedBy { it.priority }
     }
 
     var chronoNote by remember { mutableStateOf("") }
