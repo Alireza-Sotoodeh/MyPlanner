@@ -220,23 +220,21 @@ private fun TodoItem(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.Checklist,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-            )
-            Spacer(Modifier.width(4.dp))
-            Checkbox(
-                checked = isDone,
-                onCheckedChange = { viewModel.toggleTodoCompletion(todo) },
-                modifier = Modifier.size(24.dp),
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = if (isDone) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else Color.Transparent,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Checklist,
+                    contentDescription = if (isDone) "Done" else "To-Do",
+                    modifier = Modifier.padding(2.dp).size(18.dp),
+                    tint = if (isDone) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
-            )
-            Spacer(Modifier.width(6.dp))
+            }
+            Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     todo.title,
