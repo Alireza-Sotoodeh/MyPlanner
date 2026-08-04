@@ -960,6 +960,7 @@ private fun HistoryDatePickerDialog(
     var selectedDay by remember { mutableStateOf<Int?>(null) }
     var editingYear by remember { mutableStateOf(false) }
     var yearInput by remember { mutableStateOf("") }
+    var showMonthPicker by remember { mutableStateOf(false) }
 
     fun toggleCalendar() {
         if (usePersian) {
@@ -1003,6 +1004,19 @@ private fun HistoryDatePickerDialog(
         selectedDay = null
     }
 
+    if (showMonthPicker) {
+        HistoryMonthPickerDialog(
+            currentMonth = currentMonth,
+            usePersian = usePersian,
+            onConfirm = { m ->
+                currentMonth = m
+                selectedDay = null
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false }
+        )
+    }
+
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -1044,7 +1058,8 @@ private fun HistoryDatePickerDialog(
                     text = monthLabel,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 16.sp,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.clickable { showMonthPicker = true }
                 )
                 if (editingYear) {
                     val focusRequester = remember { FocusRequester() }
@@ -1113,6 +1128,78 @@ private fun HistoryDatePickerDialog(
             onDaySelected = { day -> selectedDay = day }
         )
     }
+}
+
+@Composable
+private fun HistoryMonthPickerDialog(
+    currentMonth: Int,
+    usePersian: Boolean,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedMonth by remember { mutableStateOf(currentMonth) }
+
+    val months = remember(usePersian) {
+        if (usePersian) PersianCalendarHelper.monthNames.toList()
+        else {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            val fmt = SimpleDateFormat("MMMM", Locale.getDefault())
+            (0..11).map {
+                cal.set(Calendar.MONTH, it)
+                fmt.format(cal.time)
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (usePersian) "Select Persian Month" else "Select Month", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (row in 0..3) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        for (col in 0..2) {
+                            val monthIndex = row * 3 + col
+                            val monthNumber = monthIndex + 1
+                            val isSelected = monthNumber == selectedMonth
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    .clickable { selectedMonth = monthNumber }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = months[monthIndex],
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selectedMonth) }) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
