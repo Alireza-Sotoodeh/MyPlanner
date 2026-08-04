@@ -511,59 +511,58 @@ private fun CronometerTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Timer section - centered in remaining space
-        Column(
+        // Timer Card (matching PomodoroTab active-state pattern)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
         ) {
-            Text(
-                text = timeStr,
-                fontSize = 72.sp,
-                fontWeight = FontWeight.Light,
-                fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = timeStr,
+                    fontSize = 72.sp,
+                    fontWeight = FontWeight.Light,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            TimerControls(
-                isRunning = chronoRunning,
-                isPaused = chronoPaused,
-                onDiscard = { viewModel.discardChronometer() },
-                onStartPause = {
-                    if (!chronoRunning) {
-                        viewModel.startChronometer(selectedTaskId)
-                    } else {
-                        viewModel.pauseChronometer()
-                    }
-                },
-                onStop = {
-                    onChronoSummaryDurationChange(chronoElapsed.toInt())
-                    viewModel.stopChronometer()
-                    onShowChronoSummaryChange(true)
-                },
-                onMinusOne = { viewModel.adjustChronoMinusOne() },
-                onReset = { viewModel.resetChronometer() },
-                isDiscardConfirm = false,
-                onDiscardConfirmDismiss = {},
-                onDiscardConfirmed = {}
-            )
+                TimerControls(
+                    isRunning = chronoRunning,
+                    isPaused = chronoPaused,
+                    onDiscard = { viewModel.discardChronometer() },
+                    onStartPause = {
+                        if (!chronoRunning) {
+                            viewModel.startChronometer(selectedTaskId)
+                        } else {
+                            viewModel.pauseChronometer()
+                        }
+                    },
+                    onStop = {
+                        onChronoSummaryDurationChange(chronoElapsed.toInt())
+                        viewModel.stopChronometer()
+                        onShowChronoSummaryChange(true)
+                    },
+                    onMinusOne = { viewModel.adjustChronoMinusOne() },
+                    onReset = { viewModel.resetChronometer() },
+                    isDiscardConfirm = false,
+                    onDiscardConfirmDismiss = {},
+                    onDiscardConfirmed = {}
+                )
+            }
         }
 
-        // Task selector at bottom
-        Text(
-            text = "TASK / NOTE",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 1.5.sp,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
+        // Task selector
         TaskSelectorSection(
             availableTasks = availableTasks,
             selectedTaskId = selectedTaskId,
@@ -571,8 +570,6 @@ private fun CronometerTab(
             viewModel = viewModel,
             isLocked = chronoIsLocked
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
     }
 
     if (showChronoSummary) {
