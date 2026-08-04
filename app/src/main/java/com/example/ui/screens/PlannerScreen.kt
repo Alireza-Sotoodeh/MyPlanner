@@ -3474,60 +3474,64 @@ private fun TodoTab(viewModel: MainViewModel) {
         TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp)
+            .nestedScroll(filterChipScrollConnection)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(filterChipScrollConnection)
+        AnimatedVisibility(
+            visible = showFilterChips,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "TO-DO LIST",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.5.sp
-                )
-                Text(
-                    "${displayTodos.size} items",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            AnimatedVisibility(
-                visible = showFilterChips,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TodoTabFilter.entries.forEach { f ->
-                        FilterChip(
-                            selected = filter == f,
-                            onClick = { filter = f },
-                            label = { Text(f.name, fontSize = 12.sp) }
-                        )
-                    }
+                TodoTabFilter.entries.forEach { f ->
+                    FilterChip(
+                        selected = filter == f,
+                        onClick = { filter = f },
+                        label = { Text(f.name, fontSize = 12.sp) }
+                    )
                 }
             }
+        }
 
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "TO-DO LIST",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+                    Text(
+                        "${displayTodos.size} items",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (displayTodos.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -3580,6 +3584,7 @@ private fun TodoTab(viewModel: MainViewModel) {
                 }
             }
         }
+    }
     }
 
     if (showAddDialog) {
@@ -4042,61 +4047,64 @@ private fun IdeasTab(viewModel: MainViewModel) {
     val filteredIdeas = if (selectedGroupId == null) ideas
     else ideas.filter { it.groupId == selectedGroupId }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp)
+            .nestedScroll(groupChipScrollConnection)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(groupChipScrollConnection)
+        // Group filter chips - outside the panel box (like Daily's labels)
+        AnimatedVisibility(
+            visible = showGroupChips && groups.isNotEmpty(),
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "IDEAS",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.5.sp
-                )
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            GroupChipRow(
+                groups = groups,
+                selectedGroupId = selectedGroupId,
+                onGroupSelected = { selectedGroupId = it },
+                onEditGroup = { editingGroup = it },
+                onDeleteGroup = { showDeleteGroupConfirm = it }
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        "${filteredIdeas.size} ideas",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "IDEAS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
                     )
-                    TextButton(onClick = { showCreateGroupDialog = true }) {
-                        Text("+ Group", fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "${filteredIdeas.size} ideas",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(onClick = { showCreateGroupDialog = true }) {
+                            Text("+ Group", fontSize = 11.sp)
+                        }
                     }
                 }
-            }
 
-            // Group filter chips
-            AnimatedVisibility(
-                visible = showGroupChips && groups.isNotEmpty(),
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                GroupChipRow(
-                    groups = groups,
-                    selectedGroupId = selectedGroupId,
-                    onGroupSelected = { selectedGroupId = it },
-                    onEditGroup = { editingGroup = it },
-                    onDeleteGroup = { showDeleteGroupConfirm = it }
-                )
-            }
-
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (filteredIdeas.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -4148,6 +4156,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
                 }
             }
         }
+    }
     }
 
     if (showCreateGroupDialog) {
