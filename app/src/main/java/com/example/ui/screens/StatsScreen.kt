@@ -1611,6 +1611,162 @@ fun StatsScreen(viewModel: MainViewModel) {
                         }
                     }
 
+                    val taskDailyMetrics = remember(taskGraphRange, allTasks) {
+                        computeTaskDailyMetrics(taskGraphRange.first, taskGraphRange.second, allTasks)
+                    }
+
+                    // ── Done vs Postponed Ratio ──
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "DONE VS POSTPONED RATIO",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val ratioValues = taskDailyMetrics.map { it.ratio }
+                    val avgRatio = remember(ratioValues) {
+                        val nonZero = ratioValues.filter { it > 0f }
+                        if (nonZero.isNotEmpty()) nonZero.average().toFloat() else 0f
+                    }
+
+                    if (taskDailyMetrics.all { it.done == 0 && it.postponed == 0 }) {
+                        Text(
+                            text = "No task data in this period.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LineChartCanvas(
+                            lines = listOf(LineChartLine(
+                                values = ratioValues,
+                                color = MaterialTheme.colorScheme.primary,
+                                label = "Ratio"
+                            )),
+                            maxY = 1f,
+                            minY = 0f,
+                            yStep = 0.25f,
+                            yLabelFormatter = { "${(it * 100).toInt()}%" },
+                            xLabels = taskDailyMetrics.map { it.day.toString() },
+                            dateStrs = taskDailyMetrics.map { it.dateStr },
+                            gradientFill = true,
+                            height = 160.dp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Avg: ${"%.0f".format(avgRatio * 100)}% done vs postponed",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${taskDailyMetrics.count { it.done > 0 || it.postponed > 0 }} of ${taskDailyMetrics.size} days with activity",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // ── Daily Task Activity ──
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "DAILY TASK ACTIVITY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val activityMaxY = remember(taskDailyMetrics) {
+                        taskDailyMetrics.maxOfOrNull { maxOf(it.created, it.postponed, it.migrated) }?.toFloat()?.coerceAtLeast(1f) ?: 1f
+                    }
+                    val activityYStep = remember(activityMaxY) {
+                        when {
+                            activityMaxY <= 3f -> 1f
+                            activityMaxY <= 8f -> 2f
+                            activityMaxY <= 20f -> 5f
+                            else -> (activityMaxY / 4f).roundToInt().coerceAtLeast(5).toFloat()
+                        }
+                    }
+
+                    if (taskDailyMetrics.all { it.created == 0 && it.postponed == 0 && it.migrated == 0 }) {
+                        Text(
+                            text = "No task data in this period.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        val createdColor = MaterialTheme.colorScheme.primary
+                        val postponedColor = Color(0xFFFF7043)
+                        val migratedColor = Color(0xFF5C6BC0)
+
+                        LineChartCanvas(
+                            lines = listOf(
+                                LineChartLine(
+                                    values = taskDailyMetrics.map { it.created.toFloat() },
+                                    color = createdColor,
+                                    label = "Created"
+                                ),
+                                LineChartLine(
+                                    values = taskDailyMetrics.map { it.postponed.toFloat() },
+                                    color = postponedColor,
+                                    label = "Postponed"
+                                ),
+                                LineChartLine(
+                                    values = taskDailyMetrics.map { it.migrated.toFloat() },
+                                    color = migratedColor,
+                                    label = "Moved"
+                                )
+                            ),
+                            maxY = activityMaxY,
+                            minY = 0f,
+                            yStep = activityYStep,
+                            yLabelFormatter = { it.toInt().toString() },
+                            xLabels = taskDailyMetrics.map { it.day.toString() },
+                            dateStrs = taskDailyMetrics.map { it.dateStr },
+                            gradientFill = true,
+                            height = 160.dp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val totalCreated = taskDailyMetrics.sumOf { it.created }
+                        val totalPostponed = taskDailyMetrics.sumOf { it.postponed }
+                        val totalMigrated = taskDailyMetrics.sumOf { it.migrated }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "$totalCreated created · $totalPostponed postponed · $totalMigrated moved",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${taskDailyMetrics.count { it.created > 0 || it.postponed > 0 || it.migrated > 0 }} active days",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     Spacer(modifier = Modifier.height(16.dp))
@@ -2320,6 +2476,16 @@ private data class TaskCompletionPoint(
     val completionRate: Float
 )
 
+private data class TaskDailyMetrics(
+    val dateStr: String,
+    val day: Int,
+    val done: Int,
+    val postponed: Int,
+    val migrated: Int,
+    val ratio: Float,
+    val created: Int
+)
+
 private fun computeTaskCompletionRate(
     startDate: String,
     endDate: String,
@@ -2346,6 +2512,56 @@ private fun computeTaskCompletionRate(
                 total = total,
                 done = done,
                 completionRate = if (total > 0) done.toFloat() / total.toFloat() else 0f
+            )
+        )
+        cal.add(Calendar.DAY_OF_MONTH, 1)
+    }
+    return results
+}
+
+// ── Task Daily Metrics Helpers ──
+
+private fun computeTaskDailyMetrics(
+    startDate: String,
+    endDate: String,
+    allTasks: List<TaskEntity>
+): List<TaskDailyMetrics> {
+    if (startDate.isBlank() || endDate.isBlank()) return emptyList()
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+    val start = sdf.parse(startDate) ?: return emptyList()
+    val end = sdf.parse(endDate) ?: return emptyList()
+
+    val tasksByDate = allTasks.groupBy { it.date }
+    val createdByDate = allTasks.groupBy { task ->
+        try {
+            val c = Calendar.getInstance().apply { timeInMillis = task.createdAt }
+            sdf.format(c.time)
+        } catch (_: Exception) { null }
+    }
+
+    val results = mutableListOf<TaskDailyMetrics>()
+    cal.time = start
+    while (!cal.time.after(end)) {
+        val dateStr = sdf.format(cal.time)
+        val dayTasks = tasksByDate[dateStr] ?: emptyList()
+        val eligible = dayTasks.filter {
+            it.type != "EVENT" && it.recurrenceMode == "NONE" && !it.isDeleted && it.parentTaskId == null
+        }
+        val done = eligible.count { it.status == "COMPLETED" && !it.postponed }
+        val postponed = eligible.count { it.postponed }
+        val migrated = eligible.count { it.status == "MIGRATED" }
+        val ratio = if (done + postponed > 0) done.toFloat() / (done + postponed).toFloat() else 0f
+        val created = createdByDate[dateStr]?.size ?: 0
+        results.add(
+            TaskDailyMetrics(
+                dateStr = dateStr,
+                day = cal.get(Calendar.DAY_OF_MONTH),
+                done = done,
+                postponed = postponed,
+                migrated = migrated,
+                ratio = ratio,
+                created = created
             )
         )
         cal.add(Calendar.DAY_OF_MONTH, 1)
