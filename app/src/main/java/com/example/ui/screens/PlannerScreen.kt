@@ -1068,6 +1068,19 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
         }
     }
 
+    if (showAddTaskDialog && taskToEdit != null) {
+        com.example.ui.components.TaskManagerDialog(
+            viewModel = viewModel,
+            initialDate = taskToEdit!!.date,
+            taskToEdit = taskToEdit,
+            initialSubtasks = subtasksToEdit,
+            onDismiss = {
+                showAddTaskDialog = false
+                taskToEdit = null
+                subtasksToEdit = emptyList()
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -2026,6 +2039,7 @@ fun BulletTaskItem(
         }
         }
     }
+
 }
 
 @Composable
