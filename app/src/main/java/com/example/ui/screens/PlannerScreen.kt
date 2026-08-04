@@ -4386,6 +4386,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
     var showDeleteGroupConfirm by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
+    var expandAllIdeas by remember { mutableStateOf(true) }
 
     var showGroupChips by remember { mutableStateOf(true) }
     val groupChipScrollConnection = remember {
@@ -4452,6 +4453,17 @@ private fun IdeasTab(viewModel: MainViewModel) {
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        IconButton(
+                            onClick = { expandAllIdeas = !expandAllIdeas },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (expandAllIdeas) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (expandAllIdeas) "Collapse All" else "Expand All",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
 
@@ -4487,6 +4499,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
                         items(filteredIdeas, key = { it.id }) { idea ->
                             IdeaCard(
                                 idea = idea,
+                                expanded = expandAllIdeas,
                                 viewModel = viewModel,
                                 onEdit = { editingIdea = it },
                                 onDelete = { showDeleteIdeaConfirm = it },
@@ -4607,6 +4620,7 @@ private fun GroupChipRow(
 @Composable
 private fun IdeaCard(
     idea: IdeaEntity,
+    expanded: Boolean = true,
     viewModel: MainViewModel,
     onEdit: (IdeaEntity) -> Unit,
     onDelete: (IdeaEntity) -> Unit,
@@ -4615,7 +4629,6 @@ private fun IdeaCard(
     val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
     var showAddStage by remember { mutableStateOf(false) }
     var newStageTitle by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
     var showIdeaMenu by remember { mutableStateOf(false) }
     var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
     var descExpanded by remember { mutableStateOf(false) }
@@ -4664,87 +4677,94 @@ private fun IdeaCard(
                 }
             }
 
-            // Collapsible description
-            if (idea.description.isNotBlank()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 26.dp, end = 4.dp, top = 2.dp)
-                        .animateContentSize()
-                ) {
-                    Text(
-                        idea.description,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        maxLines = if (descExpanded) Int.MAX_VALUE else 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = if (descExpanded) "less" else "more",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { descExpanded = !descExpanded }
-                    )
-                }
-            }
-
-            if (stages.isNotEmpty()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
-                stages.forEachIndexed { index, stage ->
-                    StageRow(
-                        stage = stage,
-                        stages = stages,
-                        viewModel = viewModel,
-                        onDelete = { viewModel.deleteStage(it) }
-                    )
-                    if (index < stages.lastIndex) {
-                        Spacer(Modifier.height(4.dp))
-                    }
-                }
-            }
-
-            if (showAddStage && addStageIdeaId == idea.id) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    OutlinedTextField(
-                        value = newStageTitle,
-                        onValueChange = { newStageTitle = it },
-                        placeholder = { Text("Stage title", fontSize = 13.sp) },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                        )
-                    )
-                    IconButton(onClick = {
-                        if (newStageTitle.isNotBlank()) {
-                            viewModel.addStage(idea.id, newStageTitle.trim())
-                            newStageTitle = ""
-                            addStageIdeaId = null
-                            showAddStage = false
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    if (idea.description.isNotBlank()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 26.dp, end = 4.dp, top = 2.dp)
+                                .animateContentSize()
+                        ) {
+                            Text(
+                                idea.description,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                maxLines = if (descExpanded) Int.MAX_VALUE else 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = if (descExpanded) "less" else "more",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable { descExpanded = !descExpanded }
+                            )
                         }
-                    }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(18.dp))
                     }
-                    IconButton(onClick = {
-                        newStageTitle = ""
-                        addStageIdeaId = null
-                        showAddStage = false
-                    }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(18.dp))
+
+                    if (stages.isNotEmpty()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
+                        stages.forEachIndexed { index, stage ->
+                            StageRow(
+                                stage = stage,
+                                stages = stages,
+                                viewModel = viewModel,
+                                onDelete = { viewModel.deleteStage(it) }
+                            )
+                            if (index < stages.lastIndex) {
+                                Spacer(Modifier.height(4.dp))
+                            }
+                        }
                     }
-                }
-            } else {
-                TextButton(
-                    onClick = { showAddStage = true; addStageIdeaId = idea.id },
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Text("+ Add Stage", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+
+                    if (showAddStage && addStageIdeaId == idea.id) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = newStageTitle,
+                                onValueChange = { newStageTitle = it },
+                                placeholder = { Text("Stage title", fontSize = 13.sp) },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+                            )
+                            IconButton(onClick = {
+                                if (newStageTitle.isNotBlank()) {
+                                    viewModel.addStage(idea.id, newStageTitle.trim())
+                                    newStageTitle = ""
+                                    addStageIdeaId = null
+                                    showAddStage = false
+                                }
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = {
+                                newStageTitle = ""
+                                addStageIdeaId = null
+                                showAddStage = false
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    } else {
+                        TextButton(
+                            onClick = { showAddStage = true; addStageIdeaId = idea.id },
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Text("+ Add Stage", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
         }
