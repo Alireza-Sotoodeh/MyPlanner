@@ -71,8 +71,7 @@ fun StatsScreen(viewModel: MainViewModel) {
     val appUsageItems by viewModel.appUsageItems.collectAsState()
     val screenTimeError by viewModel.screenTimeError.collectAsState()
     val habits by viewModel.habits.collectAsState()
-    val habitLogs by viewModel.habitLogs.collectAsState()
-    val selectedDate by viewModel.selectedDate.collectAsState()
+    val todayHabitLogs by viewModel.todayHabitLogs.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
     val allTimerSessions by viewModel.allTimerSessions.collectAsState()
     val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
@@ -266,11 +265,11 @@ fun StatsScreen(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        val activeHabits = remember(habits, selectedDate) {
-                            if (selectedDate.isBlank()) return@remember habits
+                        val activeHabits = remember(habits, todayDateStr) {
+                            if (todayDateStr.isBlank()) return@remember habits
                             try {
                                 val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                val parsedDate = sdf.parse(selectedDate) ?: return@remember habits
+                                val parsedDate = sdf.parse(todayDateStr) ?: return@remember habits
                                 val cal = Calendar.getInstance().apply { time = parsedDate }
                                 val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
                                 habits.filter { habit ->
@@ -295,7 +294,7 @@ fun StatsScreen(viewModel: MainViewModel) {
                             } catch (_: Exception) { habits }
                         }
                         val habitTargetMap = activeHabits.associate { it.id to it.target }
-                        val loggedCount = habitLogs.count { log ->
+                        val loggedCount = todayHabitLogs.count { log ->
                             val target = habitTargetMap[log.habitId] ?: 1f
                             log.value >= target
                         }
@@ -357,7 +356,7 @@ fun StatsScreen(viewModel: MainViewModel) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val tasks = allTasks
+                    val tasks = allTasks.filter { it.date == todayDateStr }
                     if (tasks.isEmpty()) {
                         Text(
                             text = "Create and complete intentions to compile stats.",
@@ -424,7 +423,8 @@ fun StatsScreen(viewModel: MainViewModel) {
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    val labelGroups = allTimerSessions.groupBy {
+                    val todaySessions = allTimerSessions.filter { it.date == todayDateStr }
+                    val labelGroups = todaySessions.groupBy {
                         if (it.label.isBlank()) "Unlabeled" else it.label
                     }
                     val labelStats = labelGroups.map { (label, sessions) ->
