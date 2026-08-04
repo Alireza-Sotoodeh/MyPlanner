@@ -274,6 +274,8 @@ class TimerForegroundService : Service() {
 
     private suspend fun handlePomodoroCompletion() {
         val current = _state.value
+        if (current.mode != TimerMode.POMODORO) return
+
         val isFg = isAppInForeground
 
         launchPomodoroFinishActivity(current)
@@ -283,9 +285,9 @@ class TimerForegroundService : Service() {
         }
 
         stopForeground(STOP_FOREGROUND_REMOVE)
-        if (isFg) {
-            _state.update { it.copy(running = false, completed = true) }
-        } else {
+        _state.update { it.copy(running = false, completed = true) }
+        if (!isFg) {
+            delay(100)
             _state.value = TimerServiceState()
         }
         fireCompletionNotification(current)
@@ -606,7 +608,7 @@ class TimerForegroundService : Service() {
         }
     }
 
-    companion object {
+companion object {
         private val _state = MutableStateFlow(TimerServiceState())
         val state: StateFlow<TimerServiceState> = _state.asStateFlow()
 
@@ -645,10 +647,12 @@ class TimerForegroundService : Service() {
         private const val UPDATE_INTERVAL_MS = 10_000L
 
         fun clearCompletedFlag() {
+            if (_state.value.mode != null) return
             _state.value = TimerServiceState()
         }
 
         fun clearStoppedFlag() {
+            if (_state.value.mode != null) return
             _state.value = TimerServiceState()
         }
     }

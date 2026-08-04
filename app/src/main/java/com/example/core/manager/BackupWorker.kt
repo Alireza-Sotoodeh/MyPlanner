@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
 import android.util.Log
+import java.io.IOException
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -110,12 +111,10 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if (existing != null) deleteDocument(existing)
                 val createdUri = DocumentsContract.createDocument(
                     contentResolver, parentUri, "application/json", name.removeSuffix(".json")
-                )
-                if (createdUri != null) {
-                    contentResolver.openOutputStream(createdUri)?.use {
-                        it.write(json.toByteArray(Charsets.UTF_8))
-                    }
-                }
+                ) ?: throw IOException("Failed to create document for $name")
+                contentResolver.openOutputStream(createdUri)?.use {
+                    it.write(json.toByteArray(Charsets.UTF_8))
+                } ?: throw IOException("Failed to open stream for $name")
             }
 
             fun isTaskInMonth(task: TaskEntity, month: String): Boolean {

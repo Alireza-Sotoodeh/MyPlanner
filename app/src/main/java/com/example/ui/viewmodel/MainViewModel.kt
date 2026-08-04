@@ -894,23 +894,29 @@ class MainViewModel(
                     writableDb.endTransaction()
                 }
 
-                backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
-                backupObj.learnItems.forEach { learnRepository.insertItem(it) }
-                backupObj.learnSections.forEach { learnRepository.insertSection(it) }
-                backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
-                backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
-                backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
-                backupObj.tasks.forEach { taskRepository.insertTask(it) }
-                backupObj.habits.forEach { habitRepository.insertHabit(it) }
-                backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
-                backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
-                backupObj.timerSessions.forEach { timerRepository.insertSession(it) }
-                backupObj.timerTemplates.forEach { timerRepository.insertTemplate(it) }
-                backupObj.todos.forEach { todoRepository.insertTodo(it) }
-                backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
-                backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
-                backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
-                backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
+                writableDb.beginTransaction()
+                try {
+                    backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
+                    backupObj.learnItems.forEach { learnRepository.insertItem(it) }
+                    backupObj.learnSections.forEach { learnRepository.insertSection(it) }
+                    backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
+                    backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
+                    backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
+                    backupObj.tasks.forEach { taskRepository.insertTask(it) }
+                    backupObj.habits.forEach { habitRepository.insertHabit(it) }
+                    backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
+                    backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
+                    backupObj.timerSessions.forEach { timerRepository.insertSession(it) }
+                    backupObj.timerTemplates.forEach { timerRepository.insertTemplate(it) }
+                    backupObj.todos.forEach { todoRepository.insertTodo(it) }
+                    backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
+                    backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
+                    backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
+                    backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
+                    writableDb.setTransactionSuccessful()
+                } finally {
+                    writableDb.endTransaction()
+                }
 
                 // FK orphan nullification
                 val taskIds = backupObj.tasks.map { it.id }.toSet()
@@ -1686,8 +1692,8 @@ class MainViewModel(
             getImmutableFlag() or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val timeParts = _reviewReminderTime.value.split(":")
-        val hour = timeParts[0].toInt()
-        val minute = timeParts[1].toInt()
+        val hour = timeParts[0].toIntOrNull() ?: 20
+        val minute = timeParts[1].toIntOrNull() ?: 0
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)

@@ -195,7 +195,9 @@ object ReminderManager {
                     if (endDate != null) {
                         try {
                             val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                            val endCal = Calendar.getInstance().apply { time = sdf.parse(endDate)!!; add(Calendar.DAY_OF_YEAR, 1) }
+                            val parsedDate = sdf.parse(endDate)
+                            if (parsedDate == null) continue
+                            val endCal = Calendar.getInstance().apply { time = parsedDate; add(Calendar.DAY_OF_YEAR, 1) }
                             if (checkCal.timeInMillis > endCal.timeInMillis) continue
                         } catch (_: Exception) {}
                     }
