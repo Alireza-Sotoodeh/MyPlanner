@@ -4075,6 +4075,8 @@ private fun TodoTab(viewModel: MainViewModel) {
             viewModel = viewModel,
             initialDate = "",
             todoToEdit = todo,
+            initialSubtasks = allTodos.filter { it.parentTodoId == todo.id }
+                .map { TaskEntity(title = it.title, date = "", subtaskImportance = it.subtaskImportance) },
             onDismiss = { editingTodo = null }
         )
     }
@@ -4393,6 +4395,11 @@ private fun TodoItem(
                         ) {
                             subTodos.forEach { subTodo ->
                                 val subDone = subTodo.status == "DONE"
+                                val importanceIcon = when (subTodo.subtaskImportance) {
+                                    "IMPORTANT" -> "⭐ "
+                                    "OPTIONAL" -> "☕ "
+                                    else -> ""
+                                }
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.fillMaxWidth()
@@ -4421,7 +4428,7 @@ private fun TodoItem(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = subTodo.title,
+                                            text = "$importanceIcon${subTodo.title}",
                                             fontSize = 11.sp,
                                             color = if (subDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                             else MaterialTheme.colorScheme.onSurfaceVariant,

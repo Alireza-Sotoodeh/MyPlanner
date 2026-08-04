@@ -747,7 +747,7 @@ class MainViewModel(
         _pendingSubTodoCompletion.value = null
     }
 
-    fun addSubTodo(parentTodo: TodoEntity, title: String) {
+    fun addSubTodo(parentTodo: TodoEntity, title: String, importance: String = "OPTIONAL") {
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
@@ -760,6 +760,7 @@ class MainViewModel(
                         priority = parentTodo.priority,
                         parentTodoId = parentTodo.id,
                         status = "PENDING",
+                        subtaskImportance = importance,
                         sortOrder = nextOrder
                     )
                 )
@@ -1283,6 +1284,29 @@ class MainViewModel(
                         subtaskImportance = importance
                     )
                     taskRepository.insertTask(subTask)
+                }
+            }
+
+            // Sync linked todo's sub-todos with importance
+            updatedTask.linkedTodoId?.let { todoId ->
+                todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                    val existingSubTodos = todoRepository.getSubTodosSync(todoId)
+                    existingSubTodos.forEach { todoRepository.deleteTodo(it) }
+                    subtasks.forEach { (subTitle, importance) ->
+                        if (subTitle.isNotBlank()) {
+                            todoRepository.insertTodo(
+                                TodoEntity(
+                                    title = subTitle.trim(),
+                                    description = "",
+                                    priority = linkedTodo.priority,
+                                    parentTodoId = todoId,
+                                    status = "PENDING",
+                                    subtaskImportance = importance,
+                                    sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -2305,14 +2329,14 @@ class MainViewModel(
     }
 
     // === To-Do CRUD ===
-    fun addTodo(title: String, description: String = "", priority: String = "Medium", subtaskTitles: List<String> = emptyList()) {
+    fun addTodo(title: String, description: String = "", priority: String = "Medium", subtasks: List<Pair<String, String>> = emptyList()) {
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
                 val allTodos = todoRepository.getAllTodosSync()
                 val nextOrder = (allTodos.maxOfOrNull { it.sortOrder } ?: -1) + 1
                 val todoId = todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority, sortOrder = nextOrder))
-                subtaskTitles.filter { it.isNotBlank() }.forEach { subTitle ->
+                subtasks.filter { it.first.isNotBlank() }.forEach { (subTitle, importance) ->
                     todoRepository.insertTodo(
                         TodoEntity(
                             title = subTitle.trim(),
@@ -2320,6 +2344,7 @@ class MainViewModel(
                             priority = priority,
                             parentTodoId = todoId,
                             status = "PENDING",
+                            subtaskImportance = importance,
                             sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
                         )
                     )
@@ -2377,13 +2402,14 @@ class MainViewModel(
         }
     }
 
-    fun updateTodoWithSubtodos(todo: TodoEntity, subtaskTitles: List<String>) {
+    fun updateTodoWithSubtodos(todo: TodoEntity, subtasks: List<Pair<String, String>>) {
         viewModelScope.launch {
             try {
+                val allTodos = todoRepository.getAllTodosSync()
                 todoRepository.updateTodo(todo)
                 val existingSubTodos = todoRepository.getSubTodosSync(todo.id)
                 existingSubTodos.forEach { todoRepository.deleteTodo(it) }
-                subtaskTitles.filter { it.isNotBlank() }.forEach { subTitle ->
+                subtasks.filter { it.first.isNotBlank() }.forEach { (subTitle, importance) ->
                     todoRepository.insertTodo(
                         TodoEntity(
                             title = subTitle.trim(),
@@ -2391,9 +2417,33 @@ class MainViewModel(
                             priority = todo.priority,
                             parentTodoId = todo.id,
                             status = "PENDING",
-                            sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
+                            subtaskImportance = importance,
+                            sortOrder = (allTodos.maxOfOrNull { it.sortOrder } ?: -1) + 1
                         )
                     )
+                }
+                // Sync to linked task's subtasks
+                todo.linkedTaskId?.let { taskId ->
+                    taskRepository.getTaskById(taskId)?.let { linkedTask ->
+                        val existingSubtasks = taskRepository.getSubtasks(taskId)
+                        existingSubtasks.forEach { taskRepository.deleteTask(it) }
+                        subtasks.filter { it.first.isNotBlank() }.forEach { (subTitle, importance) ->
+                            taskRepository.insertTask(
+                                TaskEntity(
+                                    title = subTitle.trim(),
+                                    description = "",
+                                    date = linkedTask.date,
+                                    type = "TASK",
+                                    durationMinutes = 0,
+                                    priority = 0,
+                                    label = linkedTask.label,
+                                    labelColor = linkedTask.labelColor,
+                                    parentTaskId = taskId,
+                                    subtaskImportance = importance
+                                )
+                            )
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update todo with subtodos", e)
@@ -2531,6 +2581,7 @@ class MainViewModel(
                             type = "TASK",
                             label = "TODO",
                             parentTaskId = taskId,
+                            subtaskImportance = subTodo.subtaskImportance,
                             priority = 0
                         )
                     )
@@ -2580,6 +2631,7 @@ class MainViewModel(
                                 priority = subtask.priorityLevel,
                                 status = if (subtask.status == "COMPLETED") "DONE" else "PENDING",
                                 parentTodoId = todoId,
+                                subtaskImportance = subtask.subtaskImportance,
                                 createdAt = subtask.createdAt
                             )
                         )
@@ -2669,6 +2721,7 @@ class MainViewModel(
                             label = "TODO",
                             parentTaskId = taskId,
                             priorityLevel = subTodo.priority,
+                            subtaskImportance = subTodo.subtaskImportance,
                             priority = 0,
                             createdAt = subTodo.createdAt
                         )

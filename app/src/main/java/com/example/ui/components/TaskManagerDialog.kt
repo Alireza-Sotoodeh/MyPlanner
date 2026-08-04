@@ -1143,7 +1143,7 @@ fun TaskManagerDialog(
                             priorityLevel = priorityLevel
                         )
                     } else if (todoToEdit != null) {
-                        viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel), subtasks.toList().map { it.first })
+                        viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel), subtasks.toList())
                     } else if (ideaToEdit != null) {
                         val mutableStages = stages.toMutableList()
                         if (editingStageIndex != -1 && editingStageIndex < mutableStages.size && editingStageText.isNotBlank()) {
@@ -1155,7 +1155,7 @@ fun TaskManagerDialog(
                         viewModel.updateIdea(ideaToEdit.copy(groupId = selectedGroupId, title = title.trim(), description = description.trim(), priority = priorityLevel), mutableStages)
                     } else {
                         when (type) {
-                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList().map { it.first })
+                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList())
                             "IDEA" -> {
                                 val mutableStages = stages.toMutableList()
                                 if (editingStageIndex != -1 && editingStageIndex < mutableStages.size && editingStageText.isNotBlank()) {
