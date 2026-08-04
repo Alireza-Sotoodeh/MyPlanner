@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.CalendarDatePickerDialog
 import com.example.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -211,30 +212,16 @@ fun DiaryScreen(
     }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = try {
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(currentDate)?.time
-                    ?: System.currentTimeMillis()
-            } catch (_: Exception) { System.currentTimeMillis() }
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val cal = Calendar.getInstance().apply { timeInMillis = millis }
-                        saveNow()
-                        currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        CalendarDatePickerDialog(
+            initialSelectedDate = currentDate,
+            initialUsePersian = viewModel.usePersianCalendar.value,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { gregorianDate ->
+                saveNow()
+                currentDate = gregorianDate
+                showDatePicker = false
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
     if (showSettingsDialog) {
         SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })

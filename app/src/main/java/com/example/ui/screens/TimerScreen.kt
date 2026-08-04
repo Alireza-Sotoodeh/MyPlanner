@@ -898,6 +898,8 @@ private fun HistoryTab(
     if (showHistoryDatePicker) {
         CalendarDatePickerDialog(
             highlightedDates = highlightedDates,
+            initialUsePersian = viewModel.usePersianCalendar.value,
+            initialSelectedDate = historySelectedDate,
             onDismiss = { showHistoryDatePicker = false },
             onDateSelected = { gregorianDate ->
                 viewModel.selectHistoryDate(gregorianDate)
@@ -1633,25 +1635,15 @@ private fun AddManualSessionDialog(
     )
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = System.currentTimeMillis()
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        CalendarDatePickerDialog(
+            initialSelectedDate = date,
+            initialUsePersian = viewModel.usePersianCalendar.value,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { gregorianDate ->
+                date = gregorianDate
+                showDatePicker = false
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 }
 
@@ -1723,28 +1715,14 @@ private fun EditSessionDialog(
     )
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = run {
-                try {
-                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date)?.time
-                } catch (_: Exception) { System.currentTimeMillis() }
+        CalendarDatePickerDialog(
+            initialSelectedDate = date,
+            initialUsePersian = viewModel.usePersianCalendar.value,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { gregorianDate ->
+                date = gregorianDate
+                showDatePicker = false
             }
         )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
     }
 }

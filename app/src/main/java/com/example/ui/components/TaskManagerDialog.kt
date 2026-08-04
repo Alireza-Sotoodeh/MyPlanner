@@ -140,96 +140,15 @@ fun TaskManagerDialog(
 
 
     if (datePickerTarget != "NONE") {
-        var isPersian by remember { mutableStateOf(false) }
         val targetDateStr = if (datePickerTarget == "START") selectedDate else (recurrenceEndDate ?: selectedDate)
-
-        if (!isPersian) {
-            val datePickerState = rememberDatePickerState(
-                initialSelectedDateMillis = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(targetDateStr)?.time ?: System.currentTimeMillis()
-            )
-            DatePickerDialog(
-                onDismissRequest = { datePickerTarget = "NONE" },
-                confirmButton = {
-                    TextButton(onClick = {
-                        datePickerState.selectedDateMillis?.let {
-                            val formatted = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(it))
-                            if (datePickerTarget == "START") selectedDate = formatted else recurrenceEndDate = formatted
-                        }
-                        datePickerTarget = "NONE"
-                    }) {
-                        Text("OK")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { datePickerTarget = "NONE" }) {
-                        Text("Cancel")
-                    }
-                }
-            ) {
-                Column {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { isPersian = true }) { Text("Switch to Persian Calendar") }
-                    }
-                    DatePicker(state = datePickerState)
-                }
+        CalendarDatePickerDialog(
+            initialSelectedDate = targetDateStr,
+            onDismiss = { datePickerTarget = "NONE" },
+            onDateSelected = { gregorian ->
+                if (datePickerTarget == "START") selectedDate = gregorian else recurrenceEndDate = gregorian
+                datePickerTarget = "NONE"
             }
-        } else {
-            val initialParts = remember(targetDateStr) { com.example.core.utils.PersianCalendarHelper.getPersianDateParts(targetDateStr) }
-            var pYear by remember { mutableStateOf(initialParts.first) }
-            var pMonth by remember { mutableStateOf(initialParts.second) }
-            var pDay by remember { mutableStateOf(initialParts.third) }
-            
-            AlertDialog(
-                onDismissRequest = { datePickerTarget = "NONE" },
-                title = { Text("Select Persian Date") },
-                text = {
-                    Column {
-                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { isPersian = false }) { Text("Switch to Western Calendar") }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = pYear.toString(),
-                                onValueChange = { if (it.isEmpty()) pYear = 0 else it.toIntOrNull()?.let { y -> pYear = y } },
-                                label = { Text("Year") },
-                                modifier = Modifier.weight(1.2f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = pMonth.toString(),
-                                onValueChange = { if (it.isEmpty()) pMonth = 0 else it.toIntOrNull()?.let { m -> if (m in 1..12) pMonth = m } },
-                                label = { Text("Month") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = pDay.toString(),
-                                onValueChange = { if (it.isEmpty()) pDay = 0 else it.toIntOrNull()?.let { d -> if (d in 1..31) pDay = d } },
-                                label = { Text("Day") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (pYear > 0 && pMonth in 1..12 && pDay in 1..31) {
-                            val greg = com.example.core.utils.PersianCalendarHelper.getGregorianDateString(pYear, pMonth, pDay)
-                            if (greg.isNotBlank()) {
-                                if (datePickerTarget == "START") selectedDate = greg else recurrenceEndDate = greg
-                                datePickerTarget = "NONE"
-                            }
-                        }
-                    }) {
-                        Text("OK")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { datePickerTarget = "NONE" }) { Text("Cancel") }
-                }
-            )
-        }
+        )
     }
 
     if (showTimePicker) {
