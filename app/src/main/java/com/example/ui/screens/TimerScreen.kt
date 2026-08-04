@@ -748,74 +748,108 @@ private fun HistoryTab(
                 )
             }
         } else {
+            val groupedSessions = remember(sessions) {
+                sessions.groupBy { it.date }.toSortedMap(compareByDescending { it })
+            }
+            val dateLabels = remember {
+                val todayCal = Calendar.getInstance()
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val today = sdf.format(todayCal.time)
+                todayCal.add(Calendar.DAY_OF_YEAR, -1)
+                val yesterday = sdf.format(todayCal.time)
+                val currentYear = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date())
+                Triple(today, yesterday, currentYear)
+            }
+
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                items(sessions, key = { it.id }) { session ->
-                    val relatedTask = tasks.find { it.id == session.taskId }
-                    val timeOfDay = remember(session.timestamp) {
-                        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(session.timestamp))
-                    }
-                    val sessionMinutes = session.durationSeconds / 60
-                    val sessionSeconds = session.durationSeconds % 60
-                    val durationLabel = if (sessionMinutes >= 60) {
-                        "${sessionMinutes / 60}h ${sessionMinutes % 60}m"
-                    } else {
-                        "${sessionMinutes}m ${sessionSeconds}s"
+                groupedSessions.forEach { (dateStr, dateSessions) ->
+                    item {
+                        val headerText = when (dateStr) {
+                            dateLabels.first -> "Today"
+                            dateLabels.second -> "Yesterday"
+                            else -> {
+                                val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateStr)
+                                val year = SimpleDateFormat("yyyy", Locale.getDefault()).format(parsed!!)
+                                val fmt = if (year == dateLabels.third) "EEE, MMM d" else "EEE, MMM d, yyyy"
+                                SimpleDateFormat(fmt, Locale.getDefault()).format(parsed)
+                            }
+                        }
+                        Text(
+                            text = headerText,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp)
+                        )
                     }
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    items(dateSessions, key = { it.id }) { session ->
+                        val relatedTask = tasks.find { it.id == session.taskId }
+                        val timeOfDay = remember(session.timestamp) {
+                            SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(session.timestamp))
+                        }
+                        val sessionMinutes = session.durationSeconds / 60
+                        val sessionSeconds = session.durationSeconds % 60
+                        val durationLabel = if (sessionMinutes >= 60) {
+                            "${sessionMinutes / 60}h ${sessionMinutes % 60}m"
+                        } else {
+                            "${sessionMinutes}m ${sessionSeconds}s"
+                        }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            // Icon
-                            Text(
-                                text = if (session.type == "POMODORO") "\uD83C\uDF45" else "\u23F1",
-                                fontSize = 20.sp
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = durationLabel,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = if (session.type == "POMODORO") "\uD83C\uDF45" else "\u23F1",
+                                    fontSize = 20.sp
                                 )
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = durationLabel,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = relatedTask?.title ?: "(no task)",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (session.note.isNotEmpty()) {
+                                        Text(
+                                            text = session.note,
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+
                                 Text(
-                                    text = relatedTask?.title ?: "(no task)",
-                                    fontSize = 12.sp,
+                                    text = timeOfDay,
+                                    fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (session.note.isNotEmpty()) {
-                                    Text(
-                                        text = session.note,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                    )
+
+                                IconButton(onClick = { editingSession = session }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp))
                                 }
-                            }
-
-                            Text(
-                                text = timeOfDay,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            IconButton(onClick = { editingSession = session }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = {
-                                viewModel.deleteTimerSession(session.id)
-                            }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
+                                IconButton(onClick = {
+                                    viewModel.deleteTimerSession(session.id)
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
+                                }
                             }
                         }
                     }
