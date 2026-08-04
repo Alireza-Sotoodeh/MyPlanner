@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -26,6 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
@@ -218,7 +221,20 @@ fun PlannerScreen(viewModel: MainViewModel) {
                     selectedTab = 0
                     viewModel.selectDate(date)
                 }
-                2 -> MonthlyPlannerView(viewModel, null)
+                 2 -> {
+                        var showYearOverview by remember { mutableStateOf(true) }
+                        if (showYearOverview) {
+                            YearOverviewView(
+                                viewModel = viewModel,
+                                onMonthSelected = { showYearOverview = false }
+                            )
+                        } else {
+                            MonthlyPlannerView(
+                                viewModel = viewModel,
+                                onBackToYear = { showYearOverview = true }
+                            )
+                        }
+                    }
                 3 -> TodoTab(viewModel)
                 4 -> IdeasTab(viewModel)
             }
@@ -2388,10 +2404,163 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
 }
 
 @Composable
-fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
+fun YearOverviewView(
+    viewModel: MainViewModel,
+    onMonthSelected: () -> Unit
+) {
+    val selectedYear by viewModel.selectedYear.collectAsState()
+    val yearTasks by viewModel.yearTasks.collectAsState()
+
+    val topLevelTasks = remember(yearTasks) {
+        yearTasks.filter { it.parentTaskId == null }
+    }
+
+    val tasksByMonth = remember(topLevelTasks) {
+        topLevelTasks.groupBy { task ->
+            if (task.date.length >= 7) task.date.substring(0, 7) else task.date
+        }.mapValues { it.value.size }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        // Year Header Navigation
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                val cal = Calendar.getInstance()
+                val sdf = SimpleDateFormat("yyyy", Locale.getDefault())
+                val date = sdf.parse(selectedYear) ?: Date()
+                cal.time = date
+                cal.add(Calendar.YEAR, -1)
+                viewModel.selectYear(sdf.format(cal.time))
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBackIosNew,
+                    contentDescription = "Previous Year",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Text(
+                text = selectedYear,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp
+            )
+
+            IconButton(onClick = {
+                val cal = Calendar.getInstance()
+                val sdf = SimpleDateFormat("yyyy", Locale.getDefault())
+                val date = sdf.parse(selectedYear) ?: Date()
+                cal.time = date
+                cal.add(Calendar.YEAR, 1)
+                viewModel.selectYear(sdf.format(cal.time))
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForwardIos,
+                    contentDescription = "Next Year",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Month grid
+        if (topLevelTasks.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No tasks for this year.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                val monthNames = listOf(
+                    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+                )
+
+                items(12) { index ->
+                    val monthStr = String.format("%s-%02d", selectedYear, index + 1)
+                    val count = tasksByMonth[monthStr] ?: 0
+
+                    Card(
+                        onClick = {
+                            viewModel.selectMonth(monthStr)
+                            viewModel.selectYear(selectedYear)
+                            onMonthSelected()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (count > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = monthNames[index],
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = count.toString(),
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (count > 0) MaterialTheme.colorScheme.onSurface
+                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onBackToYear: () -> Unit = {}) {
     val selectedMonth by viewModel.selectedMonth.collectAsState()
     val rawMonthlyTasks by viewModel.monthlyTasks.collectAsState()
     val monthlyTasks = if (filterLabel != null) rawMonthlyTasks.filter { it.label == filterLabel } else rawMonthlyTasks
+
+    val mainTasks = monthlyTasks.filter { it.parentTaskId == null }
+    var showCompleted by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -2445,7 +2614,8 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 1.sp
+                letterSpacing = 1.sp,
+                modifier = Modifier.clickable { onBackToYear() }
             )
 
             IconButton(onClick = {
@@ -2487,7 +2657,7 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
                     )
                 }
 
-                if (monthlyTasks.isEmpty()) {
+                if (mainTasks.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2501,6 +2671,9 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
                         )
                     }
                 } else {
+                    val activeTasks = mainTasks.filter { it.status != "COMPLETED" }
+                    val completedTasks = mainTasks.filter { it.status == "COMPLETED" }
+
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
@@ -2508,7 +2681,7 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)
                     ) {
-                        items(monthlyTasks) { task ->
+                        items(activeTasks) { task ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2545,6 +2718,78 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
                                         fontWeight = FontWeight.Bold,
                                         color = if (task.status == "COMPLETED") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                            }
+                        }
+
+                        if (completedTasks.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .clickable { showCompleted = !showCompleted }
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Completed (${completedTasks.size})",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Icon(
+                                        imageVector = if (showCompleted) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Toggle Completed",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            if (showCompleted) {
+                                items(completedTasks) { task ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { viewModel.selectDate(task.date) }
+                                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = task.title,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            )
+                                            Text(
+                                                text = "Target Date: ${task.date}",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = "COMPLETED",
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

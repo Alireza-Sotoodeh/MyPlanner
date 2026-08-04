@@ -293,6 +293,7 @@ class MainViewModel(
 
     private var lastTodayDateString = getTodayDateString()
     private var lastTodayMonthString = getTodayMonthString()
+    private var lastTodayYearString = getTodayYearString()
 
     private val dateChangeReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -323,6 +324,16 @@ class MainViewModel(
                 }
             }
 
+            // Same for year view
+            val newYear = getTodayYearString()
+            if (lastTodayYearString != newYear) {
+                val oldYear = lastTodayYearString
+                lastTodayYearString = newYear
+                if (_selectedYear.value == oldYear) {
+                    _selectedYear.value = newYear
+                }
+            }
+
             // Reset reviewed_today prefs cache on date change
             val cachedDate = prefs.getString("reviewed_today_date", null)
             if (cachedDate != null && cachedDate != newToday) {
@@ -337,6 +348,9 @@ class MainViewModel(
     private val _selectedMonth = MutableStateFlow(getTodayMonthString())
     val selectedMonth: StateFlow<String> = _selectedMonth.asStateFlow()
 
+    private val _selectedYear = MutableStateFlow(getTodayYearString())
+    val selectedYear: StateFlow<String> = _selectedYear.asStateFlow()
+
     // Tasks for currently selected day
     val dailyTasks: StateFlow<List<TaskEntity>> = _selectedDate.flatMapLatest { date ->
         taskRepository.getTasksForDate(date)
@@ -345,6 +359,11 @@ class MainViewModel(
     // Tasks for currently selected month
     val monthlyTasks: StateFlow<List<TaskEntity>> = _selectedMonth.flatMapLatest { month ->
         taskRepository.getTasksForMonth(month)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Tasks for currently selected year (used in YearOverviewView)
+    val yearTasks: StateFlow<List<TaskEntity>> = _selectedYear.flatMapLatest { year ->
+        taskRepository.getTasksForYear(year)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // All Tasks
@@ -664,6 +683,10 @@ class MainViewModel(
 
     fun selectMonth(month: String) {
         _selectedMonth.value = month
+    }
+
+    fun selectYear(year: String) {
+        _selectedYear.value = year
     }
 
     // --- Task CRUD Operations ---
@@ -1684,6 +1707,10 @@ class MainViewModel(
     
     private fun getTodayMonthString(): String {
         return java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
+    }
+
+    private fun getTodayYearString(): String {
+        return java.text.SimpleDateFormat("yyyy", java.util.Locale.getDefault()).format(java.util.Date())
     }
 
     override fun onCleared() {

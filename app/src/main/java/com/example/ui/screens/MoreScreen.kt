@@ -21,8 +21,6 @@ import com.example.ui.components.MottoCard
 import com.example.ui.viewmodel.MainViewModel
 
 sealed class MoreSubScreen(val label: String) {
-    data object Ideas : MoreSubScreen("Ideas")
-    data object Todo : MoreSubScreen("To-Do")
     data object Diary : MoreSubScreen("Diary")
     data object ShopList : MoreSubScreen("Shop List")
     data object Mottos : MoreSubScreen("Mottos")
@@ -37,8 +35,6 @@ data class MoreTile(
 )
 
 private val tiles = listOf(
-    MoreTile("Ideas", Icons.Default.Lightbulb, MoreSubScreen.Ideas),
-    MoreTile("To-Do", Icons.Default.Checklist, MoreSubScreen.Todo),
     MoreTile("Diary", Icons.Default.MenuBook, MoreSubScreen.Diary),
     MoreTile("Shop List", Icons.Default.ShoppingCart, MoreSubScreen.ShopList),
     MoreTile("Mottos", Icons.Default.FormatQuote, MoreSubScreen.Mottos),
@@ -55,14 +51,6 @@ fun MoreScreen(
 
     if (currentScreen !is MoreSubScreen.None) {
         when (currentScreen) {
-                is MoreSubScreen.Ideas -> IdeasScreen(
-                    viewModel = viewModel,
-                    onBack = { currentScreen = MoreSubScreen.None }
-                )
-                is MoreSubScreen.Todo -> TodoScreen(
-                    viewModel = viewModel,
-                    onBack = { currentScreen = MoreSubScreen.None }
-                )
                 is MoreSubScreen.Diary -> DiaryScreen(
                     viewModel = viewModel,
                     onBack = { currentScreen = MoreSubScreen.None }

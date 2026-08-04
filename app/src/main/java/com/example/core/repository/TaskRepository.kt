@@ -14,6 +14,8 @@ class TaskRepository(
 
     fun getTasksForMonth(datePrefix: String): Flow<List<TaskEntity>> = taskDao.getTasksForMonth(datePrefix)
 
+    fun getTasksForYear(yearPrefix: String): Flow<List<TaskEntity>> = taskDao.getTasksForYear(yearPrefix)
+
     fun getAllTasks(): Flow<List<TaskEntity>> = taskDao.getAllTasks()
 
     suspend fun getTaskById(id: Long): TaskEntity? = taskDao.getTaskById(id)

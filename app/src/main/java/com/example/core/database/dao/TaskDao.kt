@@ -15,6 +15,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE date LIKE :datePrefix || '%' ORDER BY date ASC, priority ASC")
     fun getTasksForMonth(datePrefix: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE date LIKE :yearPrefix || '%' ORDER BY date ASC, priority ASC")
+    fun getTasksForYear(yearPrefix: String): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks ORDER BY id DESC")
     fun getAllTasks(): Flow<List<TaskEntity>>
 
