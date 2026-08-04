@@ -447,18 +447,29 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
         }
     }
 
-    val formattedDate = remember(selectedDate, parsedDate) {
+    val formattedGregorian = remember(selectedDate, parsedDate) {
         val date = parsedDate
         if (date != null) {
             try {
-                val gregorian = SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(date)
-                val persian = com.example.core.utils.PersianCalendarHelper.getPersianDateString(date)
-                "$gregorian ($persian)"
+                SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(date)
             } catch (e: Exception) {
                 selectedDate
             }
         } else {
             selectedDate
+        }
+    }
+
+    val formattedPersian = remember(selectedDate, parsedDate) {
+        val date = parsedDate
+        if (date != null) {
+            try {
+                com.example.core.utils.PersianCalendarHelper.getPersianDateString(date)
+            } catch (e: Exception) {
+                ""
+            }
+        } else {
+            ""
         }
     }
 
@@ -497,12 +508,16 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
                 letterSpacing = 1.5.sp
             )
             Text(
-                text = formattedDate,
-                fontSize = 20.sp,
+                text = formattedGregorian,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Light,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = formattedPersian,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 

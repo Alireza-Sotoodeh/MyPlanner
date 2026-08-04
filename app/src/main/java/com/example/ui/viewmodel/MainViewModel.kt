@@ -3381,7 +3381,12 @@ private val mottoRepository: MottoRepository,
                                 val appInfo = packageManager.getApplicationInfo(packageName, 0)
                                 packageManager.getApplicationLabel(appInfo).toString()
                             } catch (_: Exception) {
-                                packageName
+                                packageName.split('.')
+                                    .lastOrNull()
+                                    ?.replace('_', ' ')
+                                    ?.replace('-', ' ')
+                                    ?.replaceFirstChar { it.uppercase() }
+                                    ?: packageName
                             }
                         }
                         AppUsageItem(

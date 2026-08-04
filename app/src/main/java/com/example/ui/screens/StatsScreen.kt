@@ -397,12 +397,12 @@ fun StatsScreen(viewModel: MainViewModel) {
                                                     fontWeight = FontWeight.Bold,
                                                     color = MaterialTheme.colorScheme.onBackground
                                                 )
-                                                Text(
-                                                    text = "${item.durationMinutes}m",
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
+                                                    Text(
+                                                        text = formatDurationCompact(item.durationMinutes),
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
                                             }
                                             Spacer(modifier = Modifier.height(4.dp))
                                             LinearProgressIndicator(
@@ -2732,6 +2732,16 @@ private data class SleepDailyPoint(
     val bedMinutes: Float?,
     val wakeMinutes: Float?
 )
+
+private fun formatDurationCompact(minutes: Long): String {
+    return if (minutes >= 60) {
+        val hours = minutes / 60
+        val mins = minutes % 60
+        if (mins > 0) "${hours}h ${mins}m" else "${hours}h"
+    } else {
+        "${minutes}m"
+    }
+}
 
 private fun parseTimeToMinutes(time: String): Float? {
     if (time.isBlank()) return null
