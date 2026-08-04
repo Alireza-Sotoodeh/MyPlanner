@@ -2022,12 +2022,11 @@ fun BulletTaskItem(
                                 } else Modifier
                             )
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onSubtaskToggle(subtask) }) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically, 
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable { onSubtaskToggle(subtask) }
                             ) {
                                 Icon(
                                     imageVector = if (subCompleted) Icons.Default.Check else Icons.Default.PlayArrow,
