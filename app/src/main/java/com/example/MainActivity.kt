@@ -69,6 +69,7 @@ import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
 import com.example.core.repository.TimerRepository
 import com.example.core.repository.TodoRepository
+import com.example.core.service.TimerForegroundService
 import com.example.ui.components.UndoBar
 import com.example.ui.screens.HabitsScreen
 import com.example.ui.screens.MoreScreen
@@ -233,6 +234,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        TimerForegroundService.isAppInForeground = true
         if (::viewModel.isInitialized) {
             viewModel.refreshSystemDate()
             viewModel.checkAndTriggerDayReviewPrompt()
@@ -259,6 +261,11 @@ class MainActivity : ComponentActivity() {
                 Log.e("MainActivity", "Unregister receiver failed", e)
             }
         }
+    }
+
+    override fun onStop() {
+        TimerForegroundService.isAppInForeground = false
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {

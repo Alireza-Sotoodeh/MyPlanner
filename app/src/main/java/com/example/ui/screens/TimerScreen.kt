@@ -545,52 +545,6 @@ private fun PomodoroTab(
 
         // In-app completion overlay
         pomodoroCompletionState?.let { state ->
-            val vibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
-            val ringtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
-            var ringtoneRef = remember { mutableStateOf<android.media.Ringtone?>(null) }
-            var vibratorRef = remember { mutableStateOf<android.os.Vibrator?>(null) }
-
-            DisposableEffect(state, vibrateEnabled, ringtoneEnabled) {
-                if (ringtoneEnabled) {
-                    val uri = viewModel.pomodoroRingtoneUri.value
-                    val ringtoneUri = if (uri.isNotBlank()) android.net.Uri.parse(uri)
-                        else android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                            ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                    try {
-                        val rt = android.media.RingtoneManager.getRingtone(context, ringtoneUri)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            rt.isLooping = true
-                        }
-                        rt.play()
-                        ringtoneRef.value = rt
-                    } catch (e: Exception) {}
-                }
-
-                if (vibrateEnabled) {
-                    val vb = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val vm = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
-                        vm?.defaultVibrator
-                    } else {
-                        @Suppress("DEPRECATION")
-                        context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-                    }
-                    vb?.let {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            it.vibrate(android.os.VibrationEffect.createWaveform(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0))
-                        } else {
-                            @Suppress("DEPRECATION")
-                            it.vibrate(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0)
-                        }
-                        vibratorRef.value = it
-                    }
-                }
-
-                onDispose {
-                    ringtoneRef.value?.stop()
-                    vibratorRef.value?.cancel()
-                }
-            }
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -669,8 +623,6 @@ private fun PomodoroTab(
                         if (state.canProceed && state.nextActionLabel.isNotBlank()) {
                             Button(
                                 onClick = {
-                                    ringtoneRef.value?.stop()
-                                    vibratorRef.value?.cancel()
                                     viewModel.continueFromPomodoroCompletion(context)
                                 },
                                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -686,8 +638,6 @@ private fun PomodoroTab(
 
                         OutlinedButton(
                             onClick = {
-                                ringtoneRef.value?.stop()
-                                vibratorRef.value?.cancel()
                                 viewModel.endPomodoroChain(context)
                             },
                             modifier = Modifier.fillMaxWidth().height(44.dp),

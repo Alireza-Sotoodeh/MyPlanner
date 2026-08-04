@@ -271,33 +271,28 @@ class TimerForegroundService : Service() {
 
     private fun handlePomodoroCompletion() {
         val current = _state.value
+        val isFg = isAppInForeground
+
+        if (!isFg) {
+            launchPomodoroFinishActivity(current)
+            serviceScope.launch { saveTimerSessionFromCompletion(current) }
+        }
 
         stopForeground(STOP_FOREGROUND_REMOVE)
 
-        fireCompletionNotification(current)
-
-        _state.value = current.copy(running = false, completed = true)
+        if (!isFg) {
+            _state.value = current.copy(running = false, completed = false)
+            fireFallbackNotification(current)
+        } else {
+            _state.value = current.copy(running = false, completed = true)
+        }
 
         stopSelf()
     }
 
-    private fun fireCompletionNotification(state: TimerServiceState) {
+    private fun launchPomodoroFinishActivity(state: TimerServiceState) {
         try {
-            val channelId = "pomodoro_session_channel_fs"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                notificationManager.deleteNotificationChannel(channelId)
-                val channel = NotificationChannel(
-                    channelId, "Pomodoro Alarms", NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Full-screen Pomodoro session completion alerts"
-                    enableVibration(true)
-                    setBypassDnd(true)
-                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                }
-                notificationManager.createNotificationChannel(channel)
-            }
-
-            val activityIntent = Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
+            val intent = Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 putExtra("phase", state.phase)
                 putExtra("sessionNumber", state.sessionNumber)
@@ -315,10 +310,31 @@ class TimerForegroundService : Service() {
                 putExtra("ringtoneEnabled", prefs.getBoolean("pomodoro_ringtone_enabled", true))
                 putExtra("vibrateEnabled", prefs.getBoolean("pomodoro_vibrate_enabled", true))
             }
-            val pendingIntent = PendingIntent.getActivity(
-                this, 4003, activityIntent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "launchPomodoroFinishActivity failed", e)
+        }
+    }
+
+    private suspend fun saveTimerSessionFromCompletion(state: TimerServiceState) {
+        val secondsElapsed = (state.focusMinutes * 60) - state.secondsLeft
+        val minutesElapsed = (secondsElapsed / 60).coerceAtLeast(1)
+        saveTimerSession("POMODORO", state.taskId.takeIf { it > 0 }, state.taskTitle, minutesElapsed * 60)
+    }
+
+    private fun fireFallbackNotification(state: TimerServiceState) {
+        try {
+            val channelId = "pomodoro_session_fallback_fs"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                notificationManager.deleteNotificationChannel(channelId)
+                val channel = NotificationChannel(
+                    channelId, "Pomodoro Complete", NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Fallback notification when pomodoro finishes"
+                    setShowBadge(false)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
 
             val title = if (state.phase == "FOCUS") "Focus Session Completed!" else "Break Over!"
             val message = "Session ${state.sessionNumber} for '${state.taskTitle}' is done."
@@ -327,15 +343,12 @@ class TimerForegroundService : Service() {
                 .setSmallIcon(R.drawable.ic_timer_notification)
                 .setContentTitle(title)
                 .setContentText(message)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setFullScreenIntent(pendingIntent, true)
                 .setAutoCancel(true)
                 .build()
 
             notificationManager.notify(4003, notification)
         } catch (e: Exception) {
-            Log.e(TAG, "fireCompletionNotification failed", e)
+            Log.e(TAG, "fireFallbackNotification failed", e)
         }
     }
 
@@ -523,6 +536,9 @@ class TimerForegroundService : Service() {
     companion object {
         private val _state = MutableStateFlow(TimerServiceState())
         val state: StateFlow<TimerServiceState> = _state.asStateFlow()
+
+        @Volatile
+        var isAppInForeground = false
 
         const val ACTION_START_POMODORO = "com.example.action.START_POMODORO"
         const val ACTION_START_CHRONOMETER = "com.example.action.START_CHRONOMETER"
