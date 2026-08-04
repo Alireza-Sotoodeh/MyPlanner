@@ -3481,10 +3481,14 @@ jsonString = backupFile.readText()
     }
 
     fun requestUsagePermission(context: Context) {
-        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        try {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Failed to open usage access settings", e)
         }
-        context.startActivity(intent)
     }
 
     // --- DND Helper ---
@@ -3499,10 +3503,14 @@ jsonString = backupFile.readText()
 
     fun requestNotificationPolicyPermission(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            try {
+                val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Failed to open notification policy settings", e)
             }
-            context.startActivity(intent)
         }
     }
 
@@ -3518,11 +3526,15 @@ jsonString = backupFile.readText()
 
     fun requestFullScreenIntentSettings(context: Context) {
         if (Build.VERSION.SDK_INT >= 34) {
-            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
-                data = android.net.Uri.parse("package:${context.packageName}")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = android.net.Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Failed to open full-screen intent settings", e)
             }
-            context.startActivity(intent)
         }
     }
 

@@ -10,12 +10,12 @@ Use this file to systematically recheck every section of the app. Each checkbox 
 - [x] `MainActivity.kt:101-367` — Activity lifecycle, ViewModel init with 11 repos, drive sign-in launcher, intent routing (open_day_review, pomodoro_action, navigate_to_tab, open_timer_subtab, open_date, open_more_screen), scheduleDailyBackup, onResume/onPause/onStop/onNewIntent, DAY_REVIEW_TRIGGERED BroadcastReceiver, day review snackbar overlay
 
 ### 1.2 Bottom Navigation Bar
-- [ ] `MainActivity.kt:369-435` — `AestheticNavigationBar` composable: 5 tabs (Planner/Habits/Timer/Stats/More), icon+label, selected tint, 1dp top border, 72dp height
-- [ ] `MainActivity.kt:437-441` — `NavigationItem` data class
+- [x] `MainActivity.kt:362-428` — `AestheticNavigationBar` composable: 5 tabs (Planner/Habits/Timer/Stats/More), icon+label, selected tint, 1dp top border, 72dp height
+- [x] `MainActivity.kt:430-434` — `NavigationItem` data class
 
 ### 1.3 Permissions Gate
-- [ ] `PermissionsScreen.kt:35-179` — `PermissionsScreen`: 5 permission items (Notifications/SDK 33+, Exact Alarms/SDK 31+, Usage Access/Optional, DND, Full-Screen Alerts/SDK 34+), CONTINUE button when all granted, lifecycle recheck on resume
-- [ ] `PermissionsScreen.kt:181-242` — `PermissionItem` reusable composable: icon, title, description, granted state, GRANT button, CheckCircle when done
+- [x] `PermissionsScreen.kt:37-218` — `PermissionsScreen`: 5 permission items (Notifications/SDK 33+, Exact Alarms/SDK 31+, Usage Access/Optional, DND, Full-Screen Alerts/SDK 34+), CONTINUE button when all granted, lifecycle recheck on resume
+- [x] `PermissionsScreen.kt:220-282` — `PermissionItem` reusable composable: icon, title, description, granted state, GRANT/SETTINGS button, CheckCircle when done
 
 ---
 

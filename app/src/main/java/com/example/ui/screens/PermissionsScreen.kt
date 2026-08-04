@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -17,6 +16,7 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.app.ActivityCompat
 import com.example.ui.viewmodel.MainViewModel
 
 @Composable
@@ -44,6 +45,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     var hasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
     var hasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
     var continueClicked by remember { mutableStateOf(false) }
+    var showNotificationSettings by remember { mutableStateOf(false) }
 
     val allGranted = hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent
     
@@ -72,6 +74,12 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             hasNotification = isGranted
+            if (!isGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val activity = context as? android.app.Activity
+                if (activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
+                    showNotificationSettings = true
+                }
+            }
         }
     )
 
@@ -108,9 +116,18 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 isGranted = hasNotification,
                 onClick = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        if (showNotificationSettings) {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } else {
+                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                     }
-                }
+                },
+                buttonText = if (showNotificationSettings) "SETTINGS" else "GRANT"
             )
 
             PermissionItem(
@@ -120,10 +137,12 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 isGranted = hasExactAlarm,
                 onClick = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            context.startActivity(intent)
+                        } catch (_: Exception) { }
                     }
                 }
             )
@@ -152,7 +171,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 PermissionItem(
                     title = "Full-Screen Alerts",
                     description = "Shows the pomodoro completion screen automatically.",
-                    icon = Icons.Default.Alarm,
+                    icon = Icons.Default.OpenInFull,
                     isGranted = hasFullScreenIntent,
                     onClick = {
                         viewModel.requestFullScreenIntentSettings(context)
@@ -186,8 +205,11 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
 
             TextButton(
                 onClick = {
-                    viewModel.setPermissionsGateSkipped(true)
-                    onAllPermissionsGranted()
+                    if (!continueClicked) {
+                        continueClicked = true
+                        viewModel.setPermissionsGateSkipped(true)
+                        onAllPermissionsGranted()
+                    }
                 },
                 modifier = Modifier.padding(top = 8.dp)
             ) {
@@ -203,7 +225,8 @@ fun PermissionItem(
     description: String,
     icon: ImageVector,
     isGranted: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    buttonText: String = "GRANT"
 ) {
     Surface(
         modifier = Modifier
@@ -253,7 +276,7 @@ fun PermissionItem(
                     onClick = onClick,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                 ) {
-                    Text("GRANT", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(buttonText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
