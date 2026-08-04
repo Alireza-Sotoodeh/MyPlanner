@@ -70,6 +70,11 @@ private class HistoryStack(private val maxSize: Int = 50) {
 
     val canUndo: Boolean get() = index > 0
     val canRedo: Boolean get() = index < items.size - 1
+
+    fun reset() {
+        items.clear()
+        index = -1
+    }
 }
 
 private class MarkdownVisualTransformation : VisualTransformation {
@@ -203,6 +208,9 @@ fun DiaryScreen(
         val savedContent = entry?.content ?: ""
         title = savedTitle
         content = savedContent
+        titleHistory.reset()
+        contentHistory.reset()
+        lastModifiedField = Field.CONTENT
         titleHistory.push(savedTitle)
         contentHistory.push(savedContent)
     }
