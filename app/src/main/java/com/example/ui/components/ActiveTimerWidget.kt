@@ -99,7 +99,10 @@ fun ActiveTimerWidget(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).clickable {
+                        viewModel.setPreferredTimerTab(if (isPomodoroActive) 0 else 1)
+                        viewModel.selectTab(2)
+                    }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Timer,
