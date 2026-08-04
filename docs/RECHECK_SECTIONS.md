@@ -22,7 +22,7 @@ Use this file to systematically recheck every section of the app. Each checkbox 
 ## 2. Planner Tab (Tab 0) — PlannerScreen.kt (7958 lines)
 
 ### 2.1 Root Composables
-- [ ] `PlannerScreen.kt:192-396` — `PlannerScreen`: tab state, 6-tab ScrollableTabRow (DAILY/WEEKLY/MONTHLY/TO-DO/IDEAS/LEARN), ActiveTimerWidget, FAB for tabs 0/3/4, SettingsDialog/FastPomodoroSetupDialog/pending completion AlertDialog/TaskManagerDialog/ReviewRatingSheet overlays, label filter state passing
+- [x] `PlannerScreen.kt:205-408` — `PlannerScreen`: tab state, 6-tab ScrollableTabRow (DAILY/WEEKLY/MONTHLY/TO-DO/IDEAS/LEARN), ActiveTimerWidget, FAB for tabs 0/3/4, SettingsDialog/FastPomodoroSetupDialog/pending completion AlertDialog/TaskManagerDialog/ReviewRatingSheet overlays, label filter state passing
 
 ### 2.2 Header
 - [ ] `PlannerScreen.kt:398-466` — `HeaderSection`: formatted date (Gregorian + Persian), day-of-week display, HeaderActions (home + settings icons)

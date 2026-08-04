@@ -134,6 +134,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -189,15 +190,27 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class)
+private sealed class TaskManagerType {
+    data object Task : TaskManagerType()
+    data object Todo : TaskManagerType()
+    data object Idea : TaskManagerType()
+
+    val value: String get() = when (this) {
+        Task -> "TASK"
+        Todo -> "TODO"
+        Idea -> "IDEA"
+    }
+}
+
 @Composable
 fun PlannerScreen(viewModel: MainViewModel) {
     val todayDate by viewModel.todayDate.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showYearOverview by rememberSaveable { mutableStateOf(true) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showTaskManager by remember { mutableStateOf(false) }
-    var taskManagerInitialType by remember { mutableStateOf("TASK") }
+    var taskManagerInitialType by remember { mutableStateOf<TaskManagerType>(TaskManagerType.Task) }
     val pendingReviewTask by viewModel.pendingReviewTask.collectAsState()
     val pendingReviewSection by viewModel.pendingReviewSection.collectAsState()
     val pendingReviewLearnItem by viewModel.pendingReviewLearnItem.collectAsState()
@@ -226,8 +239,9 @@ fun PlannerScreen(viewModel: MainViewModel) {
             contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 0.dp,
             indicator = { tabPositions ->
+                val safeIndex = selectedTab.coerceAtMost(tabPositions.lastIndex)
                 TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[safeIndex]),
                     color = MaterialTheme.colorScheme.primary,
                     height = 2.dp
                 )
@@ -242,7 +256,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
                             selectedTab = index
                             if (index == 0) viewModel.selectDate(todayDate)
                         }
-                        .padding(horizontal = 0.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -279,7 +293,6 @@ fun PlannerScreen(viewModel: MainViewModel) {
                     viewModel.selectDate(date)
                 }
                  2 -> {
-                        var showYearOverview by remember { mutableStateOf(true) }
                         val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
                         if (showYearOverview) {
                             YearOverviewView(
@@ -304,16 +317,15 @@ fun PlannerScreen(viewModel: MainViewModel) {
                 FloatingActionButton(
                     onClick = {
                         taskManagerInitialType = when (selectedTab) {
-                            3 -> "TODO"
-                            4 -> "IDEA"
-                            else -> "TASK"
+                            3 -> TaskManagerType.Todo
+                            4 -> TaskManagerType.Idea
+                            else -> TaskManagerType.Task
                         }
                         showTaskManager = true
                     },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 16.dp),
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.background,
-                    shape = CircleShape
+                    contentColor = MaterialTheme.colorScheme.background
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -371,7 +383,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
         com.example.ui.components.TaskManagerDialog(
             viewModel = viewModel,
             initialDate = selectedDate,
-            initialType = taskManagerInitialType,
+            initialType = taskManagerInitialType.value,
             ideaGroups = ideaGroups,
             onDismiss = { showTaskManager = false }
         )
