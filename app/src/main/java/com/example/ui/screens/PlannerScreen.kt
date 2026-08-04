@@ -5330,6 +5330,10 @@ private fun IdeaCard(
                         PriorityBadge(idea.priority)
                     }
                 }
+                IconButton(onClick = { onAddToPlanner(idea) }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = "Add to Planner", modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                }
                 Box {
                     IconButton(onClick = { showIdeaMenu = true }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp))
