@@ -41,6 +41,7 @@ fun IdeasScreen(
 
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
     var showCreateGroupDialog by remember { mutableStateOf(false) }
+    var showCreateGroupFromIdeaDialog by remember { mutableStateOf(false) }
     var showCreateIdeaDialog by remember { mutableStateOf(false) }
     var editingIdea by remember { mutableStateOf<IdeaEntity?>(null) }
     var showDeleteIdeaConfirm by remember { mutableStateOf<IdeaEntity?>(null) }
@@ -118,7 +119,7 @@ fun IdeasScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredIdeas, key = { it.id }) { idea ->
@@ -133,17 +134,15 @@ fun IdeasScreen(
                     }
                 }
             }
-        }
 
-        Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Button(
+            FloatingActionButton(
                 onClick = { showCreateIdeaDialog = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp)
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.background,
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Add Idea")
+                Icon(Icons.Default.Add, contentDescription = "Add Idea")
             }
         }
     }
@@ -154,6 +153,14 @@ fun IdeasScreen(
             initialColor = presetColors[0],
             onDismiss = { showCreateGroupDialog = false },
             onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupDialog = false }
+        )
+    }
+    if (showCreateGroupFromIdeaDialog) {
+        CreateGroupDialog(
+            initialName = null,
+            initialColor = presetColors[0],
+            onDismiss = { showCreateGroupFromIdeaDialog = false },
+            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupFromIdeaDialog = false }
         )
     }
     editingGroup?.let { group ->
@@ -182,7 +189,8 @@ fun IdeasScreen(
                     viewModel.addIdea(groupId, title, description)
                 }
                 showCreateIdeaDialog = false; editingIdea = null
-            }
+            },
+            onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
         )
     }
     showDeleteIdeaConfirm?.let { idea ->
@@ -504,7 +512,8 @@ private fun CreateIdeaDialog(
     initialDescription: String,
     initialGroupId: Long?,
     onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String) -> Unit
+    onConfirm: (Long?, String, String) -> Unit,
+    onShowCreateGroup: () -> Unit = {}
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var description by remember { mutableStateOf(initialDescription) }
@@ -544,6 +553,16 @@ private fun CreateIdeaDialog(
                         trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
                     )
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Create New Group...")
+                                }
+                            },
+                            onClick = { expanded = false; onShowCreateGroup() }
+                        )
                         DropdownMenuItem(
                             text = { Text("None") },
                             onClick = { selectedGroupId = null; expanded = false }

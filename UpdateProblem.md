@@ -1196,3 +1196,190 @@ The existing `OutlinedTextField` + "Add" button captures only a title. Users can
 
 ### Build Verification
 `.\gradlew.bat assembleDebug` — expects BUILD SUCCESSFUL
+
+---
+
+## IdeasScreen: Replace Add Button with FAB + Inline Group Creation
+
+### Motivation
+Align IdeasScreen's add-idea flow with the TodoScreen pattern (FAB + dialog) and allow creating new groups inline
+without closing the idea dialog.
+
+### Changes
+
+**File:** `app/src/main/java/com/example/ui/screens/IdeasScreen.kt`
+
+#### 1. Remove full-width "Add Idea" Button, add FAB
+
+**Before:**
+```kotlin
+Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+    if (filteredIdeas.isEmpty()) { ... }
+    else { LazyColumn(...) { ... } }
+}
+Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Button(onClick = { showCreateIdeaDialog = true }, ...) {
+        Icon(Icons.Default.Add, ...)
+        Text("Add Idea")
+    }
+}
+```
+
+**After:**
+```kotlin
+Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+    if (filteredIdeas.isEmpty()) { ... }
+    else { LazyColumn(...) { ... } }
+    FloatingActionButton(
+        onClick = { showCreateIdeaDialog = true },
+        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+    ) {
+        Icon(Icons.Default.Add, contentDescription = "Add Idea")
+    }
+}
+```
+
+- FAB placed inside the content `Box(weight(1f).fillMaxWidth())`, aligned `BottomEnd`
+- LazyColumn gets extra bottom padding: `PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp)`
+  to prevent last card from being hidden behind the FAB
+
+#### 2. Inline "Create New Group" inside CreateIdeaDialog
+
+**Current flow:** Close idea dialog → tap "+ Group" in header → create group → reopen idea dialog → select group.
+
+**New flow:** Inside CreateIdeaDialog, tap "Create New Group..." as the first dropdown item:
+1. Dropdown closes (`expanded = false`), idea dialog stays open
+2. `onShowCreateGroup()` callback fires → parent sets `showCreateGroupFromIdeaDialog = true`
+3. `CreateGroupDialog` renders as overlay on top of `CreateIdeaDialog` (AlertDialogs stack naturally)
+4. User fills name, picks color, taps Save → `viewModel.addGroup()` runs
+5. Group dialog dismisses, idea dialog still open with refreshed groups list
+6. User opens dropdown again → selects the newly created group
+
+**`CreateIdeaDialog` signature change:**
+```kotlin
+@Composable
+private fun CreateIdeaDialog(
+    groups: List<IdeaGroupEntity>,
+    initialTitle: String,
+    initialDescription: String,
+    initialGroupId: Long?,
+    onDismiss: () -> Unit,
+    onConfirm: (Long?, String, String) -> Unit,
+    onShowCreateGroup: () -> Unit = {}  // NEW
+)
+```
+
+**Dropdown addition:**
+```kotlin
+DropdownMenu(...) {
+    DropdownMenuItem(   // ← NEW: appears first
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Add, ..., modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Create New Group...")
+            }
+        },
+        onClick = { expanded = false; onShowCreateGroup() }
+    )
+    DropdownMenuItem(
+        text = { Text("None") },
+        onClick = { selectedGroupId = null; expanded = false }
+    )
+    groups.forEach { group ->
+        DropdownMenuItem(
+            text = { Text(group.name) },
+            onClick = { selectedGroupId = group.id; expanded = false }
+        )
+    }
+}
+```
+
+**Parent state + dialog rendering:**
+```kotlin
+var showCreateGroupFromIdeaDialog by remember { mutableStateOf(false) }
+
+// In CreateIdeaDialog call:
+CreateIdeaDialog(
+    ...
+    onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
+)
+
+// New overlay dialog:
+if (showCreateGroupFromIdeaDialog) {
+    CreateGroupDialog(
+        initialName = null,
+        initialColor = presetColors[0],
+        onDismiss = { showCreateGroupFromIdeaDialog = false },
+        onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupFromIdeaDialog = false }
+    )
+}
+```
+
+### Visual Flow
+
+```
+┌──────────────────────────┐
+│ IDEAS                    │
+│ Ideas               [+Group]│
+│ [All] [Work] [Personal]  │
+│                          │
+│  ┌────────────────────┐  │
+│  │ 💡 Idea card 1     │  │
+│  │    + Add Stage     │  │
+│  └────────────────────┘  │
+│                    [ + ] │  ← FAB
+└──────────────────────────┘
+
+Tapping FAB → New Idea dialog:
+┌──────────────────────────┐
+│ ╔══════════════════════╗ │
+│ ║    New Idea          ║ │
+│ ║  ┌──────────────┐   ║ │
+│ ║  │ Title        │   ║ │
+│ ║  └──────────────┘   ║ │
+│ ║  ┌──────────────┐   ║ │
+│ ║  │ Description  │   ║ │
+│ ║  └──────────────┘   ║ │
+│ ║  ┌──────────────┐   ║ │
+│ ║  │ Group ▼      │   ║ │
+│ ║  │ ├ Create New… │   ║ │  ← NEW item
+│ ║  │ ├ None       │   ║ │
+│ ║  │ ├ Work       │   ║ │
+│ ║  │ └ Personal   │   ║ │
+│ ║  └──────────────┘   ║ │
+│ ║  [Cancel] [Save]    ║ │
+│ ╚══════════════════════╝ │
+└──────────────────────────┘
+
+Tapping "Create New Group..." → overlay:
+┌──────────────────────────┐
+│ ╔══════════════════════╗ │
+│ ║  ┌─────────────┐    ║ │
+│ ║  │   New Group      ║ │
+│ ║  │  ┌───────────┐  ║ │
+│ ║  │  │ Group name│  ║ │
+│ ║  │  └───────────┘  ║ │
+│ ║  │  ● ● ● ● ●     ║ │
+│ ║  │  [Cancel] [Save] ║ │
+│ ║  └─────────────┘    ║ │ ← New Group dialog on top
+│ ╚══════════════════════╝ │
+│  (underneath: New Idea    │
+│   dialog still open)      │
+└──────────────────────────┘
+```
+
+### Edge Cases
+
+| Edge Case | Handling |
+|-----------|----------|
+| Both dialogs open at once | Compose stacks AlertDialogs; group dialog on top, idea dialog underneath — works naturally |
+| Group created but not auto-selected | User re-opens dropdown and selects new group; groups list auto-refreshes via `viewModel.ideaGroups` Flow |
+| "Create New Group" during edit | Works identically — dialog says "Edit Idea", group creation flow is same |
+| Empty groups list | Dropdown shows "Create New Group..." + "None" |
+| FAB in empty state | Empty state hint already says "Tap + to create your first idea" — matches FAB action |
+| LazyColumn FAB overlap | bottom = 80.dp padding prevents last card from being obscured |
+| Cancel group creation | Group dialog dismisses — idea dialog remains open |
+
+### Build Verification
+`.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
