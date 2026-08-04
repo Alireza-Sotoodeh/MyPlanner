@@ -76,6 +76,7 @@ fun StatsScreen(viewModel: MainViewModel) {
     val allTasks by viewModel.allTasks.collectAsState()
     val allTimerSessions by viewModel.allTimerSessions.collectAsState()
     val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
+    val todayDateStr by viewModel.todayDate.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var heatmapYear by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear() else Calendar.getInstance().get(Calendar.YEAR)) }
@@ -608,6 +609,7 @@ fun StatsScreen(viewModel: MainViewModel) {
                 month = heatmapMonth,
                 isPersian = usePersianCalendar,
                 sessions = allTimerSessions,
+                todayDateStr = todayDateStr,
                 onPrevMonth = {
                     if (usePersianCalendar) {
                         val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, -1)
@@ -756,7 +758,8 @@ fun StatsScreen(viewModel: MainViewModel) {
 
 private data class DayCell(
     val seconds: Int,
-    val isCurrentMonth: Boolean
+    val isCurrentMonth: Boolean,
+    val dateStr: String
 )
 
 private data class GridData(
@@ -773,6 +776,7 @@ private fun ActivityHeatmapSection(
     month: Int,
     isPersian: Boolean,
     sessions: List<TimerSessionEntity>,
+    todayDateStr: String,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onToday: () -> Unit,
@@ -780,6 +784,9 @@ private fun ActivityHeatmapSection(
 ) {
     val gridData = remember(year, month, isPersian, sessions) {
         computeGridData(year, month, isPersian, sessions)
+    }
+    val hasActivity = remember(gridData) {
+        gridData.cells.flatten().any { it != null && it.seconds > 0 && it.isCurrentMonth }
     }
 
     Card(
@@ -829,51 +836,66 @@ private fun ActivityHeatmapSection(
 
             Spacer(Modifier.height(8.dp))
 
-            Row(modifier = Modifier.fillMaxWidth()) {
-                (1..7).forEach { n ->
-                    Text(
-                        "$n",
-                        fontSize = 9.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-
-            for (rowIdx in 0..6) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    for (colIdx in 0 until gridData.numWeeks) {
-                        val cell = gridData.cells[rowIdx][colIdx]
-                        val color = if (cell != null && cell.isCurrentMonth) {
-                            if (cell.seconds > 0) {
-                                val alpha = if (gridData.quintiles.isNotEmpty()) {
-                                    val bucket = gridData.quintiles.indexOfFirst { cell.seconds <= it }
-                                    when {
-                                        bucket < 0 -> 1.0f
-                                        bucket == 0 -> 0.15f
-                                        bucket == 1 -> 0.35f
-                                        bucket == 2 -> 0.55f
-                                        bucket == 3 -> 0.75f
-                                        else -> 1.0f
-                                    }
-                                } else {
-                                    0.55f
-                                }
-                                MaterialTheme.colorScheme.primary.copy(alpha = alpha)
-                            } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
-                            }
-                        } else Color.Transparent
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .padding(1.5.dp)
-                                .background(color = color, shape = RoundedCornerShape(3.dp))
+            if (!hasActivity) {
+                Text(
+                    text = "No focus sessions this month.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            } else {
+                for (rowIdx in 0..6) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "${rowIdx + 1}",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(14.dp),
+                            textAlign = TextAlign.Center
                         )
+                        Spacer(Modifier.width(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (colIdx in 0 until gridData.numWeeks) {
+                                val cell = gridData.cells[rowIdx][colIdx]
+                                val isToday = cell != null && cell.dateStr == todayDateStr
+                                val color = if (cell != null && cell.isCurrentMonth) {
+                                    if (cell.seconds > 0) {
+                                        val alpha = if (gridData.quintiles.isNotEmpty()) {
+                                            val bucket = gridData.quintiles.indexOfFirst { cell.seconds <= it }
+                                            when {
+                                                bucket < 0 -> 1.0f
+                                                bucket == 0 -> 0.15f
+                                                bucket == 1 -> 0.35f
+                                                bucket == 2 -> 0.55f
+                                                bucket == 3 -> 0.75f
+                                                else -> 1.0f
+                                            }
+                                        } else {
+                                            0.55f
+                                        }
+                                        MaterialTheme.colorScheme.primary.copy(alpha = alpha)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                } else Color.Transparent
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .background(color = color, shape = RoundedCornerShape(2.dp))
+                                        .then(
+                                            if (isToday) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
+                                            else Modifier
+                                        )
+                                )
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
                     }
+                    if (rowIdx < 6) Spacer(Modifier.height(2.dp))
                 }
             }
 
@@ -970,7 +992,8 @@ private fun computeGridData(
             }
             cells[d][w] = DayCell(
                 seconds = perDaySeconds[dateStr] ?: 0,
-                isCurrentMonth = isCurrent
+                isCurrentMonth = isCurrent,
+                dateStr = dateStr
             )
             cal.add(Calendar.DAY_OF_MONTH, 1)
         }
