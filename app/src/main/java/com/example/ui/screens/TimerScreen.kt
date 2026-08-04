@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -712,6 +716,7 @@ private fun HistoryTab(
     ) {
         // Date range chips
         Row(
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -946,6 +951,7 @@ private fun HistoryDatePickerDialog(
     var currentYear by remember { mutableIntStateOf(today.get(Calendar.YEAR)) }
     var currentMonth by remember { mutableIntStateOf(today.get(Calendar.MONTH) + 1) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
+    var showYearDialog by remember { mutableStateOf(false) }
 
     fun toggleCalendar() {
         if (usePersian) {
@@ -965,6 +971,59 @@ private fun HistoryDatePickerDialog(
         }
         usePersian = !usePersian
         selectedDay = null
+    }
+
+    fun prevMonth() {
+        if (usePersian) {
+            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(currentYear, currentMonth, -1)
+            currentYear = y; currentMonth = m
+        } else {
+            if (currentMonth == 1) { currentYear--; currentMonth = 12 }
+            else currentMonth--
+        }
+        selectedDay = null
+    }
+
+    fun nextMonth() {
+        if (usePersian) {
+            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(currentYear, currentMonth, 1)
+            currentYear = y; currentMonth = m
+        } else {
+            if (currentMonth == 12) { currentYear++; currentMonth = 1 }
+            else currentMonth++
+        }
+        selectedDay = null
+    }
+
+    if (showYearDialog) {
+        var yearInput by remember(currentYear) { mutableStateOf(currentYear.toString()) }
+        AlertDialog(
+            onDismissRequest = { showYearDialog = false },
+            title = { Text("Enter year") },
+            text = {
+                OutlinedTextField(
+                    value = yearInput,
+                    onValueChange = { yearInput = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Year") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    yearInput.toIntOrNull()?.let { y ->
+                        if (y > 0) {
+                            currentYear = y
+                            selectedDay = null
+                            showYearDialog = false
+                        }
+                    }
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showYearDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     DatePickerDialog(
@@ -989,14 +1048,41 @@ private fun HistoryDatePickerDialog(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = if (usePersian) "Select Persian Date" else "Select Date",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
+            IconButton(onClick = { prevMonth() }) {
+                Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, contentDescription = "Previous month")
+            }
+
+            val monthLabel = if (usePersian) {
+                PersianCalendarHelper.monthNames.getOrElse(currentMonth - 1) { "" }
+            } else {
+                val c = Calendar.getInstance()
+                c.set(currentYear, currentMonth - 1, 1)
+                SimpleDateFormat("MMMM", Locale.getDefault()).format(c.time)
+            }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                Text(
+                    text = monthLabel,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = currentYear.toString(),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { showYearDialog = true },
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            IconButton(onClick = { nextMonth() }) {
+                Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, contentDescription = "Next month")
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
             TextButton(onClick = { toggleCalendar() }) {
                 Text(
                     text = if (usePersian) "EN" else "FA",
@@ -1006,18 +1092,15 @@ private fun HistoryDatePickerDialog(
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
         HistoryCalendarGrid(
             year = currentYear,
             month = currentMonth,
             usePersian = usePersian,
             selectedDay = selectedDay,
             highlightedDates = highlightedDates,
-            onDaySelected = { day -> selectedDay = day },
-            onMonthChange = { y, m ->
-                currentYear = y
-                currentMonth = m
-                selectedDay = null
-            }
+            onDaySelected = { day -> selectedDay = day }
         )
     }
 }
@@ -1029,8 +1112,7 @@ private fun HistoryCalendarGrid(
     usePersian: Boolean,
     selectedDay: Int?,
     highlightedDates: Set<String>,
-    onDaySelected: (Int) -> Unit,
-    onMonthChange: (Int, Int) -> Unit
+    onDaySelected: (Int) -> Unit
 ) {
     val daysInMonth: Int
     val firstDayOffset: Int
@@ -1060,51 +1142,7 @@ private fun HistoryCalendarGrid(
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            IconButton(onClick = {
-                if (usePersian) {
-                    val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(year, month, -1)
-                    onMonthChange(y, m)
-                } else {
-                    if (month == 1) onMonthChange(year - 1, 12) else onMonthChange(year, month - 1)
-                }
-            }) {
-                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous month")
-            }
-
-            Text(
-                text = if (usePersian) {
-                    val name = PersianCalendarHelper.monthNames.getOrElse(month - 1) { "" }
-                    "$name $year"
-                } else {
-                    val c = Calendar.getInstance()
-                    c.set(year, month - 1, 1)
-                    SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(c.time)
-                },
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-
-            IconButton(onClick = {
-                if (usePersian) {
-                    val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(year, month, 1)
-                    onMonthChange(y, m)
-                } else {
-                    if (month == 12) onMonthChange(year + 1, 1) else onMonthChange(year, month + 1)
-                }
-            }) {
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next month")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val dayHeaders = if (usePersian) listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
+        val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
 
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -1127,11 +1165,24 @@ private fun HistoryCalendarGrid(
 
         for (row in 0 until rowCount) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                for (col in 0 until 7) {
-                    val cellDay = if (row == 0 && col < firstDayOffset) null
-                    else if (day <= daysInMonth) { val d = day; day++; d }
-                    else null
+                val cellDays = arrayOfNulls<Int>(7)
+                if (usePersian) {
+                    for (logicalCol in 0 until 7) {
+                        val visualCol = 6 - logicalCol
+                        cellDays[visualCol] = if (row == 0 && logicalCol < firstDayOffset) null
+                        else if (day <= daysInMonth) { val d = day; day++; d }
+                        else null
+                    }
+                } else {
+                    for (col in 0 until 7) {
+                        cellDays[col] = if (row == 0 && col < firstDayOffset) null
+                        else if (day <= daysInMonth) { val d = day; day++; d }
+                        else null
+                    }
+                }
 
+                for (col in 0 until 7) {
+                    val cellDay = cellDays[col]
                     val dateStr = if (cellDay != null) {
                         if (usePersian) PersianCalendarHelper.getGregorianDateString(year, month, cellDay)
                         else "%04d-%02d-%02d".format(year, month, cellDay)
@@ -1146,14 +1197,14 @@ private fun HistoryCalendarGrid(
                             .weight(1f)
                             .aspectRatio(1f)
                             .padding(2.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .clip(CircleShape)
                             .then(
                                 if (isSelected) Modifier.background(primaryColor)
                                 else Modifier
                             )
                             .then(
                                 if (!isSelected && isToday) Modifier.border(
-                                    1.5.dp, primaryColor, androidx.compose.foundation.shape.CircleShape
+                                    1.5.dp, primaryColor, CircleShape
                                 ) else Modifier
                             )
                             .clickable(enabled = cellDay != null) {
@@ -1173,7 +1224,7 @@ private fun HistoryCalendarGrid(
                                     Box(
                                         modifier = Modifier
                                             .size(4.dp)
-                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .clip(CircleShape)
                                             .background(
                                                 if (isSelected) onPrimaryColor else primaryColor
                                             )
