@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,10 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -951,7 +956,8 @@ private fun HistoryDatePickerDialog(
     var currentYear by remember { mutableIntStateOf(today.get(Calendar.YEAR)) }
     var currentMonth by remember { mutableIntStateOf(today.get(Calendar.MONTH) + 1) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
-    var showYearDialog by remember { mutableStateOf(false) }
+    var editingYear by remember { mutableStateOf(false) }
+    var yearInput by remember { mutableStateOf("") }
 
     fun toggleCalendar() {
         if (usePersian) {
@@ -993,37 +999,6 @@ private fun HistoryDatePickerDialog(
             else currentMonth++
         }
         selectedDay = null
-    }
-
-    if (showYearDialog) {
-        var yearInput by remember(currentYear) { mutableStateOf(currentYear.toString()) }
-        AlertDialog(
-            onDismissRequest = { showYearDialog = false },
-            title = { Text("Enter year") },
-            text = {
-                OutlinedTextField(
-                    value = yearInput,
-                    onValueChange = { yearInput = it.filter { ch -> ch.isDigit() } },
-                    label = { Text("Year") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    yearInput.toIntOrNull()?.let { y ->
-                        if (y > 0) {
-                            currentYear = y
-                            selectedDay = null
-                            showYearDialog = false
-                        }
-                    }
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showYearDialog = false }) { Text("Cancel") }
-            }
-        )
     }
 
     DatePickerDialog(
@@ -1069,13 +1044,46 @@ private fun HistoryDatePickerDialog(
                     fontSize = 16.sp,
                     textAlign = TextAlign.Center
                 )
-                Text(
-                    text = currentYear.toString(),
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { showYearDialog = true },
-                    textAlign = TextAlign.Center
-                )
+                if (editingYear) {
+                    val focusRequester = remember { FocusRequester() }
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                    TextField(
+                        value = yearInput,
+                        onValueChange = { yearInput = it.filter { c -> c.isDigit() }.take(5) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                yearInput.toIntOrNull()?.let { y ->
+                                    if (y > 0) { currentYear = y; selectedDay = null }
+                                }
+                                editingYear = false
+                            }
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
+                        ),
+                        modifier = Modifier
+                            .focusRequester(focusRequester)
+                            .widthIn(min = 80.dp)
+                    )
+                } else {
+                    Text(
+                        text = currentYear.toString(),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            yearInput = currentYear.toString()
+                            editingYear = true
+                        },
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
 
             IconButton(onClick = { nextMonth() }) {
@@ -1142,7 +1150,7 @@ private fun HistoryCalendarGrid(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = 62.dp)
+        modifier = Modifier.padding(top = 68.dp)
     ) {
         val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
