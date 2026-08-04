@@ -5770,7 +5770,10 @@ private fun LearnGroupChipRow(
     onEditGroup: (LearnGroupEntity) -> Unit,
     onDeleteGroup: (LearnGroupEntity) -> Unit,
     statusFilter: String,
-    onStatusFilterChange: (String) -> Unit
+    onStatusFilterChange: (String) -> Unit,
+    inProgressCount: Int,
+    plannedCount: Int,
+    completedCount: Int
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -5782,17 +5785,17 @@ private fun LearnGroupChipRow(
                 FilterChip(
                     selected = statusFilter == "in_progress",
                     onClick = { onStatusFilterChange("in_progress") },
-                    label = { Text("In Progress", fontSize = 12.sp) }
+                    label = { Text("In Progress ($inProgressCount)", fontSize = 12.sp) }
                 )
                 FilterChip(
                     selected = statusFilter == "planned",
                     onClick = { onStatusFilterChange("planned") },
-                    label = { Text("Planned", fontSize = 12.sp) }
+                    label = { Text("Planned ($plannedCount)", fontSize = 12.sp) }
                 )
                 FilterChip(
                     selected = statusFilter == "completed",
                     onClick = { onStatusFilterChange("completed") },
-                    label = { Text("Completed", fontSize = 12.sp) }
+                    label = { Text("Completed ($completedCount)", fontSize = 12.sp) }
                 )
                 FilterChip(
                     selected = statusFilter == "all",
@@ -6342,6 +6345,9 @@ fun LearnTab(viewModel: MainViewModel) {
         }
     }
 
+    val inProgressCount = learnItems.count { it.status == "ACTIVE" || it.status == "PAUSED" }
+    val plannedCount = learnItems.count { it.status == "NOT_STARTED" }
+    val completedCount = learnItems.count { it.status == "COMPLETED" }
     val statusFiltered = when (statusFilter) {
         "in_progress" -> learnItems.filter { it.status == "ACTIVE" || it.status == "PAUSED" }
         "planned" -> learnItems.filter { it.status == "NOT_STARTED" }
@@ -6367,7 +6373,10 @@ fun LearnTab(viewModel: MainViewModel) {
                     onEditGroup = { editingGroup = it },
                     onDeleteGroup = { showDeleteGroupConfirm = it },
                     statusFilter = statusFilter,
-                    onStatusFilterChange = { statusFilter = it }
+                    onStatusFilterChange = { statusFilter = it },
+                    inProgressCount = inProgressCount,
+                    plannedCount = plannedCount,
+                    completedCount = completedCount
                 )
             }
 
