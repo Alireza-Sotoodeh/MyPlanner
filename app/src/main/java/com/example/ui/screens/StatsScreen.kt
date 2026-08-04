@@ -42,6 +42,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -388,7 +391,7 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 4. Time Spent by Label (Pie Chart) — from actual timer sessions
+        // 4. Time Spent by Label (Donut Chart) — from actual timer sessions
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -406,7 +409,7 @@ fun StatsScreen(viewModel: MainViewModel) {
                         letterSpacing = 1.5.sp
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     val labelGroups = allTimerSessions.groupBy {
                         if (it.label.isBlank()) "Unlabeled" else it.label.uppercase()
@@ -424,57 +427,149 @@ fun StatsScreen(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        val totalDuration = labelStats.sumOf { it.second }.toFloat()
+                        val totalMinutes = labelStats.sumOf { it.second }
+                        val totalDuration = totalMinutes.toFloat()
+                        val totalHoursVal = totalMinutes / 60
+                        val totalMinsVal = totalMinutes % 60
+                        val totalTimeString = if (totalHoursVal > 0) "${totalHoursVal}h ${totalMinsVal}m" else "${totalMinsVal}m"
+
                         val pieColors = listOf(
-                            Color(0xFF6750A4), Color(0xFFD0BCFF), Color(0xFF381E72),
-                            Color(0xFFEADDFF), Color(0xFF4F378B), Color(0xFF21005D),
-                            Color(0xFF625B71), Color(0xFF7C5264), Color(0xFF9580B2)
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary,
+                            MaterialTheme.colorScheme.tertiary,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
                         )
 
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+                        // Donut chart + Legend row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Donut with total in center
+                            Box(
+                                modifier = Modifier.size(148.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val strokeWidth = 36.dp.toPx()
+                                    val gapDeg = 2.5f
+                                    val radius = (size.width - strokeWidth) / 2f
+                                    val arcTopLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
+                                    val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+
                                     var startAngle = -90f
                                     labelStats.forEachIndexed { index, stat ->
-                                        val sweepAngle = (stat.second / totalDuration) * 360f
+                                        val sweep = (stat.second / totalDuration) * 360f
                                         drawArc(
                                             color = pieColors[index % pieColors.size],
                                             startAngle = startAngle,
-                                            sweepAngle = sweepAngle,
-                                            useCenter = true
+                                            sweepAngle = (sweep - gapDeg).coerceAtLeast(0f),
+                                            useCenter = false,
+                                            topLeft = arcTopLeft,
+                                            size = arcSize,
+                                            style = Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Butt)
                                         )
-                                        startAngle += sweepAngle
+                                        startAngle += sweep
                                     }
+                                }
+                                // Center total
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = totalTimeString,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "total",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        letterSpacing = 1.sp
+                                    )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(24.dp))
+                            Spacer(modifier = Modifier.width(20.dp))
 
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                labelStats.forEachIndexed { index, stat ->
+                            // Legend
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                labelStats.take(6).forEachIndexed { index, stat ->
+                                    val pct = (stat.second / totalDuration * 100).toInt()
                                     val hours = stat.second / 60
                                     val mins = stat.second % 60
-                                    val timeString = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+                                    val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(pieColors[index % pieColors.size]))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(CircleShape)
+                                                .background(pieColors[index % pieColors.size])
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = stat.first,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1
                                             )
-                                            Text(
-                                                text = timeString,
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = timeStr,
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "${pct}%",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
                                         }
                                     }
                                 }
+                                if (labelStats.size > 6) {
+                                    Text(
+                                        text = "+${labelStats.size - 6} more",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Total tracked time",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = totalTimeString,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
