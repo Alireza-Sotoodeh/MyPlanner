@@ -83,34 +83,89 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        private fun columnExists(db: SupportSQLiteDatabase, table: String, column: String): Boolean {
+            val cursor = db.query("PRAGMA table_info('$table')")
+            val cols = mutableListOf<String>()
+            while (cursor.moveToNext()) { cols.add(cursor.getString(1)) }
+            cursor.close()
+            return column in cols
+        }
+
+        private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {
+            val cursor = db.query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='$table'")
+            cursor.moveToFirst()
+            val count = cursor.getInt(0)
+            cursor.close()
+            return count > 0
+        }
+
+        // Covers versions 1 through 16 — creates tables at version-16 schema
+        private val MIGRATION_1_16 = Migration(1, 16) { db ->
+            db.execSQL("CREATE TABLE IF NOT EXISTS `tasks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `date` TEXT NOT NULL, `status` TEXT NOT NULL, `type` TEXT NOT NULL, `durationMinutes` INTEGER NOT NULL, `pomodorosCompleted` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `label` TEXT NOT NULL, `labelColor` INTEGER, `recurrenceMode` TEXT NOT NULL, `recurrenceInterval` INTEGER NOT NULL, `recurrenceDaysOfWeek` TEXT NOT NULL, `recurrenceEndDate` TEXT, `subtaskImportance` TEXT NOT NULL, `eventTime` TEXT, `notifyNightBefore` INTEGER NOT NULL, `reminderMinutesBefore` INTEGER, `notes` TEXT NOT NULL, `priorityLevel` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `parentTaskId` INTEGER, `targetSessions` INTEGER, `breakMinutes` INTEGER, `linkedTodoId` INTEGER, `linkedIdeaId` INTEGER, `linkedLearnSectionId` INTEGER)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `habits` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `target` REAL NOT NULL, `unit` TEXT NOT NULL, `recurrenceMode` TEXT NOT NULL, `recurrenceInterval` INTEGER NOT NULL, `recurrenceDaysOfWeek` TEXT NOT NULL, `recurrenceEndDate` TEXT, `habitTime` TEXT, `reminderEnabled` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `habit_logs` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `habitId` INTEGER NOT NULL, `date` TEXT NOT NULL, `value` REAL NOT NULL, `notes` TEXT NOT NULL, `timestamp` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `sleep_logs` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `hoursSlept` REAL NOT NULL, `sleepQuality` INTEGER NOT NULL, `sleepTime` TEXT NOT NULL, `wakeTime` TEXT NOT NULL, `notes` TEXT NOT NULL, `timestamp` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `pomodoro_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taskId` INTEGER, `durationMinutes` INTEGER NOT NULL, `date` TEXT NOT NULL, `timestamp` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `idea_groups` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `color` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `ideas` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `groupId` INTEGER, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `priority` TEXT NOT NULL, `linkedTaskId` INTEGER, FOREIGN KEY(`groupId`) REFERENCES `idea_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `idea_stages` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `ideaId` INTEGER NOT NULL, `title` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, `importance` TEXT NOT NULL, FOREIGN KEY(`ideaId`) REFERENCES `ideas`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `todos` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `priority` TEXT NOT NULL, `linkedTaskId` INTEGER, `parentTodoId` INTEGER, `status` TEXT NOT NULL, `subtaskImportance` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `diary_entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `shop_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `price` REAL, `notes` TEXT NOT NULL, `isPurchased` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `mottos` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, `author` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `day_reviews` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `good` TEXT NOT NULL, `bad` TEXT NOT NULL, `improve` TEXT NOT NULL, `gratitude` TEXT NOT NULL, `moodRating` INTEGER NOT NULL, `score` INTEGER NOT NULL, `notes` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `learn_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `type` TEXT NOT NULL, `totalSections` INTEGER NOT NULL, `sectionsPerDay` INTEGER NOT NULL, `status` TEXT NOT NULL, `pausedAt` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `learn_sections` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `learnItemId` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, `title` TEXT NOT NULL, `amount` INTEGER NOT NULL, `status` TEXT NOT NULL, `reviewStage` INTEGER NOT NULL, `lastReviewDate` TEXT, `nextReviewDate` TEXT, FOREIGN KEY(`learnItemId`) REFERENCES `learn_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+        }
+
+        // Covers versions 18 through 23
+        private val MIGRATION_18_23 = Migration(18, 23) { db ->
+            db.execSQL("CREATE TABLE IF NOT EXISTS `timer_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `type` TEXT NOT NULL, `taskId` INTEGER, `label` TEXT NOT NULL, `durationSeconds` INTEGER NOT NULL, `date` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `note` TEXT NOT NULL, `templateName` TEXT)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `timer_templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `focusMinutes` INTEGER NOT NULL, `shortBreakMinutes` INTEGER, `longBreakMinutes` INTEGER, `targetSessions` INTEGER)")
+        }
+
         private val MIGRATION_16_17 = Migration(16, 17) { db ->
-            db.execSQL("ALTER TABLE tasks ADD COLUMN postponed INTEGER NOT NULL DEFAULT 0")
+            if (!columnExists(db, "tasks", "postponed")) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN postponed INTEGER NOT NULL DEFAULT 0")
+            }
         }
 
         private val MIGRATION_17_18 = Migration(17, 18) { db ->
             db.execSQL("CREATE TABLE IF NOT EXISTS `timer_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `type` TEXT NOT NULL, `taskId` INTEGER, `label` TEXT NOT NULL DEFAULT '', `durationSeconds` INTEGER NOT NULL, `date` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `note` TEXT NOT NULL DEFAULT '', `templateName` TEXT)")
             db.execSQL("CREATE TABLE IF NOT EXISTS `timer_templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `focusMinutes` INTEGER NOT NULL, `shortBreakMinutes` INTEGER, `longBreakMinutes` INTEGER, `targetSessions` INTEGER)")
-            db.execSQL("INSERT INTO timer_sessions (type, taskId, label, durationSeconds, date, timestamp, note, templateName) SELECT 'POMODORO', taskId, '', durationMinutes * 60, date, timestamp, '', NULL FROM pomodoro_sessions")
-            db.execSQL("DROP TABLE IF EXISTS pomodoro_sessions")
+            if (tableExists(db, "pomodoro_sessions")) {
+                db.execSQL("INSERT INTO timer_sessions (type, taskId, label, durationSeconds, date, timestamp, note, templateName) SELECT 'POMODORO', taskId, '', durationMinutes * 60, date, timestamp, '', NULL FROM pomodoro_sessions")
+                db.execSQL("DROP TABLE IF EXISTS pomodoro_sessions")
+            }
         }
 
         private val MIGRATION_23_24 = Migration(23, 24) { db ->
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN priorityLevel TEXT NOT NULL DEFAULT 'Medium'")
+            if (!columnExists(db, "learn_items", "priorityLevel")) {
+                db.execSQL("ALTER TABLE learn_items ADD COLUMN priorityLevel TEXT NOT NULL DEFAULT 'Medium'")
+            }
         }
 
         private val MIGRATION_24_25 = Migration(24, 25) { db ->
             db.execSQL("CREATE TABLE IF NOT EXISTS `learn_groups` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `color` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL DEFAULT 0)")
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN groupId INTEGER REFERENCES learn_groups(id) ON DELETE CASCADE")
+            if (!columnExists(db, "learn_items", "groupId")) {
+                db.execSQL("ALTER TABLE learn_items ADD COLUMN groupId INTEGER REFERENCES learn_groups(id) ON DELETE CASCADE")
+            }
             db.execSQL("CREATE INDEX IF NOT EXISTS index_learn_items_groupId ON learn_items(groupId)")
         }
 
         private val MIGRATION_25_26 = Migration(25, 26) { db ->
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+            if (!columnExists(db, "learn_items", "sortOrder")) {
+                db.execSQL("ALTER TABLE learn_items ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+            }
         }
 
         private val MIGRATION_26_27 = Migration(26, 27) { db ->
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN scheduleMode TEXT NOT NULL DEFAULT 'CONTINUOUS'")
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN scheduleDaysOfWeek TEXT NOT NULL DEFAULT ''")
+            if (!columnExists(db, "learn_items", "scheduleMode")) {
+                db.execSQL("ALTER TABLE learn_items ADD COLUMN scheduleMode TEXT NOT NULL DEFAULT 'CONTINUOUS'")
+            }
+            if (!columnExists(db, "learn_items", "scheduleDaysOfWeek")) {
+                db.execSQL("ALTER TABLE learn_items ADD COLUMN scheduleDaysOfWeek TEXT NOT NULL DEFAULT ''")
+            }
         }
 
         private val MIGRATION_27_28 = Migration(27, 28) { db ->
@@ -187,39 +242,31 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private val MIGRATION_29_30 = Migration(29, 30) { db ->
-            db.execSQL("ALTER TABLE tasks ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE tasks ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE habits ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE habits ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE habit_logs ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE habit_logs ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE sleep_logs ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE sleep_logs ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE timer_sessions ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE timer_sessions ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE timer_templates ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE timer_templates ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE idea_groups ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE idea_groups ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE ideas ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE ideas ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE idea_stages ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE idea_stages ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE todos ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE todos ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE diary_entries ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE shop_items ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE shop_items ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE mottos ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE mottos ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE day_reviews ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE day_reviews ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE learn_groups ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE learn_groups ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE learn_items ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE learn_sections ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE learn_sections ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
+            listOf(
+                "tasks" to listOf("updatedAt", "isDeleted"),
+                "habits" to listOf("updatedAt", "isDeleted"),
+                "habit_logs" to listOf("updatedAt", "isDeleted"),
+                "sleep_logs" to listOf("updatedAt", "isDeleted"),
+                "timer_sessions" to listOf("updatedAt", "isDeleted"),
+                "timer_templates" to listOf("updatedAt", "isDeleted"),
+                "idea_groups" to listOf("updatedAt", "isDeleted"),
+                "ideas" to listOf("updatedAt", "isDeleted"),
+                "idea_stages" to listOf("updatedAt", "isDeleted"),
+                "todos" to listOf("updatedAt", "isDeleted"),
+                "diary_entries" to listOf("isDeleted"),
+                "shop_items" to listOf("updatedAt", "isDeleted"),
+                "mottos" to listOf("updatedAt", "isDeleted"),
+                "day_reviews" to listOf("updatedAt", "isDeleted"),
+                "learn_groups" to listOf("updatedAt", "isDeleted"),
+                "learn_items" to listOf("updatedAt", "isDeleted"),
+                "learn_sections" to listOf("updatedAt", "isDeleted")
+            ).forEach { (table, columns) ->
+                columns.forEach { col ->
+                    if (!columnExists(db, table, col)) {
+                        db.execSQL("ALTER TABLE $table ADD COLUMN $col INTEGER NOT NULL DEFAULT 0")
+                    }
+                }
+            }
         }
 
         fun getDatabase(context: Context): AppDatabase {
@@ -229,7 +276,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "bulletcoach_database"
                 )
-                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
+                    .addMigrations(MIGRATION_1_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
