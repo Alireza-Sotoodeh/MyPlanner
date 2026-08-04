@@ -282,6 +282,9 @@ class MainViewModel(
     private val _expandAllIdeas = MutableStateFlow(prefs.getBoolean("ideas_expand_all_ideas", true))
     val expandAllIdeas: StateFlow<Boolean> = _expandAllIdeas.asStateFlow()
 
+    private val _expandAllLearnItems = MutableStateFlow(prefs.getBoolean("learn_expand_all_items", true))
+    val expandAllLearnItems: StateFlow<Boolean> = _expandAllLearnItems.asStateFlow()
+
     private fun loadCustomLabels(): List<Pair<String, Long>> {
         val serialized = prefs.getString("custom_labels", "") ?: ""
         if (serialized.isBlank()) return emptyList()
@@ -385,6 +388,12 @@ class MainViewModel(
         val newValue = !_expandAllIdeas.value
         _expandAllIdeas.value = newValue
         prefs.edit().putBoolean("ideas_expand_all_ideas", newValue).apply()
+    }
+
+    fun toggleExpandAllLearnItems() {
+        val newValue = !_expandAllLearnItems.value
+        _expandAllLearnItems.value = newValue
+        prefs.edit().putBoolean("learn_expand_all_items", newValue).apply()
     }
 
     fun triggerReorderByPriority() {

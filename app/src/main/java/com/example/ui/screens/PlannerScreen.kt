@@ -6346,6 +6346,7 @@ fun LearnTab(viewModel: MainViewModel) {
     var showGroupChips by remember { mutableStateOf(true) }
     var showLearnBreakdown by remember { mutableStateOf(false) }
     var statusFilter by remember { mutableStateOf("planned") }
+    val expandAllLearnItems by viewModel.expandAllLearnItems.collectAsState()
 
     val groupChipScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
@@ -6416,6 +6417,17 @@ fun LearnTab(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.primary,
                             letterSpacing = 1.5.sp
                         )
+                        IconButton(
+                            onClick = { viewModel.toggleExpandAllLearnItems() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (expandAllLearnItems) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (expandAllLearnItems) "Collapse All" else "Expand All",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                         Box {
                             Box(
                                 modifier = Modifier
@@ -6552,6 +6564,7 @@ fun LearnTab(viewModel: MainViewModel) {
                                 items(filteredItems, key = { it.id }) { item ->
                                     LearnItemCard(
                                         item = item,
+                                        expanded = expandAllLearnItems,
                                         viewModel = viewModel,
                                         allTasks = allTasks,
                                         todayDate = todayDate,
@@ -6637,6 +6650,7 @@ fun LearnTab(viewModel: MainViewModel) {
 @OptIn(ExperimentalFoundationApi::class)
 fun LearnItemCard(
     item: LearnItemEntity,
+    expanded: Boolean = true,
     viewModel: MainViewModel,
     allTasks: List<TaskEntity>,
     todayDate: String,
@@ -6776,110 +6790,118 @@ fun LearnItemCard(
                         trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                     )
                 }
-                // === SECTION BREAKDOWN (ACTIVE/PAUSED) ===
-                if (item.status == "ACTIVE" || item.status == "PAUSED") {
-                    val muted = item.status == "PAUSED"
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (notStartedCount > 0) {
-                            Text(
-                                text = "$notStartedCount to study",
-                                fontSize = 10.sp,
-                                color = if (muted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                            )
-                        }
-                        if (studiedCount > 0) {
-                            Text(
-                                text = "$studiedCount reviewing",
-                                fontSize = 10.sp,
-                                color = if (muted) Color(0xFFFFB300).copy(alpha = 0.3f)
-                                else Color(0xFFFFB300).copy(alpha = 0.6f)
-                            )
-                        }
-                        if (inReviewCount > 0) {
-                            Text(
-                                text = "$inReviewCount to review",
-                                fontSize = 10.sp,
-                                color = if (muted) Color(0xFFFFB300).copy(alpha = 0.3f)
-                                else Color(0xFFFFB300)
-                            )
-                        }
-                        if (masteredCount > 0) {
-                            Text(
-                                text = "$masteredCount mastered",
-                                fontSize = 10.sp,
-                                color = if (muted) Color(0xFF4CAF50).copy(alpha = 0.5f)
-                                else Color(0xFF4CAF50)
-                            )
-                        }
-                    }
-                    if (item.status == "ACTIVE") {
-                        val remaining = totalSections - masteredCount
-                        val daysEstimate = kotlin.math.ceil(remaining.toFloat() / item.sectionsPerDay.coerceAtLeast(1)).toInt()
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "~${daysEstimate}d remaining",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Paused — ${pausedDaysAgo}d ago",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-                        )
-                    }
-                }
-                // === TODAY'S PENDING TASKS (ACTIVE only) ===
-                if (item.status == "ACTIVE") {
-                    val sectionIds = sections.map { it.id }.toSet()
-                    val pendingToday = allTasks.filter { task ->
-                        task.linkedLearnSectionId in sectionIds &&
-                        task.date == todayDate &&
-                        task.status == "PENDING"
-                    }
-                    val studyTasksToday = pendingToday.count { it.label == "Study" }
-                    val reviewTasksToday = pendingToday.count { it.label == "Review" }
-                    if (studyTasksToday > 0 || reviewTasksToday > 0) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (studyTasksToday > 0) {
-                                Icon(
-                                    Icons.Default.MenuBook,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = Color(0xFFFFB300)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column {
+                        // === SECTION BREAKDOWN (ACTIVE/PAUSED) ===
+                        if (item.status == "ACTIVE" || item.status == "PAUSED") {
+                            val muted = item.status == "PAUSED"
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (notStartedCount > 0) {
+                                    Text(
+                                        text = "$notStartedCount to study",
+                                        fontSize = 10.sp,
+                                        color = if (muted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                    )
+                                }
+                                if (studiedCount > 0) {
+                                    Text(
+                                        text = "$studiedCount reviewing",
+                                        fontSize = 10.sp,
+                                        color = if (muted) Color(0xFFFFB300).copy(alpha = 0.3f)
+                                        else Color(0xFFFFB300).copy(alpha = 0.6f)
+                                    )
+                                }
+                                if (inReviewCount > 0) {
+                                    Text(
+                                        text = "$inReviewCount to review",
+                                        fontSize = 10.sp,
+                                        color = if (muted) Color(0xFFFFB300).copy(alpha = 0.3f)
+                                        else Color(0xFFFFB300)
+                                    )
+                                }
+                                if (masteredCount > 0) {
+                                    Text(
+                                        text = "$masteredCount mastered",
+                                        fontSize = 10.sp,
+                                        color = if (muted) Color(0xFF4CAF50).copy(alpha = 0.5f)
+                                        else Color(0xFF4CAF50)
+                                    )
+                                }
+                            }
+                            if (item.status == "ACTIVE") {
+                                val remaining = totalSections - masteredCount
+                                val daysEstimate = kotlin.math.ceil(remaining.toFloat() / item.sectionsPerDay.coerceAtLeast(1)).toInt()
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "$studyTasksToday study today",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFFFFB300)
+                                    text = "~${daysEstimate}d remaining",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Paused — ${pausedDaysAgo}d ago",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
                                 )
                             }
-                            if (studyTasksToday > 0 && reviewTasksToday > 0) {
-                                Spacer(modifier = Modifier.width(12.dp))
+                        }
+                        // === TODAY'S PENDING TASKS (ACTIVE only) ===
+                        if (item.status == "ACTIVE") {
+                            val sectionIds = sections.map { it.id }.toSet()
+                            val pendingToday = allTasks.filter { task ->
+                                task.linkedLearnSectionId in sectionIds &&
+                                task.date == todayDate &&
+                                task.status == "PENDING"
                             }
-                            if (reviewTasksToday > 0) {
-                                Icon(
-                                    Icons.Default.Update,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = Color(0xFF2196F3)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "$reviewTasksToday review today",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF2196F3)
-                                )
+                            val studyTasksToday = pendingToday.count { it.label == "Study" }
+                            val reviewTasksToday = pendingToday.count { it.label == "Review" }
+                            if (studyTasksToday > 0 || reviewTasksToday > 0) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (studyTasksToday > 0) {
+                                        Icon(
+                                            Icons.Default.MenuBook,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = Color(0xFFFFB300)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "$studyTasksToday study today",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFFFFB300)
+                                        )
+                                    }
+                                    if (studyTasksToday > 0 && reviewTasksToday > 0) {
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                    }
+                                    if (reviewTasksToday > 0) {
+                                        Icon(
+                                            Icons.Default.Update,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = Color(0xFF2196F3)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "$reviewTasksToday review today",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF2196F3)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
