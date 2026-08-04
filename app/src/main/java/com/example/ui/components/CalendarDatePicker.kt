@@ -78,23 +78,17 @@ fun CalendarDatePickerDialog(
     var showMonthPicker by remember { mutableStateOf(false) }
 
     fun toggleCalendar() {
-        if (usePersian) {
-            val gregorian = PersianCalendarHelper.getGregorianDateString(currentYear, currentMonth, 1)
-            if (gregorian.isNotEmpty()) {
-                val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(gregorian)!!
-                val c = Calendar.getInstance()
-                c.time = parsed
-                currentYear = c.get(Calendar.YEAR)
-                currentMonth = c.get(Calendar.MONTH) + 1
-            }
-        } else {
-            val dateStr = "%04d-%02d-01".format(currentYear, currentMonth)
-            val parts = PersianCalendarHelper.getPersianDateParts(dateStr)
-            currentYear = parts.first
-            currentMonth = parts.second
-        }
         usePersian = !usePersian
+        if (usePersian) {
+            currentYear = PersianCalendarHelper.getCurrentPersianYear()
+            currentMonth = PersianCalendarHelper.getCurrentPersianMonth()
+        } else {
+            val cal = Calendar.getInstance()
+            currentYear = cal.get(Calendar.YEAR)
+            currentMonth = cal.get(Calendar.MONTH) + 1
+        }
         selectedDay = null
+        editingYear = false
     }
 
     fun prevMonth() {
