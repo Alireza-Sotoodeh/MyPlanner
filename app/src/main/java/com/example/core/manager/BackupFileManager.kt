@@ -26,6 +26,10 @@ class BackupFileManager(private val context: Context) {
         private const val TAG = "BackupFileManager"
         private const val PREFS_NAME = "bulletcoach_prefs"
         private const val NOTIFICATION_CHANNEL_ID = "backup_failures"
+        private val DATE_FULL_REGEX = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        private val DATE_MONTH_REGEX = Regex("^\\d{4}-\\d{2}$")
+        private val DATE_WEEK_REGEX = Regex("^\\d{4}-W\\d{2}$")
+        val MONTH_DIR_REGEX = Regex("""^\d{4}-\d{2}$""")
     }
 
     private val contentResolver: ContentResolver = context.contentResolver
@@ -50,11 +54,11 @@ class BackupFileManager(private val context: Context) {
 
     fun isTaskInMonth(task: TaskEntity, month: String): Boolean {
         val d = task.date
-        return if (d.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))) {
+        return if (d.matches(DATE_FULL_REGEX)) {
             d.startsWith(month)
-        } else if (d.matches(Regex("^\\d{4}-\\d{2}$"))) {
+        } else if (d.matches(DATE_MONTH_REGEX)) {
             d == month
-        } else if (d.matches(Regex("^\\d{4}-W\\d{2}$"))) {
+        } else if (d.matches(DATE_WEEK_REGEX)) {
             try {
                 val cal = Calendar.getInstance()
                 cal.set(Calendar.YEAR, d.substring(0, 4).toInt())
@@ -69,16 +73,25 @@ class BackupFileManager(private val context: Context) {
     }
 
     fun hasWritePermission(uri: Uri): Boolean {
+        cleanupTestFiles(uri)
         return try {
             val testFile = DocumentsContract.createDocument(
                 contentResolver, uri, "application/json", ".write_test_${System.currentTimeMillis()}"
             )
             if (testFile != null) {
-                DocumentsContract.deleteDocument(contentResolver, testFile)
+                deleteDocument(testFile)
             }
             testFile != null
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun cleanupTestFiles(uri: Uri) {
+        for (child in listChildren(uri)) {
+            if (child.name.startsWith(".write_test_")) {
+                deleteDocument(child.uri)
+            }
         }
     }
 
@@ -186,7 +199,7 @@ class BackupFileManager(private val context: Context) {
 
     fun rotateOldBackups(root: Uri, maxMonths: Int) {
         val monthDirs = listChildren(root)
-            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(Regex("""^\d{4}-\d{2}$""")) }
+            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(MONTH_DIR_REGEX) }
             .sortedByDescending { it.name }
         if (monthDirs.size > maxMonths) {
             monthDirs.drop(maxMonths).forEach { deleteRecursive(it.uri) }

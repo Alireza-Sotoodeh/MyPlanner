@@ -3623,10 +3623,18 @@ fun SettingsDialog(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (e: SecurityException) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Could not persist folder access — please try again",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
             viewModel.setBackupLocationUri(uri.toString())
         }
     }
@@ -3857,6 +3865,33 @@ fun SettingsDialog(
                     Text(if (backupLocationUri != null) "Change Folder" else "Choose Backup Folder")
                 }
 
+                // Permission indicator
+                if (backupLocationUri != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val backupWritable by viewModel.backupLocationWritable.collectAsState()
+                    LaunchedEffect(backupLocationUri) {
+                        viewModel.refreshBackupWritable()
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    if (backupWritable) Color(0xFF4CAF50)
+                                    else Color(0xFFE53935),
+                                    RoundedCornerShape(4.dp)
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (backupWritable) "Location accessible"
+                                   else "Location not accessible — tap Change Folder to reselect",
+                            fontSize = 11.sp,
+                            color = if (backupWritable) Color(0xFF4CAF50) else Color(0xFFE53935)
+                        )
+                    }
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
                 Text(
@@ -3919,6 +3954,28 @@ fun SettingsDialog(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
+                }
+
+                // Inline status message (visible right after backup action)
+                if (statusMessage.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isSuccessStatus) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                            )
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = statusMessage,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isSuccessStatus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
 
                 // Keep last N months
@@ -4365,27 +4422,6 @@ fun SettingsDialog(
                     Switch(
                         checked = mottoEnabled,
                         onCheckedChange = { viewModel.updateMottoEnabled(it) }
-                    )
-                }
-            }
-
-            // Status message
-            if (statusMessage.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (isSuccessStatus) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
-                        )
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = statusMessage,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isSuccessStatus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                 }
             }

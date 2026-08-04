@@ -225,6 +225,15 @@ private val mottoRepository: MottoRepository,
     // State flows for Settings
     private val _backupLocationUri = MutableStateFlow<String?>(prefs.getString("backup_location_uri", null))
     val backupLocationUri: StateFlow<String?> = _backupLocationUri.asStateFlow()
+    private val _backupLocationWritable = MutableStateFlow(false)
+    val backupLocationWritable: StateFlow<Boolean> = _backupLocationWritable.asStateFlow()
+
+    fun refreshBackupWritable() {
+        val uriStr = _backupLocationUri.value ?: run { _backupLocationWritable.value = false; return }
+        _backupLocationWritable.value = try {
+            backupFileManager.hasWritePermission(android.net.Uri.parse(uriStr))
+        } catch (_: Exception) { false }
+    }
 
     private val _backupMaxMonths = MutableStateFlow(prefs.getInt("backup_max_months", 5))
     val backupMaxMonths: StateFlow<Int> = _backupMaxMonths.asStateFlow()
@@ -441,6 +450,7 @@ private val mottoRepository: MottoRepository,
             prefs.edit().remove("backup_location_uri").apply()
         }
         _backupLocationUri.value = uri
+        refreshBackupWritable()
     }
 
     fun setBackupMaxMonths(count: Int) {
@@ -592,9 +602,9 @@ private val mottoRepository: MottoRepository,
                 val dayReviewsList = dayReviewRepository.getAllReviews().first()
                 val timerSessionsList = timerRepository.getAllSessions().first()
                 val timerTemplatesList = timerRepository.getAllTemplates().first()
-                val ideaStagesList = allIdeas.value.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
+                val ideaStagesList = ideasList.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
                 val learnGroupsList = learnRepository.getAllGroupsSync()
-                val learnItemsList = learnItems.value
+                val learnItemsList = learnRepository.getAllItemsSync()
                 val learnSectionsList = learnItemsList.flatMap { learnRepository.getSectionsForItemSync(it.id) }
 
                 val currentMonth = backupFileManager.getCurrentMonth()
@@ -654,7 +664,7 @@ private val mottoRepository: MottoRepository,
     fun listBackupMonths(): List<String> {
         val rootUri = backupFileManager.getBackupRootDir() ?: return emptyList()
         return backupFileManager.listChildren(rootUri)
-            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(Regex("""^\d{4}-\d{2}$""")) }
+            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(BackupFileManager.MONTH_DIR_REGEX) }
             .map { it.name }
             .sortedDescending()
     }
@@ -669,40 +679,19 @@ private val mottoRepository: MottoRepository,
                     return@launch
                 }
 
-                val permanentDir = backupFileManager.getOrCreateDir(rootDir, "_permanent")
-                val monthDir = backupFileManager.getOrCreateDir(rootDir, month)
+                val permanentDir = backupFileManager.findChildUri(rootDir, "_permanent")
+                val monthDir = backupFileManager.findChildUri(rootDir, month)
 
                 if (monthDir == null) {
                     onResult(false, "No backup found for $month")
                     return@launch
                 }
-
-                // Pre-flight validation - read all entity files before any destructive operations
-                var totalEntities = 0
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "HabitEntity.json", HabitEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "TodoEntity.json", TodoEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "MottoEntity.json", MottoEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "ShopItemEntity.json", ShopItemEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "IdeaGroupEntity.json", IdeaGroupEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "IdeaEntity.json", IdeaEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "IdeaStageEntity.json", IdeaStageEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "LearnGroupEntity.json", LearnGroupEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "LearnItemEntity.json", LearnItemEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "LearnSectionEntity.json", LearnSectionEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(permanentDir, "TimerTemplateEntity.json", TimerTemplateEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(monthDir, "TaskEntity.json", TaskEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(monthDir, "HabitLogEntity.json", HabitLogEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(monthDir, "SleepLogEntity.json", SleepLogEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(monthDir, "DiaryEntryEntity.json", DiaryEntryEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(monthDir, "DayReviewEntity.json", DayReviewEntity::class.java).size
-                totalEntities += backupFileManager.readEntityFile(monthDir, "TimerSessionEntity.json", TimerSessionEntity::class.java).size
-
-                if (totalEntities == 0) {
-                    onResult(false, "No entities found in backup files - data loss may have occurred")
+                if (permanentDir == null) {
+                    onResult(false, "Permanent backup data not found")
                     return@launch
                 }
 
-                // Read all entity files from _permanent (non-date entities)
+                // Read all 17 entity files ONCE and reuse for validation + restore
                 val habits = backupFileManager.readEntityFile(permanentDir, "HabitEntity.json", HabitEntity::class.java) as List<HabitEntity>
                 val todos = backupFileManager.readEntityFile(permanentDir, "TodoEntity.json", TodoEntity::class.java) as List<TodoEntity>
                 val mottos = backupFileManager.readEntityFile(permanentDir, "MottoEntity.json", MottoEntity::class.java) as List<MottoEntity>
@@ -714,8 +703,6 @@ private val mottoRepository: MottoRepository,
                 val learnItems = backupFileManager.readEntityFile(permanentDir, "LearnItemEntity.json", LearnItemEntity::class.java) as List<LearnItemEntity>
                 val learnSections = backupFileManager.readEntityFile(permanentDir, "LearnSectionEntity.json", LearnSectionEntity::class.java) as List<LearnSectionEntity>
                 val timerTemplates = backupFileManager.readEntityFile(permanentDir, "TimerTemplateEntity.json", TimerTemplateEntity::class.java) as List<TimerTemplateEntity>
-
-                // Read all entity files from month (date-filtered entities)
                 val tasks = backupFileManager.readEntityFile(monthDir, "TaskEntity.json", TaskEntity::class.java) as List<TaskEntity>
                 val habitLogs = backupFileManager.readEntityFile(monthDir, "HabitLogEntity.json", HabitLogEntity::class.java) as List<HabitLogEntity>
                 val sleepLogs = backupFileManager.readEntityFile(monthDir, "SleepLogEntity.json", SleepLogEntity::class.java) as List<SleepLogEntity>
@@ -723,27 +710,33 @@ private val mottoRepository: MottoRepository,
                 val dayReviews = backupFileManager.readEntityFile(monthDir, "DayReviewEntity.json", DayReviewEntity::class.java) as List<DayReviewEntity>
                 val timerSessions = backupFileManager.readEntityFile(monthDir, "TimerSessionEntity.json", TimerSessionEntity::class.java) as List<TimerSessionEntity>
 
+                val totalEntities = habits.size + todos.size + mottos.size + shopItems.size +
+                    ideaGroups.size + ideas.size + ideaStages.size + learnGroups.size +
+                    learnItems.size + learnSections.size + timerTemplates.size + tasks.size +
+                    habitLogs.size + sleepLogs.size + diaryEntries.size + dayReviews.size + timerSessions.size
+
+                if (totalEntities == 0) {
+                    onResult(false, "No entities found in backup files - data loss may have occurred")
+                    return@launch
+                }
+
                 val backupObj = BulletCoachBackup(
-                    tasks = tasks,
-                    habits = habits,
-                    habitLogs = habitLogs,
-                    sleepLogs = sleepLogs,
-                    ideaGroups = ideaGroups,
-                    ideas = ideas,
-                    ideaStages = ideaStages,
-                    todos = todos,
-                    diaryEntries = diaryEntries,
-                    shopItems = shopItems,
-                    mottos = mottos,
-                    dayReviews = dayReviews,
-                    learnGroups = learnGroups,
-                    learnItems = learnItems,
-                    learnSections = learnSections,
-                    timerSessions = timerSessions,
+                    tasks = tasks, habits = habits, habitLogs = habitLogs,
+                    sleepLogs = sleepLogs, ideaGroups = ideaGroups, ideas = ideas,
+                    ideaStages = ideaStages, todos = todos, diaryEntries = diaryEntries,
+                    shopItems = shopItems, mottos = mottos, dayReviews = dayReviews,
+                    learnGroups = learnGroups, learnItems = learnItems,
+                    learnSections = learnSections, timerSessions = timerSessions,
                     timerTemplates = timerTemplates
                 )
 
-                // Destructive restore (same logic as current)
+                // FK set tracking (computed once before transaction)
+                val taskIds = tasks.map { it.id }.toSet()
+                val todoIds = todos.map { it.id }.toSet()
+                val ideaIds = ideas.map { it.id }.toSet()
+                val learnSectionIds = learnSections.map { it.id }.toSet()
+
+                // Single atomic transaction: DELETE + INSERT + FK nullification
                 val writableDb = database.openHelper.writableDatabase
                 writableDb.beginTransaction()
                 try {
@@ -765,13 +758,7 @@ private val mottoRepository: MottoRepository,
                     writableDb.execSQL("DELETE FROM learn_items")
                     writableDb.execSQL("DELETE FROM learn_sections")
                     writableDb.execSQL("DELETE FROM sqlite_sequence")
-                    writableDb.setTransactionSuccessful()
-                } finally {
-                    writableDb.endTransaction()
-                }
 
-                writableDb.beginTransaction()
-                try {
                     backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
                     backupObj.learnItems.forEach { learnRepository.insertItem(it) }
                     backupObj.learnSections.forEach { learnRepository.insertSection(it) }
@@ -789,38 +776,34 @@ private val mottoRepository: MottoRepository,
                     backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
                     backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
                     backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
+
+                    // FK orphan nullification inside same transaction
+                    backupObj.tasks
+                        .filter { it.linkedTodoId != null && it.linkedTodoId !in todoIds }
+                        .forEach { taskRepository.updateTask(it.copy(linkedTodoId = null)) }
+                    backupObj.tasks
+                        .filter { it.linkedIdeaId != null && it.linkedIdeaId !in ideaIds }
+                        .forEach { taskRepository.updateTask(it.copy(linkedIdeaId = null)) }
+                    backupObj.tasks
+                        .filter { it.linkedLearnSectionId != null && it.linkedLearnSectionId !in learnSectionIds }
+                        .forEach { taskRepository.updateTask(it.copy(linkedLearnSectionId = null)) }
+                    backupObj.todos
+                        .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
+                        .forEach { todoRepository.updateTodo(it.copy(linkedTaskId = null)) }
+                    backupObj.ideas
+                        .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
+                        .forEach { ideaRepository.updateIdea(it.copy(linkedTaskId = null)) }
+                    backupObj.learnSections
+                        .filter { it.studyTaskId != null && it.studyTaskId !in taskIds }
+                        .forEach { learnRepository.updateSection(it.copy(studyTaskId = null)) }
+                    backupObj.learnSections
+                        .filter { it.reviewTaskId != null && it.reviewTaskId !in taskIds }
+                        .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
+
                     writableDb.setTransactionSuccessful()
                 } finally {
                     writableDb.endTransaction()
                 }
-
-                // FK orphan nullification
-                val taskIds = backupObj.tasks.map { it.id }.toSet()
-                val todoIds = backupObj.todos.map { it.id }.toSet()
-                val ideaIds = backupObj.ideas.map { it.id }.toSet()
-                val learnSectionIds = backupObj.learnSections.map { it.id }.toSet()
-
-                backupObj.tasks
-                    .filter { it.linkedTodoId != null && it.linkedTodoId !in todoIds }
-                    .forEach { taskRepository.updateTask(it.copy(linkedTodoId = null)) }
-                backupObj.tasks
-                    .filter { it.linkedIdeaId != null && it.linkedIdeaId !in ideaIds }
-                    .forEach { taskRepository.updateTask(it.copy(linkedIdeaId = null)) }
-                backupObj.tasks
-                    .filter { it.linkedLearnSectionId != null && it.linkedLearnSectionId !in learnSectionIds }
-                    .forEach { taskRepository.updateTask(it.copy(linkedLearnSectionId = null)) }
-                backupObj.todos
-                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
-                    .forEach { todoRepository.updateTodo(it.copy(linkedTaskId = null)) }
-                backupObj.ideas
-                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
-                    .forEach { ideaRepository.updateIdea(it.copy(linkedTaskId = null)) }
-                backupObj.learnSections
-                    .filter { it.studyTaskId != null && it.studyTaskId !in taskIds }
-                    .forEach { learnRepository.updateSection(it.copy(studyTaskId = null)) }
-                backupObj.learnSections
-                    .filter { it.reviewTaskId != null && it.reviewTaskId !in taskIds }
-                    .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
 
                 com.example.core.manager.SystemSettingsApplier.reapplyAfterRestore(context)
 

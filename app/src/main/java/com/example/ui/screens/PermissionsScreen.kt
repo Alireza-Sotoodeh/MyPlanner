@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.*
@@ -44,6 +45,8 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     var hasUsageStats by remember { mutableStateOf(viewModel.hasUsageStatsPermission(context)) }
     var hasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
     var hasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
+    val backupUri by viewModel.backupLocationUri.collectAsState()
+    val hasBackupLocation = backupUri != null
     var continueClicked by remember { mutableStateOf(false) }
     var showNotificationSettings by remember { mutableStateOf(false) }
 
@@ -82,6 +85,20 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             }
         }
     )
+
+    val backupFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: SecurityException) { }
+            viewModel.setBackupLocationUri(uri.toString())
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -178,6 +195,15 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                     }
                 )
             }
+
+            PermissionItem(
+                title = "Backup Storage (Optional)",
+                description = "Choose a folder to store your automated backups.",
+                icon = Icons.Default.Backup,
+                isGranted = hasBackupLocation,
+                onClick = { backupFolderLauncher.launch(null) },
+                buttonText = "CHOOSE"
+            )
             
             Spacer(modifier = Modifier.height(32.dp))
             
