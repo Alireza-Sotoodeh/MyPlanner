@@ -914,7 +914,15 @@ class MainViewModel(
                 priorityLevel = priorityLevel
             )
             taskRepository.updateTask(updatedTask)
-            
+
+            updatedTask.linkedTodoId?.let { todoId ->
+                todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                    if (linkedTodo.title != title || linkedTodo.description != description) {
+                        todoRepository.updateTodo(linkedTodo.copy(title = title, description = description))
+                    }
+                }
+            }
+
             if (updatedTask.type == "EVENT") {
                 com.example.core.manager.ReminderManager.cancelReminders(context, task) // Cancel old
                 com.example.core.manager.ReminderManager.scheduleReminders(
