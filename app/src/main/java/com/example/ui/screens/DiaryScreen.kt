@@ -359,7 +359,7 @@ fun DiaryScreen(
             },
             placeholder = { Text("Title", fontSize = 16.sp) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+            textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedBorderColor = Color.Transparent,
@@ -379,7 +379,7 @@ fun DiaryScreen(
                     triggerAutoSave()
                 },
                 modifier = Modifier.fillMaxSize(),
-                textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 22.sp),
+                textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface),
                 visualTransformation = MarkdownVisualTransformation(),
                 decorationBox = { innerTextField ->
                     if (content.isEmpty()) {
