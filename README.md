@@ -428,4 +428,4 @@ Backup is a directory of JSON files (one per entity type) written via Moshi. The
 
 ## License
 
-Private — All rights reserved.
+[GNU General Public License v3.0](LICENSE)
