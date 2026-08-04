@@ -74,11 +74,13 @@ class PomodoroFinishActivity : ComponentActivity() {
         val canProceed = intent.getBooleanExtra("canProceed", true)
         val isFinal = intent.getBooleanExtra("isFinal", false)
         val ringtoneUriStr = intent.getStringExtra("ringtoneUri") ?: ""
+        val ringtoneEnabled = intent.getBooleanExtra("ringtoneEnabled", true)
         val vibrateEnabled = intent.getBooleanExtra("vibrateEnabled", true)
 
         val durationMinutes = durationSeconds / 60
+        val isTest = phase == "TEST"
 
-        // Audio focus
+        // Audio focus (always acquire for vibration timing)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val afRequestBuilder = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -102,21 +104,23 @@ class PomodoroFinishActivity : ComponentActivity() {
             audioManager?.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN)
         }
 
-        // Ringtone
-        val ringtoneUri = if (ringtoneUriStr.isNotBlank()) android.net.Uri.parse(ringtoneUriStr)
-            else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        try {
-            ringtone = RingtoneManager.getRingtone(this, ringtoneUri)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                ringtone?.isLooping = true
+        // Ringtone (only if enabled)
+        if (ringtoneEnabled) {
+            val ringtoneUri = if (ringtoneUriStr.isNotBlank()) android.net.Uri.parse(ringtoneUriStr)
+                else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            try {
+                ringtone = RingtoneManager.getRingtone(this, ringtoneUri)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ringtone?.isLooping = true
+                }
+                ringtone?.play()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            ringtone?.play()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
 
-        // Vibration
+        // Vibration (heartbeat pattern)
         if (vibrateEnabled) {
             vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -127,29 +131,33 @@ class PomodoroFinishActivity : ComponentActivity() {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator?.vibrate(
-                    VibrationEffect.createWaveform(longArrayOf(0, 1000, 1000), 0),
+                    VibrationEffect.createWaveform(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0),
                     AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
                 )
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(longArrayOf(0, 1000, 1000), 0)
+                vibrator?.vibrate(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0)
             }
         }
 
         setContent {
             MyApplicationTheme {
-                PomodoroFinishContent(
-                    phase = phase,
-                    sessionNumber = sessionNumber,
-                    totalSessions = totalSessions,
-                    taskTitle = taskTitle,
-                    durationMinutes = durationMinutes,
-                    nextActionLabel = nextActionLabel,
-                    canProceed = canProceed,
-                    isFinal = isFinal,
-                    onContinue = { sendAction("continue") },
-                    onEnd = { sendAction("end") }
-                )
+                if (isTest) {
+                    PomodoroTestContent(onDismiss = { stopAll(); finish() })
+                } else {
+                    PomodoroFinishContent(
+                        phase = phase,
+                        sessionNumber = sessionNumber,
+                        totalSessions = totalSessions,
+                        taskTitle = taskTitle,
+                        durationMinutes = durationMinutes,
+                        nextActionLabel = nextActionLabel,
+                        canProceed = canProceed,
+                        isFinal = isFinal,
+                        onContinue = { sendAction("continue") },
+                        onEnd = { sendAction("end") }
+                    )
+                }
 
                 DisposableEffect(Unit) {
                     onDispose {
@@ -335,6 +343,68 @@ private fun PomodoroFinishContent(
                         fontWeight = FontWeight.Medium
                     )
                 }
+            }
+    }
+}
+
+}
+
+@Composable
+private fun PomodoroTestContent(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF4CAF50).copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "🔔", fontSize = 48.sp)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Pomodoro Alarm Test",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "This is how the completion screen looks.\nThe selected ringtone and vibration are playing.",
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(
+                    text = "Dismiss",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

@@ -3423,8 +3423,10 @@ fun SettingsDialog(
     var showReviewTimePicker by remember { mutableStateOf(false) }
 
     val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
+    val pomodoroRingtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
     val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
     var enteredPomodoroRingtoneUri by remember { mutableStateOf(pomodoroRingtoneUri) }
+    var enteredPomodoroRingtoneEnabled by remember { mutableStateOf(pomodoroRingtoneEnabled) }
     var enteredPomodoroVibrateEnabled by remember { mutableStateOf(pomodoroVibrateEnabled) }
     val reviewTimePickerState = rememberTimePickerState(
         initialHour = enteredReviewTime.substringBefore(":").toIntOrNull() ?: 21,
@@ -3615,6 +3617,25 @@ fun SettingsDialog(
                         color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 1.sp
                     )
+                    // Play sound toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Play sound",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Switch(
+                            checked = enteredPomodoroRingtoneEnabled,
+                            onCheckedChange = { enteredPomodoroRingtoneEnabled = it }
+                        )
+                    }
                     // Ringtone selector
                     val ringtoneName = if (enteredPomodoroRingtoneUri.isBlank()) "Default ringtone"
                         else try {
@@ -3638,22 +3659,27 @@ fun SettingsDialog(
                                 text = ringtoneName,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = if (enteredPomodoroRingtoneEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         }
-                        TextButton(onClick = {
-                            val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                                putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Pomodoro Alarm")
-                                if (enteredPomodoroRingtoneUri.isNotBlank()) {
-                                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(enteredPomodoroRingtoneUri))
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Pomodoro Alarm")
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
+                                    if (enteredPomodoroRingtoneUri.isNotBlank()) {
+                                        putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(enteredPomodoroRingtoneUri))
+                                    }
                                 }
-                            }
-                            ringtoneLauncher.launch(intent)
-                        }) {
+                                ringtoneLauncher.launch(intent)
+                            },
+                            enabled = enteredPomodoroRingtoneEnabled
+                        ) {
                             Text("Change", fontSize = 12.sp)
                         }
                     }
+                    // Vibrate toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -3661,7 +3687,7 @@ fun SettingsDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Vibrate on complete",
+                                text = "Vibrate",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -3672,9 +3698,21 @@ fun SettingsDialog(
                             onCheckedChange = { enteredPomodoroVibrateEnabled = it }
                         )
                     }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Pattern: Heartbeat 🫀",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     // Test button
                     TextButton(onClick = {
                         viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
+                        viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
                         viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
                         viewModel.testPomodoroAlarm(context)
                     }) {
@@ -3856,6 +3894,7 @@ fun SettingsDialog(
                     viewModel.updateEventReminderVibrate(enteredEventVibrate)
                     viewModel.updateEventReminderSound(enteredEventSound)
                     viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
+                    viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
                     viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
                     viewModel.updateReviewReminderTime(enteredReviewTime)
                     viewModel.updateReviewReminderEnabled(enteredReviewEnabled)

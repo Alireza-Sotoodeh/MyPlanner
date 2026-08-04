@@ -540,22 +540,25 @@ private fun PomodoroTab(
         // In-app completion overlay
         pomodoroCompletionState?.let { state ->
             val vibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
+            val ringtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
             var ringtoneRef = remember { mutableStateOf<android.media.Ringtone?>(null) }
             var vibratorRef = remember { mutableStateOf<android.os.Vibrator?>(null) }
 
-            DisposableEffect(state, vibrateEnabled) {
-                val uri = viewModel.pomodoroRingtoneUri.value
-                val ringtoneUri = if (uri.isNotBlank()) android.net.Uri.parse(uri)
-                    else android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                        ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                try {
-                    val rt = android.media.RingtoneManager.getRingtone(context, ringtoneUri)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        rt.isLooping = true
-                    }
-                    rt.play()
-                    ringtoneRef.value = rt
-                } catch (e: Exception) {}
+            DisposableEffect(state, vibrateEnabled, ringtoneEnabled) {
+                if (ringtoneEnabled) {
+                    val uri = viewModel.pomodoroRingtoneUri.value
+                    val ringtoneUri = if (uri.isNotBlank()) android.net.Uri.parse(uri)
+                        else android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                            ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                    try {
+                        val rt = android.media.RingtoneManager.getRingtone(context, ringtoneUri)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            rt.isLooping = true
+                        }
+                        rt.play()
+                        ringtoneRef.value = rt
+                    } catch (e: Exception) {}
+                }
 
                 if (vibrateEnabled) {
                     val vb = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -567,10 +570,10 @@ private fun PomodoroTab(
                     }
                     vb?.let {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            it.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 1000, 1000), 0))
+                            it.vibrate(android.os.VibrationEffect.createWaveform(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0))
                         } else {
                             @Suppress("DEPRECATION")
-                            it.vibrate(longArrayOf(0, 1000, 1000), 0)
+                            it.vibrate(com.example.ui.viewmodel.MainViewModel.HEARTBEAT_PATTERN, 0)
                         }
                         vibratorRef.value = it
                     }

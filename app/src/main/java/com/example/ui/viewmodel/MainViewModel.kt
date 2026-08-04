@@ -202,8 +202,16 @@ class MainViewModel(
     private val _pomodoroRingtoneUri = MutableStateFlow(prefs.getString("pomodoro_ringtone_uri", "") ?: "")
     val pomodoroRingtoneUri: StateFlow<String> = _pomodoroRingtoneUri.asStateFlow()
 
+    private val _pomodoroRingtoneEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_ringtone_enabled", true))
+    val pomodoroRingtoneEnabled: StateFlow<Boolean> = _pomodoroRingtoneEnabled.asStateFlow()
+
     private val _pomodoroVibrateEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_vibrate_enabled", true))
     val pomodoroVibrateEnabled: StateFlow<Boolean> = _pomodoroVibrateEnabled.asStateFlow()
+
+    companion object {
+        val HEARTBEAT_PATTERN = longArrayOf(0, 300, 100, 300, 500, 300, 100, 300)
+        val HEARTBEAT_PATTERN_SINGLE = longArrayOf(0, 300, 100, 300)
+    }
 
     private val _pomodoroCompletionState = MutableStateFlow<PomodoroCompletionState?>(null)
     val pomodoroCompletionState: StateFlow<PomodoroCompletionState?> = _pomodoroCompletionState.asStateFlow()
@@ -275,6 +283,11 @@ class MainViewModel(
     fun updatePomodoroRingtoneUri(uri: String) {
         prefs.edit().putString("pomodoro_ringtone_uri", uri).apply()
         _pomodoroRingtoneUri.value = uri
+    }
+
+    fun updatePomodoroRingtoneEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("pomodoro_ringtone_enabled", enabled).apply()
+        _pomodoroRingtoneEnabled.value = enabled
     }
 
     fun updatePomodoroVibrateEnabled(enabled: Boolean) {
@@ -1900,41 +1913,20 @@ class MainViewModel(
     }
 
     fun testPomodoroAlarm(context: Context) {
-        val uri = _pomodoroRingtoneUri.value
-        val ringtoneUri = if (uri.isNotBlank()) android.net.Uri.parse(uri)
-            else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        try {
-            val ringtone = RingtoneManager.getRingtone(context, ringtoneUri)
-            ringtone?.play()
-            viewModelScope.launch {
-                delay(2000)
-                ringtone?.stop()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "testPomodoroAlarm ringtone failed", e)
+        val intent = Intent(context, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            putExtra("phase", "TEST")
+            putExtra("taskTitle", "Test Pomodoro")
+            putExtra("sessionNumber", 1)
+            putExtra("durationSeconds", 1500)
+            putExtra("nextActionLabel", "")
+            putExtra("canProceed", false)
+            putExtra("isFinal", true)
+            putExtra("ringtoneUri", _pomodoroRingtoneUri.value)
+            putExtra("ringtoneEnabled", _pomodoroRingtoneEnabled.value)
+            putExtra("vibrateEnabled", _pomodoroVibrateEnabled.value)
         }
-        if (_pomodoroVibrateEnabled.value) {
-            try {
-                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                    vibratorManager?.defaultVibrator
-                } else {
-                    @Suppress("DEPRECATION")
-                    context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? Vibrator
-                }
-                vibrator?.let {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        it.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 300, 100, 300), -1))
-                    } else {
-                        @Suppress("DEPRECATION")
-                        it.vibrate(1000)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "testPomodoroAlarm vibrate failed", e)
-            }
-        }
-        showPomodoroTestNotification(context)
+        context.startActivity(intent)
     }
 
     private fun showPomodoroTestNotification(context: Context) {
@@ -2180,6 +2172,7 @@ class MainViewModel(
                 putExtra("isFinal", state.isFinal)
                 putExtra("breakDuration", state.breakDuration ?: -1)
                 putExtra("ringtoneUri", _pomodoroRingtoneUri.value)
+                putExtra("ringtoneEnabled", _pomodoroRingtoneEnabled.value)
                 putExtra("vibrateEnabled", _pomodoroVibrateEnabled.value)
             }
             val pendingIntent = PendingIntent.getActivity(context, 4003, activityIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
