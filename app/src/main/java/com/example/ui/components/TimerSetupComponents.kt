@@ -11,6 +11,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,6 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -173,13 +181,18 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                     tint = if (value > min) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
             if (isEditing) {
+                val focusRequester = remember { FocusRequester() }
+                var hadFocus by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                }
                 BasicTextField(
                     value = inputText,
                     onValueChange = { inputText = it.filter { c -> c.isDigit() } },
-                    singleLine = true,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
-                        val newValue = inputText.toIntOrNull()?.coerceIn(min, max) ?: value
+                    maxLines = 1,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        val newValue = inputText.toIntOrNull()?.coerceIn(1, max) ?: value
                         onValueChange(newValue)
                         isEditing = false
                         focusManager.clearFocus()
@@ -187,13 +200,27 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                     textStyle = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary
                     ),
-                    modifier = Modifier.width(52.dp).onFocusChanged { state ->
-                        if (!state.isFocused && isEditing) {
-                            val newValue = inputText.toIntOrNull()?.coerceIn(min, max) ?: value
-                            onValueChange(newValue)
-                            isEditing = false
+                    visualTransformation = object : VisualTransformation {
+                        override fun filter(text: AnnotatedString): TransformedText {
+                            val transformed = AnnotatedString("${text.text} min")
+                            val mapping = object : OffsetMapping {
+                                override fun originalToTransformed(offset: Int) = offset
+                                override fun transformedToOriginal(offset: Int) = offset.coerceAtMost(text.text.length)
+                            }
+                            return TransformedText(transformed, mapping)
                         }
-                    }
+                    },
+                    modifier = Modifier
+                        .width(IntrinsicSize.Min)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { state ->
+                            if (state.isFocused || state.hasFocus) hadFocus = true
+                            if (!state.isFocused && !state.hasFocus && hadFocus && isEditing) {
+                                val newValue = inputText.toIntOrNull()?.coerceIn(1, max) ?: value
+                                onValueChange(newValue)
+                                isEditing = false
+                            }
+                        }
                 )
             } else {
                 Text(text = "$value min", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
