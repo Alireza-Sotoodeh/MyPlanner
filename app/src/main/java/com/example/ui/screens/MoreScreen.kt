@@ -84,6 +84,13 @@ fun MoreScreen(
                 else -> {}
             }
     } else {
+        val allMottos by viewModel.allMottos.collectAsState()
+        val todayMotto by viewModel.todayMotto.collectAsState()
+
+        LaunchedEffect(Unit) {
+            viewModel.refreshRandomMotto()
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
@@ -125,17 +132,27 @@ fun MoreScreen(
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                 ) {
-                    Text(
-                        "Add your favorite quotes in Mottos \u2192",
-                        modifier = Modifier
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                            .fillMaxWidth(),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        fontStyle = FontStyle.Italic,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        textAlign = TextAlign.Center
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.FormatQuote,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "No mottos saved — tap here to add one",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
 

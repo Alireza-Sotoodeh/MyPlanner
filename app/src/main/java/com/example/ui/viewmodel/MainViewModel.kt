@@ -644,6 +644,12 @@ class MainViewModel(
         }
     }
 
+    fun refreshRandomMotto() {
+        viewModelScope.launch {
+            _todayMotto.value = mottoRepository.getRandomMotto()
+        }
+    }
+
     // --- Date Navigation Methods ---
     fun selectDate(date: String) {
         _selectedDate.value = date
