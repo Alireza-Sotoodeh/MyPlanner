@@ -84,224 +84,246 @@ fun HabitsScreen(viewModel: MainViewModel) {
     var showLogSleepDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)
-    ) {
-        // Tracker Section Title
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "MINDFULNESS & TRACKERS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.5.sp
-                    )
-                    Text(
-                        text = "Habit & Sleep Log",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)
+        ) {
+            // Tracker Section Title
+            item {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(0.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
-                        Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    }
-                    IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    }
-                }
-            }
-        }
-
-        // 1. Sleep Tracker Summary Card
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-                    .clickable { showLogSleepDialog = true }
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column {
                         Text(
-                            text = "SLEEP TRACKER",
+                            text = "TRACKERS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                             letterSpacing = 1.5.sp
                         )
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                                .padding(horizontal = 10.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = "LOG SLEEP",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        Text(
+                            text = "Habit & Sleep",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (sleepLog == null) {
-                        Text(
-                            text = "No sleep logged for today.",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                        Text(
-                            text = "Tap to input sleep hours and quality rating.",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    } else {
-                        val currentSleep = sleepLog!!
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "${currentSleep.hoursSlept} hrs",
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Light,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = "Duration",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(1.dp).height(40.dp).background(MaterialTheme.colorScheme.outline))
-
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    repeat(5) { index ->
-                                        Icon(
-                                            imageVector = if (index < currentSleep.sleepQuality) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFFD54F), // Elegant gold
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = "Quality rating",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
+                            Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                         }
-
-                        if (currentSleep.notes.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Notes: ${currentSleep.notes}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                         }
                     }
                 }
             }
-        }
 
-        // 2. Habits Section header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // 1. Sleep Tracker Summary Card
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                        .clickable { showLogSleepDialog = true }
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "SLEEP TRACKER",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                letterSpacing = 1.5.sp
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "LOG SLEEP",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (sleepLog == null) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "😴",
+                                    fontSize = 28.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "No sleep logged for today.",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "Tap to log your sleep hours and quality.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        } else {
+                            val currentSleep = sleepLog!!
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "${currentSleep.sleepTime} → ${currentSleep.wakeTime}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "${currentSleep.hoursSlept} hrs",
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Light,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Duration",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(1.dp).height(50.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
+
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Quality",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        repeat(5) { index ->
+                                            Icon(
+                                                imageVector = if (index < currentSleep.sleepQuality) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFFD54F),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (currentSleep.notes.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = currentSleep.notes,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Habits Section header (without add button — moved to FAB)
+            item {
                 Text(
-                    text = "DAILY HABIT INTENTIONS",
+                    text = "DAILY HABITS",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     letterSpacing = 1.5.sp
                 )
+            }
 
-                IconButton(
-                    onClick = { showCreateHabitDialog = true },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "New Habit",
-                        tint = MaterialTheme.colorScheme.background,
-                        modifier = Modifier.size(18.dp)
+            // Habits logs lists
+            if (habits.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "📋",
+                                fontSize = 28.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "No habits yet",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF79747E)
+                            )
+                            Text(
+                                text = "Tap + to create your first habit",
+                                fontSize = 11.sp,
+                                color = Color(0xFF79747E).copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(habits) { habit ->
+                    val currentLog = logs.find { it.habitId == habit.id }
+                    HabitRowItem(
+                        habit = habit,
+                        logValue = currentLog?.value ?: 0f,
+                        onLog = { value -> viewModel.logHabit(habit.id, value) },
+                        onEdit = { editingHabit = habit },
+                        onDelete = { viewModel.deleteHabit(habit) }
                     )
                 }
             }
         }
 
-        // Habits logs lists
-        if (habits.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No habits created yet. Tap + to add one!",
-                        fontSize = 13.sp,
-                        color = Color(0xFF79747E)
-                    )
-                }
-            }
-        } else {
-            items(habits) { habit ->
-                val currentLog = logs.find { it.habitId == habit.id }
-                HabitRowItem(
-                    habit = habit,
-                    logValue = currentLog?.value ?: 0f,
-                    onLog = { value -> viewModel.logHabit(habit.id, value) },
-                    onEdit = { editingHabit = habit },
-                    onDelete = { viewModel.deleteHabit(habit) }
-                )
-            }
-        }
-
-        // Empty bottom padding
-        item {
-            Spacer(modifier = Modifier.height(80.dp))
+        // FAB for adding habits
+        FloatingActionButton(
+            onClick = { showCreateHabitDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.background,
+            shape = CircleShape
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "New Habit"
+            )
         }
     }
 
@@ -365,7 +387,7 @@ fun HabitRowItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -383,7 +405,7 @@ fun HabitRowItem(
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             // Habit logger interactions based on type (BINARY or QUANTITATIVE)
             if (habit.type == "BINARY") {
@@ -432,37 +454,61 @@ fun HabitRowItem(
                 } else {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         IconButton(
-                            onClick = { if (logValue > 0f) onLog(logValue - 1f) }
+                            onClick = { if (logValue > 0f) onLog(logValue - 1f) },
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "Decrease",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
 
                         Text(
-                            text = "${logValue.toInt()}/${habit.target.toInt()}",
-                            fontSize = 16.sp,
+                            text = "${logValue.toInt()}",
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.primary
                         )
+                        Text(
+                            text = "/ ${habit.target.toInt()}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
                         IconButton(
-                            onClick = { onLog(logValue + 1f) }
+                            onClick = { onLog(logValue + 1f) },
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Increase",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
-            IconButton(onClick = onEdit) {
-                Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Habit", tint = Color(0xFF79747E))
-            }
-            IconButton(onClick = onDelete) {
-                Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Habit", tint = Color(0xFF79747E))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color(0xFF79747E), modifier = Modifier.size(16.dp))
+                    }
+                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFF79747E), modifier = Modifier.size(16.dp))
+                    }
+                }
             }
         }
     }
