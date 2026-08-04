@@ -1139,8 +1139,10 @@ private fun HistoryCalendarGrid(
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(modifier = Modifier.height(28.dp))
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(top = 32.dp)
+    ) {
         val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
 
