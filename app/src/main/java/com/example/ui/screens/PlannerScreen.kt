@@ -113,13 +113,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.TaskEntity
 import com.example.ui.components.ActivePomodoroWidget
-import com.example.ui.components.DayReviewCard
 import com.example.ui.components.MottoCard
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -527,7 +528,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
     var expandAllItems by remember { mutableStateOf(true) }
     var expandAllSubtasks by remember { mutableStateOf(true) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
-    var showDayReviewDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(expandAllSubtasks) {
         expandedSubtasksMap.clear()
@@ -1125,12 +1125,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                     }
                 }
 
-                val reviewForDate by viewModel.reviewForDate(selectedDate).collectAsState(initial = null)
-                DayReviewCard(
-                    review = reviewForDate,
-                    date = selectedDate,
-                    onClick = { showDayReviewDialog = true }
-                )
             }
 
             // FLOATING ACTION BUTTON inside the container or at bottom right
@@ -1166,13 +1160,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
         )
     }
 
-    if (showDayReviewDialog) {
-        DayReviewScreen(
-            viewModel = viewModel,
-            initialDate = selectedDate,
-            onBack = { showDayReviewDialog = false }
-        )
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -2675,6 +2662,14 @@ fun SettingsDialog(
     val context = LocalContext.current
     val notificationManager = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager }
 
+    val postNotificationsLauncher = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                android.widget.Toast.makeText(context, "Notifications disabled — enable in Settings", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    } else null
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -2911,7 +2906,18 @@ fun SettingsDialog(
                         }
                         Switch(
                             checked = enteredReviewEnabled,
-                            onCheckedChange = { enteredReviewEnabled = it }
+                            onCheckedChange = { enabled ->
+                                enteredReviewEnabled = enabled
+                                if (enabled) {
+                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                        }
+                                    }
+                                }
+                            }
                         )
                     }
                     if (enteredReviewEnabled) {
