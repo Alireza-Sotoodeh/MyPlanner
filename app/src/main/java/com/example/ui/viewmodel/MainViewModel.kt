@@ -560,15 +560,18 @@ class MainViewModel(
                 val adapter = moshi.adapter(BulletCoachBackup::class.java)
                 val jsonString = adapter.toJson(backupObj)
 
-                // Save locally (offline fallback)
+                // Save locally (offline fallback) — uncompressed
                 val backupFile = java.io.File(context.filesDir, "bulletcoach_backup.json")
                 backupFile.writeText(jsonString)
 
-                // Upload to Drive
-                val data = jsonString.toByteArray(Charsets.UTF_8)
+                // Gzip for Drive upload
+                val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
+                val bos = java.io.ByteArrayOutputStream()
+                java.util.zip.GZIPOutputStream(bos).use { it.write(jsonBytes) }
+                val gzipBytes = bos.toByteArray()
                 val dateStr = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                val filename = "bulletcoach_${dateStr}.json"
-                val fileId = com.example.core.manager.DriveManager.uploadBackup(context, data, filename)
+                val filename = "bulletcoach_${dateStr}.json.gz"
+                val fileId = com.example.core.manager.DriveManager.uploadBackup(context, gzipBytes, filename)
 
                 if (fileId != null) {
                     val lastSync = System.currentTimeMillis()
@@ -595,7 +598,12 @@ class MainViewModel(
                     try {
                         val driveBytes = com.example.core.manager.DriveManager.downloadLatest(context)
                         if (driveBytes != null) {
-                            jsonString = String(driveBytes, Charsets.UTF_8)
+                            jsonString = try {
+                                java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(driveBytes))
+                                    .use { it.reader(Charsets.UTF_8).readText() }
+                            } catch (_: java.util.zip.ZipException) {
+                                String(driveBytes, Charsets.UTF_8)
+                            }
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Drive download failed, falling back to local", e)

@@ -91,10 +91,13 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val backupFile = File(applicationContext.filesDir, "bulletcoach_backup.json")
             backupFile.writeText(jsonString)
 
-            val data = jsonString.toByteArray(Charsets.UTF_8)
+            val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
+            val bos = java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(bos).use { it.write(jsonBytes) }
+            val gzipBytes = bos.toByteArray()
             val dateStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val filename = "bulletcoach_${dateStr}.json"
-            val fileId = DriveManager.uploadBackup(applicationContext, data, filename)
+            val filename = "bulletcoach_${dateStr}.json.gz"
+            val fileId = DriveManager.uploadBackup(applicationContext, gzipBytes, filename)
 
             if (fileId != null) {
                 prefs.edit().putLong("drive_last_sync_at", System.currentTimeMillis()).apply()

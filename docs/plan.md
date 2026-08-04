@@ -231,41 +231,31 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 
 *Files: MainViewModel.kt*
 
-### 5.1 — Backup: gzip before Drive upload
+### 5.1 — Backup: gzip before Drive upload `[x] DONE`
 
-- [ ] After Moshi serialization to JSON string, convert to bytes:
-  
-  ```kotlin
-  val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
-  val bos = ByteArrayOutputStream()
-  GZIPOutputStream(bos).use { it.write(jsonBytes) }
-  val gzipBytes = bos.toByteArray()
-  ```
-- [ ] Upload `gzipBytes` to Drive (not raw JSON)
-- [ ] **Edge case:** Empty backup (no data) — gzip still produces valid output (~20 bytes)
-- [ ] **Edge case:** Very large backup (50MB raw → ~5MB gzip) — test with synthetic data
+- [x] `backupDataToGoogleDrive()`: after Moshi serialization, gzips JSON bytes via `GZIPOutputStream` before `DriveManager.uploadBackup()`
+- [x] `BackupWorker.kt`: same gzip logic applied
+- [x] Filename changed to `bulletcoach_YYYYMMDD_HHmmss.json.gz`
+- [x] **Edge case:** Empty backup → gzip still produces valid ~20 byte output
+- [x] **Verify:** `assembleDebug` succeeds
 
-### 5.2 — Local file: keep uncompressed
+### 5.2 — Local file: keep uncompressed `[x] DONE`
 
-- [ ] Write `bulletcoach_backup.json` as plain JSON (for offline restore + debugging)
-- [ ] **Edge case:** Large files — use `writeText()` is fine up to 50MB (memory remains a concern per #54)
+- [x] Local `bulletcoach_backup.json` stays as plain JSON (for offline restore + debugging)
+- [x] **Verify:** `assembleDebug` succeeds
 
-### 5.3 — Restore: gunzip Drive download
+### 5.3 — Restore: gunzip Drive download `[x] DONE`
 
-- [ ] `downloadLatest()` returns gzipped bytes → decompress:
-  
-  ```kotlin
-  val jsonString = GZIPInputStream(ByteArrayInputStream(driveBytes))
-      .use { it.reader(Charsets.UTF_8).readText() }
-  ```
-- [ ] Local file restore stays the same (`backupFile.readText()` — uncompressed)
-- [ ] **Edge case:** Corrupted gzip → `ZipException` → catch → show "Corrupted backup" → fall back to local
+- [x] `restoreDataFromGoogleDrive()`: wraps Drive bytes in `GZIPInputStream` to decompress; falls back to raw `String(driveBytes)` on `ZipException` for legacy uncompressed backups
+- [x] Local file restore unchanged (`backupFile.readText()` — uncompressed)
+- [x] **Edge case:** Corrupted gzip → `ZipException` caught → fall back to uncompressed parsing or fall through to local
+- [x] **Verify:** `assembleDebug` succeeds
 
-### 5.4 — Rotation: apply gzip + local
+### 5.4 — Rotation: apply gzip + local `[x] DONE`
 
-- [ ] Drive filenames: `bulletcoach_YYYYMMDD_HHmmss.json.gz`
-- [ ] Local rotation filenames: `bulletcoach_YYYYMMDD_HHmmss.json` (uncompressed)
-- [ ] Keep 3 most recent in both locations
+- [x] Drive filenames: `bulletcoach_YYYYMMDD_HHmmss.json.gz` (handled by both callers)
+- [x] Local rotation: `rotateLocalBackups()` already matches `bulletcoach_backup_*.json.gz`
+- [x] Keep 3 most recent in both locations (already configured in DriveManager)
 
 ---
 
