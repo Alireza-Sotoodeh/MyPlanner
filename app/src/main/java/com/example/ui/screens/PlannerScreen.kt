@@ -3583,6 +3583,7 @@ fun SettingsDialog(
 ) {
     val googleDriveConnected by viewModel.googleDriveConnected.collectAsState()
     val googleDriveEmail by viewModel.googleDriveEmail.collectAsState()
+    val lastBackupTimestamp by viewModel.lastBackupTimestamp.collectAsState()
     val backupEnabled by viewModel.backupEnabled.collectAsState()
     val backupTime by viewModel.backupTime.collectAsState()
     val backupFailureNotify by viewModel.backupFailureNotify.collectAsState()
@@ -3606,6 +3607,53 @@ fun SettingsDialog(
     var isExporting by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
     val isSyncing by viewModel.isSyncing.collectAsState()
+
+    // Launcher for Google Drive sign-in
+    val driveSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.onDriveSignInResult(result.data)
+        }
+    }
+
+    // Observe pending Drive sign-in intent
+    val pendingSignIn by viewModel.pendingDriveSignInIntent.collectAsState()
+    LaunchedEffect(pendingSignIn) {
+        val intent = pendingSignIn
+        if (intent != null) {
+            driveSignInLauncher.launch(intent)
+        }
+    }
+
+    // Launcher for manual backup export
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportBackupToFile { success, msg ->
+                isSuccessStatus = success
+                statusMessage = msg
+            }
+        }
+    }
+
+    // Launcher for manual backup import
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importBackupFromFile(uri) { success, msg ->
+                isSuccessStatus = success
+                statusMessage = msg
+            }
+        }
+    }
+
+    // Formatted last backup time
+    val lastBackupTime = if (lastBackupTimestamp > 0) {
+        SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(lastBackupTimestamp))
+    } else null
 
     val reviewReminderTime by viewModel.reviewReminderTime.collectAsState()
     val reviewReminderEnabled by viewModel.reviewReminderEnabled.collectAsState()
@@ -3829,7 +3877,15 @@ fun SettingsDialog(
                 }
 
                 if (googleDriveConnected) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    // Last backup time
+                    if (lastBackupTime != null) {
+                        Text(
+                            text = "Last backup: $lastBackupTime",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3872,6 +3928,39 @@ fun SettingsDialog(
                             }
                         }
                     }
+                    }
+                    // Local backup section
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { exportBackupLauncher.launch("bulletcoach_backup_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.json") },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSyncing,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Export Backup", fontSize = 12.sp)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = { importBackupLauncher.launch(arrayOf("application/json")) },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSyncing,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Import Backup", fontSize = 12.sp)
+                            }
+                        }
                     }
                 } else {
                     OutlinedTextField(

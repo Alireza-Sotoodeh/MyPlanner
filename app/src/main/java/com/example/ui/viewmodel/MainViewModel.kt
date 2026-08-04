@@ -236,6 +236,9 @@ class MainViewModel(
     private val _googleDriveEmail = MutableStateFlow(prefs.getString("google_drive_email", "") ?: "")
     val googleDriveEmail: StateFlow<String> = _googleDriveEmail.asStateFlow()
 
+    private val _lastBackupTimestamp = MutableStateFlow(prefs.getLong("drive_last_sync_at", 0L))
+    val lastBackupTimestamp: StateFlow<Long> = _lastBackupTimestamp.asStateFlow()
+
     private val _dndEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_dnd_enabled", false))
     val dndEnabled: StateFlow<Boolean> = _dndEnabled.asStateFlow()
 
@@ -675,6 +678,7 @@ class MainViewModel(
                 if (fileId != null) {
                     val lastSync = System.currentTimeMillis()
                     prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
+                    _lastBackupTimestamp.value = lastSync
                     onResult(true, "Successfully backed up ${tasksList.size} intentions, ${habitsList.size} habits, and logs to Google Drive!")
                 } else {
                     if (!com.example.core.manager.DriveManager.isSignedIn(context)) clearDriveConnected()
@@ -1092,6 +1096,195 @@ jsonString = backupFile.readText()
             }
             val file = File(downloadsDir, fileName)
             FileOutputStream(file).use { it.write(jsonBytes) }
+        }
+    }
+
+    // Manual backup export to file (Downloads folder)
+    fun exportBackupToFile(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isSyncing.value = true
+            try {
+                val tasksList = taskRepository.getAllTasks().first()
+                val habitsList = habitRepository.allHabits.first()
+                val habitLogsList = habitRepository.getAllLogs().first()
+                val sleepLogsList = sleepLogRepository.allSleepLogs.first()
+                val ideaGroupsList = ideaRepository.allGroups.first()
+                val ideasList = ideaRepository.getAllIdeas().first()
+                val todosList = todoRepository.allTodos.first()
+                val diaryEntriesList = diaryRepository.getAllEntries().first()
+                val shopItemsList = shopItemRepository.allItems.first()
+                val mottosList = mottoRepository.allMottos.first()
+                val dayReviewsList = dayReviewRepository.getAllReviews().first()
+                val timerSessionsList = timerRepository.getAllSessions().first()
+                val timerTemplatesList = timerRepository.getAllTemplates().first()
+                val ideaStagesList = allIdeas.value.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
+                val backupObj = BulletCoachBackup(
+                    tasks = tasksList,
+                    habits = habitsList,
+                    habitLogs = habitLogsList,
+                    sleepLogs = sleepLogsList,
+                    ideaGroups = ideaGroupsList,
+                    ideas = ideasList,
+                    ideaStages = ideaStagesList,
+                    todos = todosList,
+                    diaryEntries = diaryEntriesList,
+                    shopItems = shopItemsList,
+                    mottos = mottosList,
+                    dayReviews = dayReviewsList,
+                    learnGroups = learnRepository.getAllGroupsSync(),
+                    learnItems = learnItems.value,
+                    learnSections = learnItems.value.flatMap { learnRepository.getSectionsForItemSync(it.id) },
+                    timerSessions = timerSessionsList,
+                    timerTemplates = timerTemplatesList
+                )
+
+                val adapter = moshi.adapter(BulletCoachBackup::class.java)
+                val jsonString = adapter.toJson(backupObj)
+
+                val fileName = "bulletcoach_backup_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.json"
+
+                if (Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                        put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                    }
+                    val resolver = context.contentResolver
+                    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    if (uri != null) {
+                        resolver.openOutputStream(uri)?.use { it.write(jsonString.toByteArray(StandardCharsets.UTF_8)) }
+                        onResult(true, "Backup exported to Downloads/$fileName")
+                    } else {
+                        throw IOException("Failed to create MediaStore entry")
+                    }
+                } else {
+                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                    val file = File(downloadsDir, fileName)
+                    file.writeText(jsonString)
+                    onResult(true, "Backup exported to Downloads/$fileName")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Export backup failed", e)
+                onResult(false, "Export failed: ${e.localizedMessage}")
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    // Manual backup import from file (using Storage Access Framework)
+    fun importBackupFromFile(uri: android.net.Uri, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isSyncing.value = true
+            try {
+                val jsonString = context.contentResolver.openInputStream(uri)?.use { it.reader(StandardCharsets.UTF_8).readText() }
+                    ?: throw IOException("Failed to read file")
+
+                val backupObj = moshiStrict.fromJson(jsonString)
+                if (backupObj == null) {
+                    onResult(false, "Failed to parse backup file")
+                    return@launch
+                }
+
+                // Clear existing data
+                val writableDb = database.openHelper.writableDatabase
+                writableDb.beginTransaction()
+                try {
+                    writableDb.execSQL("DELETE FROM tasks")
+                    writableDb.execSQL("DELETE FROM habits")
+                    writableDb.execSQL("DELETE FROM habit_logs")
+                    writableDb.execSQL("DELETE FROM sleep_logs")
+                    writableDb.execSQL("DELETE FROM timer_sessions")
+                    writableDb.execSQL("DELETE FROM timer_templates")
+                    writableDb.execSQL("DELETE FROM idea_groups")
+                    writableDb.execSQL("DELETE FROM ideas")
+                    writableDb.execSQL("DELETE FROM idea_stages")
+                    writableDb.execSQL("DELETE FROM todos")
+                    writableDb.execSQL("DELETE FROM diary_entries")
+                    writableDb.execSQL("DELETE FROM shop_items")
+                    writableDb.execSQL("DELETE FROM mottos")
+                    writableDb.execSQL("DELETE FROM day_reviews")
+                    writableDb.execSQL("DELETE FROM learn_groups")
+                    writableDb.execSQL("DELETE FROM learn_items")
+                    writableDb.execSQL("DELETE FROM learn_sections")
+                    writableDb.execSQL("DELETE FROM sqlite_sequence")
+                    writableDb.setTransactionSuccessful()
+                } finally {
+                    writableDb.endTransaction()
+                }
+
+                // Restore in FK-safe order: groups before items, parents before children
+                backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
+                backupObj.learnItems.forEach { learnRepository.insertItem(it) }
+                backupObj.learnSections.forEach { learnRepository.insertSection(it) }
+                backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
+                backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
+                backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
+                backupObj.tasks.forEach { taskRepository.insertTask(it) }
+                backupObj.habits.forEach { habitRepository.insertHabit(it) }
+                backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
+                backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
+                backupObj.timerSessions.forEach { timerRepository.insertSession(it) }
+                backupObj.timerTemplates.forEach { timerRepository.insertTemplate(it) }
+                backupObj.todos.forEach { todoRepository.insertTodo(it) }
+                backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
+                backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
+                backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
+                backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
+
+                // FK orphan nullification
+                val taskIds = backupObj.tasks.map { it.id }.toSet()
+                val todoIds = backupObj.todos.map { it.id }.toSet()
+                val ideaIds = backupObj.ideas.map { it.id }.toSet()
+                val learnSectionIds = backupObj.learnSections.map { it.id }.toSet()
+
+                backupObj.tasks
+                    .filter { it.linkedTodoId != null && it.linkedTodoId !in todoIds }
+                    .forEach { taskRepository.updateTask(it.copy(linkedTodoId = null)) }
+                backupObj.tasks
+                    .filter { it.linkedIdeaId != null && it.linkedIdeaId !in ideaIds }
+                    .forEach { taskRepository.updateTask(it.copy(linkedIdeaId = null)) }
+                backupObj.tasks
+                    .filter { it.linkedLearnSectionId != null && it.linkedLearnSectionId !in learnSectionIds }
+                    .forEach { taskRepository.updateTask(it.copy(linkedLearnSectionId = null)) }
+                backupObj.todos
+                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
+                    .forEach { todoRepository.updateTodo(it.copy(linkedTaskId = null)) }
+                backupObj.ideas
+                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
+                    .forEach { ideaRepository.updateIdea(it.copy(linkedTaskId = null)) }
+                backupObj.learnSections
+                    .filter { it.studyTaskId != null && it.studyTaskId !in taskIds }
+                    .forEach { learnRepository.updateSection(it.copy(studyTaskId = null)) }
+                backupObj.learnSections
+                    .filter { it.reviewTaskId != null && it.reviewTaskId !in taskIds }
+                    .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
+
+                com.example.core.manager.SystemSettingsApplier.reapplyAfterRestore(context)
+
+                // Re-schedule all alarms
+                val eventVibrate = prefs.getBoolean("event_reminder_vibrate", true)
+                val eventSound = prefs.getBoolean("event_reminder_sound", true)
+                backupObj.tasks.forEach { task ->
+                    if (task.type == "EVENT" && task.eventTime != null) {
+                        com.example.core.manager.ReminderManager.scheduleReminders(context, task, eventVibrate, eventSound)
+                    }
+                }
+                backupObj.habits.forEach { habit ->
+                    if (habit.habitTime != null && habit.reminderEnabled) {
+                        com.example.core.manager.ReminderManager.scheduleHabitReminder(context, habit, eventVibrate, eventSound)
+                    }
+                }
+                com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
+
+                delay(1500)
+                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from local file!")
+            } catch (e: Exception) {
+                Log.e(TAG, "Import backup failed", e)
+                onResult(false, "Import failed: ${e.localizedMessage}")
+            } finally {
+                _isSyncing.value = false
+            }
         }
     }
 
