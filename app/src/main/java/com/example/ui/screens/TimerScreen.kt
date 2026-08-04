@@ -1092,8 +1092,6 @@ private fun HistoryDatePickerDialog(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
         HistoryCalendarGrid(
             year = currentYear,
             month = currentMonth,
@@ -1142,7 +1140,7 @@ private fun HistoryCalendarGrid(
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(28.dp))
         val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
 
