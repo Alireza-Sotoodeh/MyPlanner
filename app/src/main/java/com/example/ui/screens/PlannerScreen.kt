@@ -3808,18 +3808,16 @@ private fun TodoTab(viewModel: MainViewModel) {
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                        if (allTodos.any { it.description.isNotBlank() }) {
-                            IconButton(
-                                onClick = { viewModel.toggleExpandAllDescriptions() },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (expandAllDescriptions) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = if (expandAllDescriptions) "Collapse All Descriptions" else "Expand All Descriptions",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                        IconButton(
+                            onClick = { viewModel.toggleExpandAllDescriptions() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (expandAllDescriptions) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (expandAllDescriptions) "Collapse All" else "Expand All",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         Box {
