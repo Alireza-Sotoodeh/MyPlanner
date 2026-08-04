@@ -3662,7 +3662,7 @@ fun SettingsDialog(
 }
 
 private enum class TodoTabFilter { ALL, PENDING, DONE }
-private enum class TodoLinkedFilter { ALL, UNLINKED, LINKED }
+private enum class LinkFilter { LINKED, UNLINKED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -3671,7 +3671,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     val allTasks by viewModel.allTasks.collectAsState()
 
     var filter by remember { mutableStateOf(TodoTabFilter.PENDING) }
-    var linkedFilter by remember { mutableStateOf(TodoLinkedFilter.UNLINKED) }
+    var linkFilter by remember { mutableStateOf(LinkFilter.UNLINKED) }
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
@@ -3701,17 +3701,16 @@ private fun TodoTab(viewModel: MainViewModel) {
         }
     }
 
-    val displayTodos = (when (filter) {
+    val statusFiltered = when (filter) {
         TodoTabFilter.ALL -> allRootTodos
         TodoTabFilter.PENDING -> allRootTodos.filter { it.status == "PENDING" }
         TodoTabFilter.DONE -> allRootTodos.filter { it.status == "DONE" }
-    }).let { statusFiltered ->
-        when (linkedFilter) {
-            TodoLinkedFilter.ALL -> statusFiltered
-            TodoLinkedFilter.UNLINKED -> statusFiltered.filter { it.linkedTaskId == null }
-            TodoLinkedFilter.LINKED -> statusFiltered.filter { it.linkedTaskId != null }
-        }
-    }.let { list -> draggedTodos ?: list }
+    }
+    val linkFiltered = when (linkFilter) {
+        LinkFilter.LINKED -> statusFiltered.filter { it.linkedTaskId != null }
+        LinkFilter.UNLINKED -> statusFiltered.filter { it.linkedTaskId == null }
+    }
+    val displayTodos = draggedTodos ?: linkFiltered
 
     Column(
         modifier = Modifier
@@ -3724,30 +3723,41 @@ private fun TodoTab(viewModel: MainViewModel) {
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TodoTabFilter.entries.forEach { f ->
-                    FilterChip(
-                        selected = filter == f,
-                        onClick = { filter = f },
-                        label = { Text(f.name, fontSize = 12.sp) }
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TodoTabFilter.entries.forEach { f ->
+                        FilterChip(
+                            selected = filter == f,
+                            onClick = { filter = f },
+                            label = { Text(f.name, fontSize = 12.sp) },
+                            modifier = Modifier.height(32.dp)
+                        )
+                    }
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TodoLinkedFilter.entries.forEach { f ->
-                    FilterChip(
-                        selected = linkedFilter == f,
-                        onClick = { linkedFilter = f },
-                        label = { Text(f.name.lowercase().replaceFirstChar { it.uppercase() }, fontSize = 12.sp) }
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LinkFilter.entries.forEach { f ->
+                        FilterChip(
+                            selected = linkFilter == f,
+                            onClick = {
+                                linkFilter = if (linkFilter == f) LinkFilter.UNLINKED else f
+                            },
+                            label = {
+                                Text(
+                                    if (f == LinkFilter.LINKED) "Linked" else "Unlinked",
+                                    fontSize = 12.sp
+                                )
+                            },
+                            modifier = Modifier.height(32.dp)
+                        )
+                    }
                 }
             }
         }
@@ -4020,16 +4030,14 @@ private fun TodoTab(viewModel: MainViewModel) {
                                     },
                                     onDragEnd = {
                                         if (draggingTodoId == todo.id) {
-                                            val originalTodos = (when (filter) {
+                                            val statusTodos = when (filter) {
                                                 TodoTabFilter.ALL -> allRootTodos
                                                 TodoTabFilter.PENDING -> allRootTodos.filter { it.status == "PENDING" }
                                                 TodoTabFilter.DONE -> allRootTodos.filter { it.status == "DONE" }
-                                            }).let { statusFiltered ->
-                                                when (linkedFilter) {
-                                                    TodoLinkedFilter.ALL -> statusFiltered
-                                                    TodoLinkedFilter.UNLINKED -> statusFiltered.filter { it.linkedTaskId == null }
-                                                    TodoLinkedFilter.LINKED -> statusFiltered.filter { it.linkedTaskId != null }
-                                                }
+                                            }
+                                            val originalTodos = when (linkFilter) {
+                                                LinkFilter.LINKED -> statusTodos.filter { it.linkedTaskId != null }
+                                                LinkFilter.UNLINKED -> statusTodos.filter { it.linkedTaskId == null }
                                             }
                                             val originalIndex = originalTodos.indexOfFirst { it.id == todo.id }
                                             val currentList = draggedTodos
