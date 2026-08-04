@@ -544,14 +544,35 @@ private fun CreateIdeaDialog(
                     maxLines = 4
                 )
                 Box {
-                    OutlinedTextField(
-                        value = selectedGroupName,
-                        onValueChange = {},
-                        label = { Text("Group") },
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
-                    )
+                    Surface(
+                        onClick = { expanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = OutlinedTextFieldDefaults.shape,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Group",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    selectedGroupName,
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         DropdownMenuItem(
                             text = {

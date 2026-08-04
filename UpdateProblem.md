@@ -1380,6 +1380,8 @@ Tapping "Create New Group..." → overlay:
 | FAB in empty state | Empty state hint already says "Tap + to create your first idea" — matches FAB action |
 | LazyColumn FAB overlap | bottom = 80.dp padding prevents last card from being obscured |
 | Cancel group creation | Group dialog dismisses — idea dialog remains open |
+| `readOnly` TextField click not firing | `readOnly = true` OutlinedTextField still consumes pointer events internally, so `.clickable { expanded = true }` on it never fires. **Fix:** replaced OutlinedTextField with custom `Surface(onClick = ...)` trigger that visually matches OutlinedTextField (border, label, value text, dropdown arrow) but correctly opens the `DropdownMenu` on tap |
+| Data sync between "+ Group" header button and dropdown "Create New Group" | Both call `viewModel.addGroup()` → `ideaGroups` StateFlow emits updated list → dropdown and header button reflect the same data immediately |
 
 ### Build Verification
 `.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
