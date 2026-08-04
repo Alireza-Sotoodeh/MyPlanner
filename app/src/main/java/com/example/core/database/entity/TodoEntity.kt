@@ -11,5 +11,6 @@ data class TodoEntity(
     val priority: String = "Medium",
     val linkedTaskId: Long? = null,
     val status: String = "PENDING",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val sortOrder: Int = 0
 )
