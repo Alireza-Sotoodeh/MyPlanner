@@ -73,8 +73,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Sort
