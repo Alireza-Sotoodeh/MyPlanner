@@ -3513,7 +3513,13 @@ private fun TodoTab(viewModel: MainViewModel) {
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
     var expandAllDescriptions by remember { mutableStateOf(false) }
-    var sortTodosByPriority by remember { mutableStateOf(false) }
+
+    var draggingTodoId by remember { mutableStateOf<Long?>(null) }
+    var dragOffsetX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var draggedTodos by remember { mutableStateOf<List<TodoEntity>?>(null) }
+    val todoItemHeights = remember { androidx.compose.runtime.mutableStateMapOf<Long, Int>() }
+    val densityD = androidx.compose.ui.platform.LocalDensity.current
 
     var showFilterChips by remember { mutableStateOf(true) }
     val filterChipScrollConnection = remember {
@@ -3526,24 +3532,11 @@ private fun TodoTab(viewModel: MainViewModel) {
         }
     }
 
-    val displayTodos = when (filter) {
+    val displayTodos = (when (filter) {
         TodoTabFilter.ALL -> allTodos
         TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
         TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
-    }.let { list ->
-        if (sortTodosByPriority) {
-            list.sortedWith(
-                compareBy {
-                    when (it.priority) {
-                        "High" -> 1
-                        "Medium" -> 2
-                        "Low" -> 3
-                        else -> 4
-                    }
-                }
-            )
-        } else list
-    }
+    }).let { list -> draggedTodos ?: list }
 
     Column(
         modifier = Modifier
@@ -3611,12 +3604,12 @@ private fun TodoTab(viewModel: MainViewModel) {
                             )
                         }
                         IconButton(
-                            onClick = { sortTodosByPriority = !sortTodosByPriority },
+                            onClick = { viewModel.triggerReorderTodosByPriority() },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Sort,
-                                contentDescription = if (sortTodosByPriority) "Sort by Default" else "Sort by Priority",
+                                contentDescription = "Sort by Priority",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -3782,16 +3775,92 @@ private fun TodoTab(viewModel: MainViewModel) {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(displayTodos, key = { it.id }) { todo ->
-                            TodoItem(
-                                todo = todo,
-                                expanded = expandAllDescriptions,
-                                viewModel = viewModel,
-                                linkedItemTitle = todo.linkedTaskId?.let { id -> allTasks.find { it.id == id }?.title },
-                                onEdit = { editingTodo = it },
-                                onDelete = { showDeleteConfirm = it },
-                                onLink = { todoForLinking = it },
-                                onUnlink = { showUnlinkConfirm = it }
-                            )
+                            Box(modifier = Modifier.animateItem()) {
+                                TodoItem(
+                                    modifier = Modifier.onGloballyPositioned {
+                                        todoItemHeights[todo.id] = it.size.height
+                                    },
+                                    todo = todo,
+                                    expanded = expandAllDescriptions,
+                                    viewModel = viewModel,
+                                    linkedItemTitle = todo.linkedTaskId?.let { id -> allTasks.find { it.id == id }?.title },
+                                    isDragging = draggingTodoId == todo.id,
+                                    dragOffsetX = if (draggingTodoId == todo.id) dragOffsetX else 0f,
+                                    dragOffsetY = if (draggingTodoId == todo.id) dragOffsetY else 0f,
+                                    onDragStart = {
+                                        draggingTodoId = todo.id
+                                        dragOffsetX = 0f
+                                        dragOffsetY = 0f
+                                        draggedTodos = displayTodos.toList()
+                                    },
+                                    onDrag = { amount ->
+                                        if (draggingTodoId == todo.id) {
+                                            dragOffsetX += amount.x
+                                            dragOffsetY += amount.y
+                                            val currentList = draggedTodos
+                                            if (currentList != null) {
+                                                val draggedIndex = currentList.indexOfFirst { it.id == todo.id }
+                                                if (draggedIndex != -1) {
+                                                    val spacing = with(densityD) { 6.dp.toPx() }
+                                                    if (dragOffsetY > 0) {
+                                                        if (draggedIndex < currentList.size - 1) {
+                                                            val nextItem = currentList[draggedIndex + 1]
+                                                            val nextHeight = todoItemHeights[nextItem.id] ?: 80
+                                                            val threshold = nextHeight / 2f + spacing
+                                                            if (dragOffsetY > threshold) {
+                                                                val mutableList = currentList.toMutableList()
+                                                                mutableList.removeAt(draggedIndex)
+                                                                mutableList.add(draggedIndex + 1, todo)
+                                                                draggedTodos = mutableList
+                                                                dragOffsetY -= (nextHeight + spacing)
+                                                            }
+                                                        }
+                                                    } else if (dragOffsetY < 0) {
+                                                        if (draggedIndex > 0) {
+                                                            val prevItem = currentList[draggedIndex - 1]
+                                                            val prevHeight = todoItemHeights[prevItem.id] ?: 80
+                                                            val threshold = -prevHeight / 2f - spacing
+                                                            if (dragOffsetY < threshold) {
+                                                                val mutableList = currentList.toMutableList()
+                                                                mutableList.removeAt(draggedIndex)
+                                                                mutableList.add(draggedIndex - 1, todo)
+                                                                draggedTodos = mutableList
+                                                                dragOffsetY += (prevHeight + spacing)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        if (draggingTodoId == todo.id) {
+                                            val originalTodos = when (filter) {
+                                                TodoTabFilter.ALL -> allTodos
+                                                TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
+                                                TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
+                                            }
+                                            val originalIndex = originalTodos.indexOfFirst { it.id == todo.id }
+                                            val currentList = draggedTodos
+                                            if (currentList != null && originalIndex != -1) {
+                                                val finalIndex = currentList.indexOfFirst { it.id == todo.id }
+                                                val deltaIndex = finalIndex - originalIndex
+                                                if (deltaIndex != 0) {
+                                                    viewModel.reorderTodo(todo, originalTodos, deltaIndex)
+                                                }
+                                            }
+                                            draggingTodoId = null
+                                            draggedTodos = null
+                                            dragOffsetX = 0f
+                                            dragOffsetY = 0f
+                                        }
+                                    },
+                                    onEdit = { editingTodo = it },
+                                    onDelete = { showDeleteConfirm = it },
+                                    onLink = { todoForLinking = it },
+                                    onUnlink = { showUnlinkConfirm = it }
+                                )
+                            }
                         }
                     }
                 }
@@ -3865,10 +3934,17 @@ private fun TodoTab(viewModel: MainViewModel) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TodoItem(
+    modifier: Modifier = Modifier,
     todo: TodoEntity,
     expanded: Boolean = false,
     viewModel: MainViewModel,
     linkedItemTitle: String? = null,
+    isDragging: Boolean = false,
+    dragOffsetX: Float = 0f,
+    dragOffsetY: Float = 0f,
+    onDragStart: (() -> Unit)? = null,
+    onDrag: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
     onEdit: (TodoEntity) -> Unit,
     onDelete: (TodoEntity) -> Unit,
     onLink: (TodoEntity) -> Unit,
@@ -3877,20 +3953,64 @@ private fun TodoItem(
     var showMenu by remember { mutableStateOf(false) }
     val isDone = todo.status == "DONE"
 
-    val bgColor = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-        else MaterialTheme.colorScheme.surface
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isDragging) 1.04f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "todoDragScale"
+    )
+
+    val shadowElevation by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isDragging) 12.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "todoDragShadow"
+    )
+
+    val bgColor = if (isDragging) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else if (isDone) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
     val outlineAlpha = if (isDone) 0.08f else 0.2f
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp))
+            .zIndex(if (isDragging) 10f else 0f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
+            .shadow(elevation = shadowElevation, shape = RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = outlineAlpha), RoundedCornerShape(12.dp))
             .combinedClickable(
                 onClick = { viewModel.toggleTodoCompletion(todo) },
                 onLongClick = { showMenu = true }
+            )
+            .then(
+                if (onDragStart != null && !isDone) {
+                    Modifier.pointerInput(todo.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { _ -> onDragStart() },
+                            onDragEnd = { onDragEnd?.invoke() },
+                            onDragCancel = { onDragEnd?.invoke() },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onDrag?.invoke(dragAmount)
+                            }
+                        )
+                    }
+                } else Modifier
             )
     ) {
         Column(
