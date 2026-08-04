@@ -3450,7 +3450,7 @@ private enum class TodoTabFilter { ALL, PENDING, DONE }
 private fun TodoTab(viewModel: MainViewModel) {
     val allTodos by viewModel.allTodos.collectAsState()
 
-    var filter by remember { mutableStateOf(TodoTabFilter.ALL) }
+    var filter by remember { mutableStateOf(TodoTabFilter.PENDING) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
