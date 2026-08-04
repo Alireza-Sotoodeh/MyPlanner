@@ -2488,20 +2488,33 @@ private fun GregorianYearOverviewView(
                 letterSpacing = 1.sp
             )
 
-            IconButton(onClick = {
-                val cal = Calendar.getInstance()
-                val sdf = SimpleDateFormat("yyyy", Locale.getDefault())
-                val date = sdf.parse(selectedYear) ?: Date()
-                cal.time = date
-                cal.add(Calendar.YEAR, 1)
-                viewModel.selectYear(sdf.format(cal.time))
-            }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { viewModel.toggleUsePersianCalendar() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = "Switch to Persian Calendar",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(onClick = {
+                    val cal = Calendar.getInstance()
+                    val sdf = SimpleDateFormat("yyyy", Locale.getDefault())
+                    val date = sdf.parse(selectedYear) ?: Date()
+                    cal.time = date
+                    cal.add(Calendar.YEAR, 1)
+                    viewModel.selectYear(sdf.format(cal.time))
+                }) {
                 Icon(
                     imageVector = Icons.Default.ArrowForwardIos,
                     contentDescription = "Next Year",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
+            }
             }
         }
 
@@ -2631,15 +2644,28 @@ private fun PersianYearOverviewView(
                 letterSpacing = 1.sp
             )
 
-            IconButton(onClick = {
-                viewModel.selectPersianMonth(persianYear + 1, 1)
-            }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { viewModel.toggleUsePersianCalendar() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = "Switch to Western Calendar",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(onClick = {
+                    viewModel.selectPersianMonth(persianYear + 1, 1)
+                }) {
                 Icon(
                     imageVector = Icons.Default.ArrowForwardIos,
                     contentDescription = "Next Year",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
+            }
             }
         }
 
@@ -2782,28 +2808,15 @@ fun MonthlyPlannerView(
                 modifier = Modifier.clickable { onBackToYear() }
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { viewModel.toggleUsePersianCalendar() },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DateRange,
-                        contentDescription = if (usePersianCalendar) "Switch to Western Calendar" else "Switch to Persian Calendar",
-                        tint = if (usePersianCalendar) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                IconButton(onClick = {
-                    viewModel.navigateMonth(1)
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowForwardIos,
-                        contentDescription = "Next Month",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+            IconButton(onClick = {
+                viewModel.navigateMonth(1)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForwardIos,
+                    contentDescription = "Next Month",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
