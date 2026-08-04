@@ -9,10 +9,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +34,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -63,11 +66,17 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.FilledTonalButton
@@ -87,10 +96,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
@@ -116,11 +127,16 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.TaskEntity
+import com.example.core.database.entity.TodoEntity
+import com.example.core.database.entity.IdeaEntity
+import com.example.core.database.entity.IdeaGroupEntity
+import com.example.core.database.entity.IdeaStageEntity
 import com.example.ui.components.ActivePomodoroWidget
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -137,7 +153,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
-    val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY")
+    val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
 
     Column(
         modifier = Modifier
@@ -154,10 +170,11 @@ fun PlannerScreen(viewModel: MainViewModel) {
             }
         )
 
-        TabRow(
+        ScrollableTabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.primary,
+            edgePadding = 0.dp,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
@@ -198,10 +215,12 @@ fun PlannerScreen(viewModel: MainViewModel) {
             when (selectedTab) {
                 0 -> DailyPlannerView(viewModel, selectedFilterLabel, uniqueLabels) { selectedFilterLabel = it }
                 1 -> WeeklyPlannerView(viewModel, null) { date ->
-    selectedTab = 0
-    viewModel.selectDate(date)
-}
+                    selectedTab = 0
+                    viewModel.selectDate(date)
+                }
                 2 -> MonthlyPlannerView(viewModel, null)
+                3 -> TodoTab(viewModel)
+                4 -> IdeasTab(viewModel)
             }
         }
     }
@@ -3185,5 +3204,1185 @@ fun SettingsDialog(
             }
         },
         shape = RoundedCornerShape(24.dp)
+    )
+}
+
+private enum class TodoTabFilter { ALL, PENDING, DONE }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TodoTab(viewModel: MainViewModel) {
+    val allTodos by viewModel.allTodos.collectAsState()
+
+    var filter by remember { mutableStateOf(TodoTabFilter.ALL) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
+    var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
+    var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
+
+    val displayTodos = when (filter) {
+        TodoTabFilter.ALL -> allTodos
+        TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
+        TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "TO-DO LIST",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.5.sp
+                )
+                Text(
+                    "${displayTodos.size} items",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TodoTabFilter.entries.forEach { f ->
+                    FilterChip(
+                        selected = filter == f,
+                        onClick = { filter = f },
+                        label = { Text(f.name, fontSize = 12.sp) }
+                    )
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (displayTodos.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Checklist,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "No to-dos yet",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
+                            Text(
+                                "Tap + to create your first to-do",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(displayTodos, key = { it.id }) { todo ->
+                            TodoItem(
+                                todo = todo,
+                                viewModel = viewModel,
+                                onEdit = { editingTodo = it },
+                                onDelete = { showDeleteConfirm = it },
+                                onLink = { todoForLinking = it },
+                                onUnlink = { showUnlinkConfirm = it }
+                            )
+                        }
+                    }
+                }
+
+                FloatingActionButton(
+                    onClick = { showAddDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.background,
+                    shape = CircleShape,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add To-Do")
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        AddTodoDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { title, description, priority ->
+                viewModel.addTodo(title, description, priority)
+                showAddDialog = false
+            }
+        )
+    }
+    editingTodo?.let { todo ->
+        EditTodoDialog(
+            todo = todo,
+            onDismiss = { editingTodo = null },
+            onConfirm = { title, description, priority ->
+                viewModel.updateTodo(todo.copy(title = title, description = description, priority = priority))
+                editingTodo = null
+            }
+        )
+    }
+    showDeleteConfirm?.let { todo ->
+        if (todo.linkedTaskId != null) {
+            LinkedDeleteConfirmDialog(
+                onDismiss = { showDeleteConfirm = null },
+                onDeleteBoth = { viewModel.deleteTodo(todo); showDeleteConfirm = null },
+                onKeepTodo = { viewModel.unlinkTodoFromTask(todo); viewModel.deleteTodo(todo); showDeleteConfirm = null }
+            )
+        } else {
+            DeleteConfirmDialog(
+                title = "Delete To-Do",
+                message = "Delete \"${todo.title}\"?",
+                onDismiss = { showDeleteConfirm = null },
+                onConfirm = { viewModel.deleteTodo(todo); showDeleteConfirm = null }
+            )
+        }
+    }
+    todoForLinking?.let { todo ->
+        LinkToPlannerDialog(
+            todo = todo,
+            viewModel = viewModel,
+            onDismiss = { todoForLinking = null }
+        )
+    }
+    showUnlinkConfirm?.let { todo ->
+        DeleteConfirmDialog(
+            title = "Unlink To-Do",
+            message = "Remove link to planner task? The to-do will be kept.",
+            onDismiss = { showUnlinkConfirm = null },
+            onConfirm = { viewModel.unlinkTodoFromTask(todo); showUnlinkConfirm = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TodoItem(
+    todo: TodoEntity,
+    viewModel: MainViewModel,
+    onEdit: (TodoEntity) -> Unit,
+    onDelete: (TodoEntity) -> Unit,
+    onLink: (TodoEntity) -> Unit,
+    onUnlink: (TodoEntity) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    val isDone = todo.status == "DONE"
+
+    Card(
+        modifier = Modifier.fillMaxWidth().combinedClickable(
+            onClick = { viewModel.toggleTodoCompletion(todo) },
+            onLongClick = { showMenu = true }
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = isDone,
+                onCheckedChange = { viewModel.toggleTodoCompletion(todo) },
+                modifier = Modifier.size(24.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = MaterialTheme.colorScheme.primary,
+                    uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+            )
+            Spacer(Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    todo.title,
+                    fontSize = 14.sp,
+                    fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
+                    color = if (isDone) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PriorityBadge(todo.priority)
+                    if (todo.linkedTaskId != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "Linked to planner",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+            if (todo.linkedTaskId != null) {
+                IconButton(onClick = { onUnlink(todo) }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.LinkOff, contentDescription = "Unlink", modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                }
+            } else {
+                IconButton(onClick = { onLink(todo) }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = "Link to planner", modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                }
+            }
+            Box {
+                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit(todo) })
+                    if (todo.linkedTaskId != null) {
+                        DropdownMenuItem(text = { Text("Unlink") }, onClick = { showMenu = false; onUnlink(todo) })
+                    } else {
+                        DropdownMenuItem(text = { Text("Schedule") }, onClick = { showMenu = false; onLink(todo) })
+                    }
+                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMenu = false; onDelete(todo) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PriorityBadge(priority: String) {
+    val color = when (priority) {
+        "High" -> Color(0xFFB3261E)
+        "Low" -> Color(0xFF00E676)
+        else -> Color(0xFFFF7043)
+    }
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = color.copy(alpha = 0.15f)
+    ) {
+        Text(
+            priority,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Medium,
+            color = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun AddTodoDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var priority by remember { mutableStateOf("Medium") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("New To-Do", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    maxLines = 3
+                )
+                Text("Priority", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Low", "Medium", "High").forEach { p ->
+                        FilterChip(
+                            selected = priority == p,
+                            onClick = { priority = p },
+                            label = { Text(p, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (title.isNotBlank()) onConfirm(title.trim(), description.trim(), priority) },
+                enabled = title.isNotBlank()
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun EditTodoDialog(
+    todo: TodoEntity,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String) -> Unit
+) {
+    var title by remember { mutableStateOf(todo.title) }
+    var description by remember { mutableStateOf(todo.description) }
+    var priority by remember { mutableStateOf(todo.priority) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Edit To-Do", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    maxLines = 3
+                )
+                Text("Priority", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Low", "Medium", "High").forEach { p ->
+                        FilterChip(
+                            selected = priority == p,
+                            onClick = { priority = p },
+                            label = { Text(p, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (title.isNotBlank()) onConfirm(title.trim(), description.trim(), priority) },
+                enabled = title.isNotBlank()
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LinkToPlannerDialog(
+    todo: TodoEntity,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val currentDate by viewModel.selectedDate.collectAsState()
+    var date by remember { mutableStateOf(currentDate) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
+                    ?: System.currentTimeMillis()
+            } catch (_: Exception) { System.currentTimeMillis() }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Schedule as Task", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("\"${todo.title}\"", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Date:", fontSize = 14.sp, modifier = Modifier.width(60.dp))
+                    OutlinedTextField(
+                        value = date,
+                        onValueChange = { date = it },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(Icons.Default.DateRange, contentDescription = "Pick date", modifier = Modifier.size(18.dp))
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                viewModel.linkTodoToTask(todo, date)
+                onDismiss()
+            }) { Text("Schedule") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun LinkedDeleteConfirmDialog(
+    onDismiss: () -> Unit,
+    onDeleteBoth: () -> Unit,
+    onKeepTodo: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Linked Task", fontWeight = FontWeight.Bold) },
+        text = { Text("This to-do is linked to a planner task.", fontSize = 14.sp) },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onKeepTodo) { Text("Keep (unlink)") }
+                TextButton(onClick = onDeleteBoth) { Text("Delete Both", color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = { Text(message, fontSize = 14.sp) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun IdeasTab(viewModel: MainViewModel) {
+    val groups by viewModel.ideaGroups.collectAsState()
+    val ideas by viewModel.allIdeas.collectAsState()
+
+    var selectedGroupId by remember { mutableStateOf<Long?>(null) }
+    var showCreateGroupDialog by remember { mutableStateOf(false) }
+    var showCreateGroupFromIdeaDialog by remember { mutableStateOf(false) }
+    var showCreateIdeaDialog by remember { mutableStateOf(false) }
+    var editingIdea by remember { mutableStateOf<IdeaEntity?>(null) }
+    var showDeleteIdeaConfirm by remember { mutableStateOf<IdeaEntity?>(null) }
+    var showDeleteGroupConfirm by remember { mutableStateOf<IdeaGroupEntity?>(null) }
+    var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
+    var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
+
+    val filteredIdeas = if (selectedGroupId == null) ideas
+    else ideas.filter { it.groupId == selectedGroupId }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "IDEAS",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.5.sp
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "${filteredIdeas.size} ideas",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = { showCreateGroupDialog = true }) {
+                        Text("+ Group", fontSize = 11.sp)
+                    }
+                }
+            }
+
+            // Group filter chips
+            GroupChipRow(
+                groups = groups,
+                selectedGroupId = selectedGroupId,
+                onGroupSelected = { selectedGroupId = it },
+                onEditGroup = { editingGroup = it },
+                onDeleteGroup = { showDeleteGroupConfirm = it }
+            )
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (filteredIdeas.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Lightbulb,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "No ideas yet",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            )
+                            Text(
+                                "Tap + to create your first idea",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredIdeas, key = { it.id }) { idea ->
+                            IdeaCard(
+                                idea = idea,
+                                viewModel = viewModel,
+                                onEdit = { editingIdea = it },
+                                onDelete = { showDeleteIdeaConfirm = it },
+                                onAddToPlanner = { ideaForPlanner = it }
+                            )
+                        }
+                    }
+                }
+
+                FloatingActionButton(
+                    onClick = { showCreateIdeaDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.background,
+                    shape = CircleShape,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Idea")
+                }
+            }
+        }
+    }
+
+    if (showCreateGroupDialog) {
+        CreateGroupDialog(
+            onDismiss = { showCreateGroupDialog = false },
+            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupDialog = false }
+        )
+    }
+    if (showCreateGroupFromIdeaDialog) {
+        CreateGroupDialog(
+            onDismiss = { showCreateGroupFromIdeaDialog = false },
+            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupFromIdeaDialog = false }
+        )
+    }
+    editingGroup?.let { group ->
+        CreateGroupDialog(
+            initialName = group.name,
+            initialColor = group.color,
+            onDismiss = { editingGroup = null },
+            onConfirm = { name, color -> viewModel.updateGroup(group.copy(name = name, color = color)); editingGroup = null }
+        )
+    }
+    if (showCreateIdeaDialog) {
+        CreateIdeaDialog(
+            groups = groups,
+            onDismiss = { showCreateIdeaDialog = false },
+            onConfirm = { groupId, title, description -> viewModel.addIdea(groupId, title, description); showCreateIdeaDialog = false },
+            onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
+        )
+    }
+    editingIdea?.let { idea ->
+        CreateIdeaDialog(
+            groups = groups,
+            initialTitle = idea.title,
+            initialDescription = idea.description,
+            initialGroupId = idea.groupId,
+            onDismiss = { editingIdea = null },
+            onConfirm = { groupId, title, description -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description)); editingIdea = null },
+            onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
+        )
+    }
+    showDeleteIdeaConfirm?.let { idea ->
+        DeleteConfirmDialog(
+            title = "Delete Idea",
+            message = "Delete \"${idea.title}\" and all its stages?",
+            onDismiss = { showDeleteIdeaConfirm = null },
+            onConfirm = { viewModel.deleteIdea(idea); showDeleteIdeaConfirm = null }
+        )
+    }
+    showDeleteGroupConfirm?.let { group ->
+        DeleteConfirmDialog(
+            title = "Delete Group",
+            message = "Delete \"${group.name}\" and all ideas inside it?",
+            onDismiss = { showDeleteGroupConfirm = null },
+            onConfirm = { viewModel.deleteGroup(group); showDeleteGroupConfirm = null }
+        )
+    }
+    ideaForPlanner?.let { idea ->
+        AddToPlannerDialog(
+            idea = idea,
+            viewModel = viewModel,
+            onDismiss = { ideaForPlanner = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GroupChipRow(
+    groups: List<IdeaGroupEntity>,
+    selectedGroupId: Long?,
+    onGroupSelected: (Long?) -> Unit,
+    onEditGroup: (IdeaGroupEntity) -> Unit,
+    onDeleteGroup: (IdeaGroupEntity) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selectedGroupId == null,
+                onClick = { onGroupSelected(null) },
+                label = { Text("All", fontSize = 12.sp) }
+            )
+        }
+        items(groups, key = { it.id }) { group ->
+            FilterChip(
+                selected = selectedGroupId == group.id,
+                onClick = { onGroupSelected(group.id) },
+                label = { Text(group.name, fontSize = 12.sp) },
+                trailingIcon = {
+                    Box(
+                        modifier = Modifier.size(8.dp).background(Color(group.color), CircleShape)
+                    )
+                },
+                modifier = Modifier.combinedClickable(
+                    onClick = { onGroupSelected(group.id) },
+                    onLongClick = { onEditGroup(group) }
+                )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun IdeaCard(
+    idea: IdeaEntity,
+    viewModel: MainViewModel,
+    onEdit: (IdeaEntity) -> Unit,
+    onDelete: (IdeaEntity) -> Unit,
+    onAddToPlanner: (IdeaEntity) -> Unit
+) {
+    val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
+    var showAddStage by remember { mutableStateOf(false) }
+    var newStageTitle by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var showIdeaMenu by remember { mutableStateOf(false) }
+    var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
+
+    val ideaGroup = remember(idea.groupId) {
+        viewModel.ideaGroups.value.find { it.id == idea.groupId }
+    }
+    val groupColor = ideaGroup?.color?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Lightbulb, contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = groupColor
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        idea.title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (idea.description.isNotBlank()) {
+                        Text(
+                            idea.description,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Box {
+                    IconButton(onClick = { showIdeaMenu = true }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = showIdeaMenu, onDismissRequest = { showIdeaMenu = false }) {
+                        DropdownMenuItem(text = { Text("Edit") }, onClick = { showIdeaMenu = false; onEdit(idea) })
+                        DropdownMenuItem(text = { Text("Add to Planner") }, onClick = { showIdeaMenu = false; onAddToPlanner(idea) })
+                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            onClick = { showIdeaMenu = false; onDelete(idea) })
+                    }
+                }
+            }
+
+            if (stages.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
+                stages.forEach { stage ->
+                    StageRow(
+                        stage = stage,
+                        stages = stages,
+                        viewModel = viewModel,
+                        onDelete = { viewModel.deleteStage(it) }
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+
+            if (showAddStage && addStageIdeaId == idea.id) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newStageTitle,
+                        onValueChange = { newStageTitle = it },
+                        placeholder = { Text("Stage title", fontSize = 13.sp) },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    )
+                    IconButton(onClick = {
+                        if (newStageTitle.isNotBlank()) {
+                            viewModel.addStage(idea.id, newStageTitle.trim())
+                            newStageTitle = ""
+                            addStageIdeaId = null
+                            showAddStage = false
+                        }
+                    }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = {
+                        newStageTitle = ""
+                        addStageIdeaId = null
+                        showAddStage = false
+                    }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(18.dp))
+                    }
+                }
+            } else {
+                TextButton(
+                    onClick = { showAddStage = true; addStageIdeaId = idea.id },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("+ Add Stage", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StageRow(
+    stage: IdeaStageEntity,
+    stages: List<IdeaStageEntity>,
+    viewModel: MainViewModel,
+    onDelete: (IdeaStageEntity) -> Unit
+) {
+    val index = stages.indexOf(stage)
+    val previousCompleted = index == 0 || stages.take(index).all { it.isCompleted }
+    val canToggle = previousCompleted
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(
+            checked = stage.isCompleted,
+            onCheckedChange = { checked ->
+                viewModel.updateStage(stage.copy(isCompleted = checked))
+                if (!checked) {
+                    stages.drop(index + 1).forEach {
+                        viewModel.updateStage(it.copy(isCompleted = false))
+                    }
+                }
+            },
+            enabled = canToggle || stage.isCompleted,
+            modifier = Modifier.size(20.dp),
+            colors = CheckboxDefaults.colors(
+                checkedColor = MaterialTheme.colorScheme.primary,
+                uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            stage.title,
+            fontSize = 13.sp,
+            color = if (stage.isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (stage.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+        )
+        Spacer(Modifier.weight(1f))
+        if (canToggle) {
+            IconButton(onClick = { onDelete(stage) }, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Delete stage", modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateGroupDialog(
+    initialName: String? = null,
+    initialColor: Long? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Long) -> Unit
+) {
+    var name by remember { mutableStateOf(initialName ?: "") }
+    var selectedColor by remember { mutableStateOf(initialColor ?: 0xFF4CAF50) }
+
+    val presetColors = listOf(0xFF4CAF50, 0xFF2196F3, 0xFFFF9800, 0xFFE91E63, 0xFF9C27B0, 0xFF00BCD4, 0xFFFF5722, 0xFF607D8B)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(if (initialName != null) "Edit Group" else "New Group", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Group Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Color", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    presetColors.forEach { c ->
+                        val isSelected = selectedColor == c
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(c))
+                                .border(if (isSelected) 2.dp else 0.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    CircleShape)
+                                .clickable { selectedColor = c }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank()) onConfirm(name.trim(), selectedColor) },
+                enabled = name.isNotBlank()
+            ) { Text(if (initialName != null) "Save" else "Create") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreateIdeaDialog(
+    groups: List<IdeaGroupEntity>,
+    initialTitle: String = "",
+    initialDescription: String = "",
+    initialGroupId: Long? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (Long, String, String) -> Unit,
+    onShowCreateGroup: () -> Unit
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var description by remember { mutableStateOf(initialDescription) }
+    var selectedGroupId by remember { mutableStateOf(initialGroupId) }
+    var expanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(if (initialTitle.isNotEmpty()) "Edit Idea" else "New Idea", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    maxLines = 3
+                )
+                Text("Group", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box {
+                    Surface(
+                        onClick = { expanded = true },
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                groups.find { it.id == selectedGroupId }?.name ?: "None",
+                                fontSize = 13.sp,
+                                color = if (selectedGroupId != null) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("None") },
+                            onClick = { selectedGroupId = null; expanded = false }
+                        )
+                        groups.forEach { group ->
+                            DropdownMenuItem(
+                                text = { Text(group.name) },
+                                onClick = { selectedGroupId = group.id; expanded = false }
+                            )
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Create New Group...", color = MaterialTheme.colorScheme.primary) },
+                            onClick = { expanded = false; onShowCreateGroup() }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId ?: 0L, title.trim(), description.trim()) },
+                enabled = title.isNotBlank()
+            ) { Text(if (initialTitle.isNotEmpty()) "Save" else "Create") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddToPlannerDialog(
+    idea: IdeaEntity,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val currentDate by viewModel.selectedDate.collectAsState()
+    val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
+    var date by remember { mutableStateOf(currentDate) }
+    var selectedType by remember { mutableStateOf("TASK") }
+    var selectedMode by remember { mutableStateOf("entire") }
+    var selectedStageId by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
+                    ?: System.currentTimeMillis()
+            } catch (_: Exception) { System.currentTimeMillis() }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Add to Planner", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("\"${idea.title}\"", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Date:", fontSize = 14.sp, modifier = Modifier.width(60.dp))
+                    OutlinedTextField(
+                        value = date,
+                        onValueChange = { date = it },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(Icons.Default.DateRange, contentDescription = "Pick date", modifier = Modifier.size(18.dp))
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+                Text("Type", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("TASK", "EVENT", "NOTE").forEach { t ->
+                        FilterChip(
+                            selected = selectedType == t,
+                            onClick = { selectedType = t },
+                            label = { Text(t, fontSize = 12.sp) }
+                        )
+                    }
+                }
+                Text("Stage", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = selectedMode == "entire",
+                        onClick = { selectedMode = "entire"; selectedStageId = null },
+                        label = { Text("Entire Idea", fontSize = 12.sp) }
+                    )
+                    if (stages.isNotEmpty()) {
+                        FilterChip(
+                            selected = selectedMode == "single",
+                            onClick = { selectedMode = "single" },
+                            label = { Text("Single Stage", fontSize = 12.sp) }
+                        )
+                    }
+                }
+                if (selectedMode == "single" && stages.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        stages.filter { it.title.isNotBlank() }.forEach { stage ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = selectedStageId == stage.id,
+                                    onClick = { selectedStageId = stage.id }
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(stage.title, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (selectedMode == "single" && selectedStageId != null) {
+                    val stage = stages.find { it.id == selectedStageId }
+                    if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType)
+                } else {
+                    viewModel.addIdeaToPlanner(idea, date, selectedType)
+                }
+                onDismiss()
+            }) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
     )
 }
