@@ -952,6 +952,48 @@ class MainViewModel(
     private val _reviewReminderEnabled = MutableStateFlow(prefs.getBoolean("review_reminder_enabled", false))
     val reviewReminderEnabled: StateFlow<Boolean> = _reviewReminderEnabled.asStateFlow()
 
+    // === Sleep Reminder State ===
+    private val _sleepReminderTime = MutableStateFlow(prefs.getString("sleep_reminder_time", "09:00") ?: "09:00")
+    val sleepReminderTime: StateFlow<String> = _sleepReminderTime.asStateFlow()
+    private val _sleepReminderEnabled = MutableStateFlow(prefs.getBoolean("sleep_reminder_enabled", false))
+    val sleepReminderEnabled: StateFlow<Boolean> = _sleepReminderEnabled.asStateFlow()
+
+    // === Diary Reminder State ===
+    private val _diaryReminderTime = MutableStateFlow(prefs.getString("diary_reminder_time", "20:00") ?: "20:00")
+    val diaryReminderTime: StateFlow<String> = _diaryReminderTime.asStateFlow()
+    private val _diaryReminderEnabled = MutableStateFlow(prefs.getBoolean("diary_reminder_enabled", false))
+    val diaryReminderEnabled: StateFlow<Boolean> = _diaryReminderEnabled.asStateFlow()
+
+    // === Morning Planner Reminder State ===
+    private val _plannerReminderTime = MutableStateFlow(prefs.getString("planner_reminder_time", "07:00") ?: "07:00")
+    val plannerReminderTime: StateFlow<String> = _plannerReminderTime.asStateFlow()
+    private val _plannerReminderEnabled = MutableStateFlow(prefs.getBoolean("planner_reminder_enabled", false))
+    val plannerReminderEnabled: StateFlow<Boolean> = _plannerReminderEnabled.asStateFlow()
+
+    // === Habits Check-in Reminder State ===
+    private val _habitsReminderTime = MutableStateFlow(prefs.getString("habits_reminder_time", "21:00") ?: "21:00")
+    val habitsReminderTime: StateFlow<String> = _habitsReminderTime.asStateFlow()
+    private val _habitsReminderEnabled = MutableStateFlow(prefs.getBoolean("habits_reminder_enabled", false))
+    val habitsReminderEnabled: StateFlow<Boolean> = _habitsReminderEnabled.asStateFlow()
+
+    // === Tomorrow Planner Reminder State ===
+    private val _tomorrowPlannerReminderTime = MutableStateFlow(prefs.getString("tomorrow_planner_reminder_time", "20:00") ?: "20:00")
+    val tomorrowPlannerReminderTime: StateFlow<String> = _tomorrowPlannerReminderTime.asStateFlow()
+    private val _tomorrowPlannerReminderEnabled = MutableStateFlow(prefs.getBoolean("tomorrow_planner_reminder_enabled", false))
+    val tomorrowPlannerReminderEnabled: StateFlow<Boolean> = _tomorrowPlannerReminderEnabled.asStateFlow()
+
+    // === Deep-link More Screen State ===
+    private val _pendingMoreScreen = MutableStateFlow<String?>(null)
+    val pendingMoreScreen: StateFlow<String?> = _pendingMoreScreen.asStateFlow()
+
+    fun setPendingMoreScreen(screen: String) {
+        _pendingMoreScreen.value = screen
+    }
+
+    fun consumePendingMoreScreen() {
+        _pendingMoreScreen.value = null
+    }
+
     // === Day Review Prompt State ===
     private val _showDayReviewPrompt = MutableStateFlow(false)
     val showDayReviewPrompt: StateFlow<Boolean> = _showDayReviewPrompt.asStateFlow()
@@ -1031,7 +1073,8 @@ class MainViewModel(
         createDayReviewChannel(context)
         val intent = Intent(context, com.example.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("open_day_review", true)
+            putExtra("navigate_to_tab", 4)
+            putExtra("open_more_screen", "DayReview")
         }
         val pendingIntent = PendingIntent.getActivity(context, 5001, intent, getImmutableFlag())
         val notification = NotificationCompat.Builder(context, "day_review_reminder")
@@ -1044,6 +1087,295 @@ class MainViewModel(
             .build()
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(5000, notification)
+    }
+
+    private fun createSleepReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "sleep_reminder", "Sleep Log Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Daily reminder to log your sleep" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    private fun createDiaryReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "diary_reminder", "Diary Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Daily reminder to write in your diary" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    private fun createPlannerReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "planner_reminder", "Morning Planner Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Daily morning summary of your day" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    private fun createHabitsReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "habits_reminder", "Habits Check-in Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Daily reminder to check your habits" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    private fun createTomorrowPlannerReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "tomorrow_planner_reminder", "Tomorrow Planner Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Evening reminder to plan tomorrow" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    private fun scheduleReminderAlarm(context: Context, action: String, requestCode: Int, time: String) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
+            this.action = action
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, requestCode, intent,
+            getImmutableFlag() or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val timeParts = time.split(":")
+        val hour = timeParts[0].toIntOrNull() ?: 9
+        val minute = timeParts[1].toIntOrNull() ?: 0
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (before(Calendar.getInstance())) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+        alarmManager.setRepeating(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis,
+            AlarmManager.INTERVAL_DAY,
+            pendingIntent
+        )
+    }
+
+    private fun cancelReminderAlarm(context: Context, action: String, requestCode: Int) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
+            this.action = action
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, requestCode, intent,
+            getImmutableFlag() or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    fun scheduleSleepReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.SLEEP_REMINDER", 6000, _sleepReminderTime.value)
+    }
+
+    fun cancelSleepReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.SLEEP_REMINDER", 6000)
+    }
+
+    fun scheduleDiaryReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.DIARY_REMINDER", 7000, _diaryReminderTime.value)
+    }
+
+    fun cancelDiaryReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.DIARY_REMINDER", 7000)
+    }
+
+    fun schedulePlannerReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.PLANNER_REMINDER", 8000, _plannerReminderTime.value)
+    }
+
+    fun cancelPlannerReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.PLANNER_REMINDER", 8000)
+    }
+
+    fun scheduleHabitsReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.HABITS_REMINDER", 9000, _habitsReminderTime.value)
+    }
+
+    fun cancelHabitsReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.HABITS_REMINDER", 9000)
+    }
+
+    fun scheduleTomorrowPlannerReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.TOMORROW_PLANNER_REMINDER", 10000, _tomorrowPlannerReminderTime.value)
+    }
+
+    fun cancelTomorrowPlannerReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.TOMORROW_PLANNER_REMINDER", 10000)
+    }
+
+    fun sendImmediateSleepReminderNotification(context: Context) {
+        createSleepReminderChannel(context)
+        val intent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("navigate_to_tab", 1)
+        }
+        val pendingIntent = PendingIntent.getActivity(context, 6001, intent, getImmutableFlag())
+        val notification = NotificationCompat.Builder(context, "sleep_reminder")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Sleep Log Reminder")
+            .setContentText("Did you log your sleep last night?")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(6000, notification)
+    }
+
+    fun sendImmediateDiaryReminderNotification(context: Context) {
+        createDiaryReminderChannel(context)
+        val intent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("navigate_to_tab", 4)
+            putExtra("open_more_screen", "Diary")
+        }
+        val pendingIntent = PendingIntent.getActivity(context, 7001, intent, getImmutableFlag())
+        val notification = NotificationCompat.Builder(context, "diary_reminder")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Diary Reminder")
+            .setContentText("Write about your day — capture your thoughts")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(7000, notification)
+    }
+
+    fun sendImmediatePlannerReminderNotification(context: Context) {
+        createPlannerReminderChannel(context)
+        val todayStr = getTodayDateString()
+        viewModelScope.launch {
+            val tasks = taskRepository.getTasksForDate(todayStr).first()
+            val taskCount = tasks.count { it.type == "TASK" }
+            val eventCount = tasks.count { it.type == "EVENT" }
+            val body = buildString {
+                append("Good morning! You have ")
+                if (tasks.isEmpty()) {
+                    append("nothing planned today")
+                } else {
+                    append("$taskCount task")
+                    if (taskCount != 1) append("s")
+                    append(" and $eventCount event")
+                    if (eventCount != 1) append("s")
+                    append(" today")
+                }
+            }
+            val intent = Intent(context, com.example.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("navigate_to_tab", 0)
+            }
+            val pendingIntent = PendingIntent.getActivity(context, 8001, intent, getImmutableFlag())
+            val notification = NotificationCompat.Builder(context, "planner_reminder")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Morning Planner Summary")
+                .setContentText(body)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(8000, notification)
+        }
+    }
+
+    fun sendImmediateHabitsReminderNotification(context: Context) {
+        createHabitsReminderChannel(context)
+        val todayStr = getTodayDateString()
+        viewModelScope.launch {
+            val allHabits = habitRepository.allHabits.first()
+            if (allHabits.isEmpty()) return@launch
+            val logs = habitRepository.getLogsForDate(todayStr).first()
+            val missed = allHabits.filter { habit ->
+                val log = logs.find { it.habitId == habit.id }
+                log == null || log.value < habit.target
+            }
+            if (missed.isEmpty()) return@launch
+            val body = buildString {
+                append("You missed:\n")
+                missed.take(5).forEachIndexed { i, h ->
+                    val log = logs.find { it.habitId == h.id }
+                    if (i > 0) append("\n")
+                    append("• ${h.name}")
+                    if (log != null && h.type == "QUANTITATIVE") {
+                        append(" (${log.value.toInt()}/${h.target.toInt()})")
+                    }
+                }
+                if (missed.size > 5) {
+                    append("\n• and ${missed.size - 5} more")
+                }
+            }
+            val intent = Intent(context, com.example.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("navigate_to_tab", 1)
+            }
+            val pendingIntent = PendingIntent.getActivity(context, 9001, intent, getImmutableFlag())
+            val notification = NotificationCompat.Builder(context, "habits_reminder")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Habits Check-in")
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(9000, notification)
+        }
+    }
+
+    fun sendImmediateTomorrowPlannerReminderNotification(context: Context) {
+        createTomorrowPlannerReminderChannel(context)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        val tomorrowStr = sdf.format(cal.time)
+        viewModelScope.launch {
+            val tasks = taskRepository.getTasksForDate(tomorrowStr).first()
+            val taskCount = tasks.count { it.type == "TASK" }
+            val eventCount = tasks.count { it.type == "EVENT" }
+            val body = buildString {
+                append("Plan tomorrow — ")
+                if (tasks.isEmpty()) {
+                    append("nothing scheduled yet. Add your tasks!")
+                } else {
+                    append("$taskCount task")
+                    if (taskCount != 1) append("s")
+                    append(" and $eventCount event")
+                    if (eventCount != 1) append("s")
+                    append(" coming up")
+                }
+            }
+            val intent = Intent(context, com.example.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("navigate_to_tab", 0)
+                putExtra("open_date", tomorrowStr)
+            }
+            val pendingIntent = PendingIntent.getActivity(context, 10001, intent, getImmutableFlag())
+            val notification = NotificationCompat.Builder(context, "tomorrow_planner_reminder")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Plan Tomorrow")
+                .setContentText(body)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(10000, notification)
+        }
     }
 
     fun dismissDayReviewPrompt() {
@@ -3211,6 +3543,101 @@ class MainViewModel(
             scheduleDayReviewAlarm(context)
         } else {
             cancelDayReviewAlarm(context)
+        }
+    }
+
+    fun updateSleepReminderTime(time: String) {
+        prefs.edit().putString("sleep_reminder_time", time).apply()
+        _sleepReminderTime.value = time
+        if (_sleepReminderEnabled.value) {
+            cancelSleepReminderAlarm(context)
+            scheduleSleepReminderAlarm(context)
+        }
+    }
+
+    fun updateSleepReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("sleep_reminder_enabled", enabled).apply()
+        _sleepReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleSleepReminderAlarm(context)
+        } else {
+            cancelSleepReminderAlarm(context)
+        }
+    }
+
+    fun updateDiaryReminderTime(time: String) {
+        prefs.edit().putString("diary_reminder_time", time).apply()
+        _diaryReminderTime.value = time
+        if (_diaryReminderEnabled.value) {
+            cancelDiaryReminderAlarm(context)
+            scheduleDiaryReminderAlarm(context)
+        }
+    }
+
+    fun updateDiaryReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("diary_reminder_enabled", enabled).apply()
+        _diaryReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleDiaryReminderAlarm(context)
+        } else {
+            cancelDiaryReminderAlarm(context)
+        }
+    }
+
+    fun updatePlannerReminderTime(time: String) {
+        prefs.edit().putString("planner_reminder_time", time).apply()
+        _plannerReminderTime.value = time
+        if (_plannerReminderEnabled.value) {
+            cancelPlannerReminderAlarm(context)
+            schedulePlannerReminderAlarm(context)
+        }
+    }
+
+    fun updatePlannerReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("planner_reminder_enabled", enabled).apply()
+        _plannerReminderEnabled.value = enabled
+        if (enabled) {
+            schedulePlannerReminderAlarm(context)
+        } else {
+            cancelPlannerReminderAlarm(context)
+        }
+    }
+
+    fun updateHabitsReminderTime(time: String) {
+        prefs.edit().putString("habits_reminder_time", time).apply()
+        _habitsReminderTime.value = time
+        if (_habitsReminderEnabled.value) {
+            cancelHabitsReminderAlarm(context)
+            scheduleHabitsReminderAlarm(context)
+        }
+    }
+
+    fun updateHabitsReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("habits_reminder_enabled", enabled).apply()
+        _habitsReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleHabitsReminderAlarm(context)
+        } else {
+            cancelHabitsReminderAlarm(context)
+        }
+    }
+
+    fun updateTomorrowPlannerReminderTime(time: String) {
+        prefs.edit().putString("tomorrow_planner_reminder_time", time).apply()
+        _tomorrowPlannerReminderTime.value = time
+        if (_tomorrowPlannerReminderEnabled.value) {
+            cancelTomorrowPlannerReminderAlarm(context)
+            scheduleTomorrowPlannerReminderAlarm(context)
+        }
+    }
+
+    fun updateTomorrowPlannerReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("tomorrow_planner_reminder_enabled", enabled).apply()
+        _tomorrowPlannerReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleTomorrowPlannerReminderAlarm(context)
+        } else {
+            cancelTomorrowPlannerReminderAlarm(context)
         }
     }
 

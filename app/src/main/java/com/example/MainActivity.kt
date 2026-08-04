@@ -133,6 +133,12 @@ class MainActivity : ComponentActivity() {
         intent.getIntExtra("open_timer_subtab", -1).let { sub ->
             if (sub >= 0) viewModel.setPreferredTimerTab(sub)
         }
+        intent.getStringExtra("open_date")?.let { date ->
+            viewModel.selectDate(date)
+        }
+        intent.getStringExtra("open_more_screen")?.let { screen ->
+            viewModel.setPendingMoreScreen(screen)
+        }
 
         setContent {
             MyApplicationTheme {
@@ -281,6 +287,12 @@ class MainActivity : ComponentActivity() {
         }
         intent.getIntExtra("open_timer_subtab", -1).let { sub ->
             if (sub >= 0) viewModel.setPreferredTimerTab(sub)
+        }
+        intent.getStringExtra("open_date")?.let { date ->
+            viewModel.selectDate(date)
+        }
+        intent.getStringExtra("open_more_screen")?.let { screen ->
+            viewModel.setPendingMoreScreen(screen)
         }
     }
 }

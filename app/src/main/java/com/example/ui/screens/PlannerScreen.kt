@@ -3422,6 +3422,36 @@ fun SettingsDialog(
     var enteredReviewEnabled by remember { mutableStateOf(reviewReminderEnabled) }
     var showReviewTimePicker by remember { mutableStateOf(false) }
 
+    val sleepReminderTime by viewModel.sleepReminderTime.collectAsState()
+    val sleepReminderEnabled by viewModel.sleepReminderEnabled.collectAsState()
+    var enteredSleepTime by remember { mutableStateOf(sleepReminderTime) }
+    var enteredSleepEnabled by remember { mutableStateOf(sleepReminderEnabled) }
+    var showSleepTimePicker by remember { mutableStateOf(false) }
+
+    val diaryReminderTime by viewModel.diaryReminderTime.collectAsState()
+    val diaryReminderEnabled by viewModel.diaryReminderEnabled.collectAsState()
+    var enteredDiaryTime by remember { mutableStateOf(diaryReminderTime) }
+    var enteredDiaryEnabled by remember { mutableStateOf(diaryReminderEnabled) }
+    var showDiaryTimePicker by remember { mutableStateOf(false) }
+
+    val plannerReminderTime by viewModel.plannerReminderTime.collectAsState()
+    val plannerReminderEnabled by viewModel.plannerReminderEnabled.collectAsState()
+    var enteredPlannerTime by remember { mutableStateOf(plannerReminderTime) }
+    var enteredPlannerEnabled by remember { mutableStateOf(plannerReminderEnabled) }
+    var showPlannerTimePicker by remember { mutableStateOf(false) }
+
+    val habitsReminderTime by viewModel.habitsReminderTime.collectAsState()
+    val habitsReminderEnabled by viewModel.habitsReminderEnabled.collectAsState()
+    var enteredHabitsTime by remember { mutableStateOf(habitsReminderTime) }
+    var enteredHabitsEnabled by remember { mutableStateOf(habitsReminderEnabled) }
+    var showHabitsTimePicker by remember { mutableStateOf(false) }
+
+    val tomorrowPlannerReminderTime by viewModel.tomorrowPlannerReminderTime.collectAsState()
+    val tomorrowPlannerReminderEnabled by viewModel.tomorrowPlannerReminderEnabled.collectAsState()
+    var enteredTomorrowPlannerTime by remember { mutableStateOf(tomorrowPlannerReminderTime) }
+    var enteredTomorrowPlannerEnabled by remember { mutableStateOf(tomorrowPlannerReminderEnabled) }
+    var showTomorrowPlannerTimePicker by remember { mutableStateOf(false) }
+
     val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
     val pomodoroRingtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
     val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
@@ -3431,6 +3461,31 @@ fun SettingsDialog(
     val reviewTimePickerState = rememberTimePickerState(
         initialHour = enteredReviewTime.substringBefore(":").toIntOrNull() ?: 21,
         initialMinute = enteredReviewTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+    val sleepTimePickerState = rememberTimePickerState(
+        initialHour = enteredSleepTime.substringBefore(":").toIntOrNull() ?: 9,
+        initialMinute = enteredSleepTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+    val diaryTimePickerState = rememberTimePickerState(
+        initialHour = enteredDiaryTime.substringBefore(":").toIntOrNull() ?: 20,
+        initialMinute = enteredDiaryTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+    val plannerTimePickerState = rememberTimePickerState(
+        initialHour = enteredPlannerTime.substringBefore(":").toIntOrNull() ?: 7,
+        initialMinute = enteredPlannerTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+    val habitsTimePickerState = rememberTimePickerState(
+        initialHour = enteredHabitsTime.substringBefore(":").toIntOrNull() ?: 21,
+        initialMinute = enteredHabitsTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+    val tomorrowPlannerTimePickerState = rememberTimePickerState(
+        initialHour = enteredTomorrowPlannerTime.substringBefore(":").toIntOrNull() ?: 20,
+        initialMinute = enteredTomorrowPlannerTime.substringAfter(":").toIntOrNull() ?: 0,
         is24Hour = true
     )
 
@@ -3865,6 +3920,195 @@ fun SettingsDialog(
                     }
                 }
 
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // Section 7: Notification Reminders
+                Text(
+                    text = "NOTIFICATION REMINDERS",
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp
+                )
+
+                // --- Sleep Log Reminder ---
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Sleep Log Reminder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Remind to log your sleep", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = enteredSleepEnabled,
+                            onCheckedChange = { enabled ->
+                                enteredSleepEnabled = enabled
+                                if (enabled) {
+                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    if (enteredSleepEnabled) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reminder Time:", fontSize = 14.sp)
+                            TextButton(onClick = { showSleepTimePicker = true }) { Text(enteredSleepTime, fontWeight = FontWeight.Bold) }
+                        }
+                        TextButton(onClick = { viewModel.sendImmediateSleepReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
+                    }
+                }
+
+                // --- Morning Planner Reminder ---
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Morning Planner Summary", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Summary of today's tasks and events", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = enteredPlannerEnabled,
+                            onCheckedChange = { enabled ->
+                                enteredPlannerEnabled = enabled
+                                if (enabled) {
+                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    if (enteredPlannerEnabled) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reminder Time:", fontSize = 14.sp)
+                            TextButton(onClick = { showPlannerTimePicker = true }) { Text(enteredPlannerTime, fontWeight = FontWeight.Bold) }
+                        }
+                        TextButton(onClick = { viewModel.sendImmediatePlannerReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
+                    }
+                }
+
+                // --- Habits Check-in Reminder ---
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Habits Check-in", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("List of habits you missed today", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = enteredHabitsEnabled,
+                            onCheckedChange = { enabled ->
+                                enteredHabitsEnabled = enabled
+                                if (enabled) {
+                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    if (enteredHabitsEnabled) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reminder Time:", fontSize = 14.sp)
+                            TextButton(onClick = { showHabitsTimePicker = true }) { Text(enteredHabitsTime, fontWeight = FontWeight.Bold) }
+                        }
+                        TextButton(onClick = { viewModel.sendImmediateHabitsReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
+                    }
+                }
+
+                // --- Diary Reminder ---
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Diary Reminder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Remind to write in your diary", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = enteredDiaryEnabled,
+                            onCheckedChange = { enabled ->
+                                enteredDiaryEnabled = enabled
+                                if (enabled) {
+                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    if (enteredDiaryEnabled) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reminder Time:", fontSize = 14.sp)
+                            TextButton(onClick = { showDiaryTimePicker = true }) { Text(enteredDiaryTime, fontWeight = FontWeight.Bold) }
+                        }
+                        TextButton(onClick = { viewModel.sendImmediateDiaryReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
+                    }
+                }
+
+                // --- Tomorrow Planner Reminder ---
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Tomorrow Planner", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Preview of tomorrow's schedule", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = enteredTomorrowPlannerEnabled,
+                            onCheckedChange = { enabled ->
+                                enteredTomorrowPlannerEnabled = enabled
+                                if (enabled) {
+                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    if (enteredTomorrowPlannerEnabled) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reminder Time:", fontSize = 14.sp)
+                            TextButton(onClick = { showTomorrowPlannerTimePicker = true }) { Text(enteredTomorrowPlannerTime, fontWeight = FontWeight.Bold) }
+                        }
+                        TextButton(onClick = { viewModel.sendImmediateTomorrowPlannerReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
+                    }
+                }
+
                 // Status Message display
                 if (statusMessage.isNotEmpty()) {
                     Box(
@@ -3898,6 +4142,16 @@ fun SettingsDialog(
                     viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
                     viewModel.updateReviewReminderTime(enteredReviewTime)
                     viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
+                    viewModel.updateSleepReminderTime(enteredSleepTime)
+                    viewModel.updateSleepReminderEnabled(enteredSleepEnabled)
+                    viewModel.updateDiaryReminderTime(enteredDiaryTime)
+                    viewModel.updateDiaryReminderEnabled(enteredDiaryEnabled)
+                    viewModel.updatePlannerReminderTime(enteredPlannerTime)
+                    viewModel.updatePlannerReminderEnabled(enteredPlannerEnabled)
+                    viewModel.updateHabitsReminderTime(enteredHabitsTime)
+                    viewModel.updateHabitsReminderEnabled(enteredHabitsEnabled)
+                    viewModel.updateTomorrowPlannerReminderTime(enteredTomorrowPlannerTime)
+                    viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
                     onDismiss()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -3929,6 +4183,86 @@ fun SettingsDialog(
             dismissButton = {
                 TextButton(onClick = { showReviewTimePicker = false }) { Text("Cancel") }
             }
+        )
+    }
+
+    if (showSleepTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showSleepTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = sleepTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = sleepTimePickerState.hour; val min = sleepTimePickerState.minute
+                    enteredSleepTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showSleepTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showSleepTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showDiaryTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showDiaryTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = diaryTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = diaryTimePickerState.hour; val min = diaryTimePickerState.minute
+                    enteredDiaryTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showDiaryTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDiaryTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showPlannerTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showPlannerTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = plannerTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = plannerTimePickerState.hour; val min = plannerTimePickerState.minute
+                    enteredPlannerTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showPlannerTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showPlannerTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showHabitsTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showHabitsTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = habitsTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = habitsTimePickerState.hour; val min = habitsTimePickerState.minute
+                    enteredHabitsTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showHabitsTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showHabitsTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showTomorrowPlannerTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showTomorrowPlannerTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = tomorrowPlannerTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = tomorrowPlannerTimePickerState.hour; val min = tomorrowPlannerTimePickerState.minute
+                    enteredTomorrowPlannerTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showTomorrowPlannerTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showTomorrowPlannerTimePicker = false }) { Text("Cancel") } }
         )
     }
 }

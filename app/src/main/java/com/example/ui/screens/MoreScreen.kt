@@ -50,6 +50,20 @@ fun MoreScreen(
 ) {
     var currentScreen by remember { mutableStateOf<MoreSubScreen>(MoreSubScreen.None) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    val pendingMoreScreen by viewModel.pendingMoreScreen.collectAsState()
+
+    LaunchedEffect(pendingMoreScreen) {
+        when (pendingMoreScreen) {
+            "Diary" -> currentScreen = MoreSubScreen.Diary
+            "DayReview" -> currentScreen = MoreSubScreen.DayReview
+        }
+    }
+
+    LaunchedEffect(currentScreen) {
+        if (currentScreen !is MoreSubScreen.None) {
+            viewModel.consumePendingMoreScreen()
+        }
+    }
 
     if (currentScreen !is MoreSubScreen.None) {
         when (currentScreen) {
