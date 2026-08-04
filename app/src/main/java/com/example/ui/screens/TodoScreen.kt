@@ -220,6 +220,13 @@ private fun TodoItem(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                Icons.Default.Checklist,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+            )
+            Spacer(Modifier.width(4.dp))
             Checkbox(
                 checked = isDone,
                 onCheckedChange = { viewModel.toggleTodoCompletion(todo) },
