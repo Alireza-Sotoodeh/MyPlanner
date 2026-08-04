@@ -71,6 +71,8 @@ fun TimerScreen(viewModel: MainViewModel) {
     var showStopConfirm by remember { mutableStateOf(false) }
 
     var historyDateRange by remember { mutableStateOf("today") }
+    var selectedCategory by remember { mutableStateOf("TASKS") }
+    var hasAutoSwitched by remember { mutableStateOf(false) }
 
     // Consume pre-selected task from Planner
     LaunchedEffect(Unit) {
@@ -78,6 +80,21 @@ fun TimerScreen(viewModel: MainViewModel) {
         if (preSelected != null) {
             selectedTaskId = preSelected
             tabIndex = viewModel.consumePreferredTimerTab() ?: 0
+        }
+    }
+
+    // Auto-switch category when pre-selected task loads
+    LaunchedEffect(selectedTaskId, tasks) {
+        if (!hasAutoSwitched && selectedTaskId != null && tasks.isNotEmpty()) {
+            val task = tasks.find { it.id == selectedTaskId }
+            if (task != null) {
+                when {
+                    task.parentTaskId != null && task.type == "NOTE" -> selectedCategory = "SUB_NOTES"
+                    task.parentTaskId != null -> selectedCategory = "SUBTASKS"
+                    task.type == "NOTE" -> selectedCategory = "NOTES"
+                }
+                hasAutoSwitched = true
+            }
         }
     }
 
@@ -167,7 +184,10 @@ fun TimerScreen(viewModel: MainViewModel) {
                 showManageTemplates = showManageTemplates,
                 onShowManageTemplatesChange = { showManageTemplates = it },
                 showStopConfirm = showStopConfirm,
-                onShowStopConfirmChange = { showStopConfirm = it }
+                onShowStopConfirmChange = { showStopConfirm = it },
+                allTasks = tasks,
+                selectedCategory = selectedCategory,
+                onCategoryChange = { selectedCategory = it }
             )
             1 -> CronometerTab(
                 viewModel = viewModel,
@@ -181,7 +201,10 @@ fun TimerScreen(viewModel: MainViewModel) {
                 showChronoSummary = showChronoSummary,
                 onShowChronoSummaryChange = { showChronoSummary = it },
                 chronoSummaryDuration = chronoSummaryDuration,
-                onChronoSummaryDurationChange = { chronoSummaryDuration = it }
+                onChronoSummaryDurationChange = { chronoSummaryDuration = it },
+                allTasks = tasks,
+                selectedCategory = selectedCategory,
+                onCategoryChange = { selectedCategory = it }
             )
             2 -> HistoryTab(
                 sessions = sessions,
@@ -226,16 +249,26 @@ private fun PomodoroTab(
     showManageTemplates: Boolean,
     onShowManageTemplatesChange: (Boolean) -> Unit,
     showStopConfirm: Boolean,
-    onShowStopConfirmChange: (Boolean) -> Unit
+    onShowStopConfirmChange: (Boolean) -> Unit,
+    allTasks: List<TaskEntity>,
+    selectedCategory: String,
+    onCategoryChange: (String) -> Unit
 ) {
     val isTimerActive = activeTask != null
     val minutes = secondsLeft / 60
     val seconds = secondsLeft % 60
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
-    val availableTasks = remember(tasks) {
+    val availableTasks = remember(tasks, selectedCategory) {
+        val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
         tasks.filter { t ->
-            t.status != "COMPLETED" && (t.type == "TASK" || t.type == "NOTE")
+            t.status != "COMPLETED" && when (selectedCategory) {
+                "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
+                "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
+                "NOTES" -> t.parentTaskId == null && t.type == "NOTE" && t.id !in parentIds
+                "SUB_NOTES" -> t.parentTaskId != null && t.type == "NOTE"
+                else -> false
+            }
         }
     }
     val selectedTask = remember(selectedTaskId, tasks) {
@@ -371,7 +404,10 @@ private fun PomodoroTab(
                 availableTasks = availableTasks,
                 selectedTaskId = selectedTaskId,
                 onSelectedTaskIdChange = onSelectedTaskIdChange,
-                viewModel = viewModel
+                viewModel = viewModel,
+                allTasks = allTasks,
+                selectedCategory = selectedCategory,
+                onCategoryChange = onCategoryChange
             )
         }
 
@@ -439,7 +475,10 @@ private fun PomodoroTab(
                 selectedTaskId = selectedTaskId,
                 onSelectedTaskIdChange = onSelectedTaskIdChange,
                 viewModel = viewModel,
-                isLocked = true
+                isLocked = true,
+                allTasks = allTasks,
+                selectedCategory = selectedCategory,
+                onCategoryChange = onCategoryChange
             )
         }
     }
@@ -466,16 +505,26 @@ private fun CronometerTab(
     showChronoSummary: Boolean,
     onShowChronoSummaryChange: (Boolean) -> Unit,
     chronoSummaryDuration: Int,
-    onChronoSummaryDurationChange: (Int) -> Unit
+    onChronoSummaryDurationChange: (Int) -> Unit,
+    allTasks: List<TaskEntity>,
+    selectedCategory: String,
+    onCategoryChange: (String) -> Unit
 ) {
     val hours = chronoElapsed / 3600
     val minutes = (chronoElapsed % 3600) / 60
     val seconds = (chronoElapsed % 60)
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
 
-    val availableTasks = remember(tasks) {
+    val availableTasks = remember(tasks, selectedCategory) {
+        val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
         tasks.filter { t ->
-            t.status != "COMPLETED" && (t.type == "TASK" || t.type == "NOTE")
+            t.status != "COMPLETED" && when (selectedCategory) {
+                "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
+                "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
+                "NOTES" -> t.parentTaskId == null && t.type == "NOTE" && t.id !in parentIds
+                "SUB_NOTES" -> t.parentTaskId != null && t.type == "NOTE"
+                else -> false
+            }
         }
     }
 
@@ -545,7 +594,10 @@ private fun CronometerTab(
             selectedTaskId = selectedTaskId,
             onSelectedTaskIdChange = onSelectedTaskIdChange,
             viewModel = viewModel,
-            isLocked = chronoIsLocked
+            isLocked = chronoIsLocked,
+            allTasks = allTasks,
+            selectedCategory = selectedCategory,
+            onCategoryChange = onCategoryChange
         )
     }
 
@@ -763,8 +815,29 @@ private fun TaskSelectorSection(
     selectedTaskId: Long?,
     onSelectedTaskIdChange: (Long?) -> Unit,
     viewModel: MainViewModel,
-    isLocked: Boolean = false
+    isLocked: Boolean = false,
+    allTasks: List<TaskEntity>,
+    selectedCategory: String,
+    onCategoryChange: (String) -> Unit
 ) {
+    val parentTitleMap = remember(allTasks) {
+        allTasks.associate { it.id to it.title }
+    }
+
+    val palette = remember {
+        listOf(
+            0xFFFF6B6B, 0xFF4ECDC4, 0xFF45B7D1, 0xFF96CEB4,
+            0xFFFFEAA7, 0xFFDDA0DD, 0xFF98D8C8, 0xFFF7DC6F,
+            0xFFBB8FCE, 0xFF85C1E9, 0xFFF0B27A, 0xFF82E0AA
+        )
+    }
+
+    val parentColorMap = remember(allTasks) {
+        allTasks.mapNotNull { it.parentTaskId }.distinct()
+            .mapIndexed { i, id -> id to palette[i % palette.size] }
+            .toMap()
+    }
+
     // Wrapped in a unified Card matching the TIMER SETUP card style
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -777,7 +850,7 @@ private fun TaskSelectorSection(
             // Section header inside the card
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "TASK / NOTE",
+                    text = "TASKS / SUBTASKS / NOTES",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -790,6 +863,30 @@ private fun TaskSelectorSection(
                         contentDescription = "Locked",
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Category filter chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    "TASKS" to "Tasks",
+                    "SUBTASKS" to "Subtasks",
+                    "NOTES" to "Notes",
+                    "SUB_NOTES" to "Sub Notes"
+                ).forEach { (key, label) ->
+                    FilterChip(
+                        selected = selectedCategory == key,
+                        onClick = { onCategoryChange(key) },
+                        label = { Text(label, fontSize = 11.sp) },
+                        modifier = Modifier.height(28.dp)
                     )
                 }
             }
@@ -812,14 +909,26 @@ private fun TaskSelectorSection(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        val emptyMsg = when (selectedCategory) {
+                            "SUBTASKS" -> "No subtasks available"
+                            "NOTES" -> "No notes available"
+                            "SUB_NOTES" -> "No sub notes available"
+                            else -> "No tasks available"
+                        }
+                        val emptyHint = when (selectedCategory) {
+                            "SUBTASKS" -> "Create a task with subtasks in the planner first"
+                            "NOTES" -> "Create a note in the planner first"
+                            "SUB_NOTES" -> "Create a note with subtasks in the planner first"
+                            else -> "Create a task in the planner first"
+                        }
                         Text(
-                            text = "No tasks or notes available",
+                            text = emptyMsg,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                         Text(
-                            text = "Create a task or note in the planner first",
+                            text = emptyHint,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
@@ -837,7 +946,9 @@ private fun TaskSelectorSection(
                                 onSelectedTaskIdChange(task.id)
                             }
                         },
-                        onMarkComplete = { viewModel.markTaskCompleteFromTimer(task.id) }
+                        onMarkComplete = { viewModel.markTaskCompleteFromTimer(task.id) },
+                        parentTitleMap = parentTitleMap,
+                        parentColorMap = parentColorMap
                     )
                     if (index < availableTasks.lastIndex) {
                         HorizontalDivider(
@@ -858,7 +969,9 @@ private fun TaskSectionItem(
     isSelected: Boolean,
     isLocked: Boolean,
     onSelect: () -> Unit,
-    onMarkComplete: () -> Unit
+    onMarkComplete: () -> Unit,
+    parentTitleMap: Map<Long, String> = emptyMap(),
+    parentColorMap: Map<Long, Long> = emptyMap()
 ) {
     val alpha = if (isLocked && !isSelected) 0.5f else 1f
 
@@ -913,20 +1026,55 @@ private fun TaskSectionItem(
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                // Type badge
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (task.type == "NOTE") MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                ) {
-                    Text(
-                        text = if (task.type == "NOTE") "NOTE" else "TASK",
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (task.type == "NOTE") MaterialTheme.colorScheme.tertiary
-                        else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                    )
+                // Type badge — 4-way: TASK / SUBTASK · Parent / NOTE / SUB NOTE · Parent
+                when {
+                    task.parentTaskId != null -> {
+                        val parentTitle = parentTitleMap[task.parentTaskId] ?: "Unknown"
+                        val groupColor = Color(parentColorMap[task.parentTaskId] ?: 0xFF4ECDC4)
+                        val badgeText = if (task.type == "NOTE") "SUB NOTE · $parentTitle" else "SUBTASK · $parentTitle"
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = groupColor.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = badgeText,
+                                fontSize = 7.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = groupColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    task.type == "NOTE" -> {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "NOTE",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    else -> {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = "TASK",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
             if (task.label.isNotEmpty()) {
