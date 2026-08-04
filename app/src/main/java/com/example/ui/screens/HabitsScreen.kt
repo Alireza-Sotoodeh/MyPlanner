@@ -411,35 +411,47 @@ fun HabitRowItem(
                     }
                 }
             } else {
-                // Quantitative +/- button stepper
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    IconButton(
-                        onClick = { if (logValue > 0f) onLog(logValue - 1f) },
+                val goalReached = logValue >= habit.target
+                if (goalReached) {
+                    Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.primary, shape = CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onLog(0f) },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Completed",
+                            tint = MaterialTheme.colorScheme.background,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-
-                    Text(
-                        text = "${logValue.toInt()}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    IconButton(
-                        onClick = { onLog(logValue + 1f) },
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
+                        IconButton(
+                            onClick = { if (logValue > 0f) onLog(logValue - 1f) }
+                        ) {
+                            Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
+                        }
+
+                        Text(
+                            text = "${logValue.toInt()}/${habit.target.toInt()}",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        IconButton(
+                            onClick = { onLog(logValue + 1f) }
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }
