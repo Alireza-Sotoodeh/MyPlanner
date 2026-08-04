@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -363,7 +364,7 @@ fun AestheticNavigationBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    Column {
+    Column(modifier = Modifier.navigationBarsPadding()) {
         // Simple single-pixel border at the top of bottom bar
         Spacer(
             modifier = Modifier
