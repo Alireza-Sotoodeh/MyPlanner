@@ -476,7 +476,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
     }
 
     val labelInfos = rawTasks
-        .filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE" || it.type == "LEARN_STUDY" || it.type == "LEARN_REVIEW") }
+        .filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") }
         .groupBy { it.label }
         .filterKeys { it.isNotBlank() }
         .map { (label, items) ->
@@ -1396,11 +1396,20 @@ fun BulletTaskItem(
                     ) {
                         when (targetType) {
                             "TASK" -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.CircleShape)
-                                )
+                                if (task.linkedLearnSectionId != null) {
+                                    Icon(
+                                        imageVector = Icons.Default.MenuBook,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = Color(0xFFFFB300)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.CircleShape)
+                                    )
+                                }
                             }
                             "EVENT" -> {
                                 Box(
@@ -1428,14 +1437,6 @@ fun BulletTaskItem(
                                     modifier = Modifier
                                         .size(width = 10.dp, height = 3.dp)
                                         .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(1.dp))
-                                )
-                            }
-                            "LEARN_STUDY", "LEARN_REVIEW" -> {
-                                Icon(
-                                    imageVector = Icons.Default.MenuBook,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = Color(0xFFFFB300)
                                 )
                             }
                             else -> {
@@ -1558,7 +1559,7 @@ fun BulletTaskItem(
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    if (task.type == "LEARN_STUDY" || task.type == "LEARN_REVIEW") {
+                    if (task.linkedLearnSectionId != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.MenuBook,
@@ -1568,7 +1569,7 @@ fun BulletTaskItem(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (task.type == "LEARN_STUDY") "Study" else "Review",
+                                text = task.label,
                                 fontSize = 11.sp,
                                 color = Color(0xFFFFB300),
                                 fontWeight = FontWeight.Medium
@@ -2410,7 +2411,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                                                     .size(width = 7.dp, height = 2.dp)
                                                     .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(0.5.dp))
                                             )
-                                        } else if (task.type == "LEARN_STUDY" || task.type == "LEARN_REVIEW") {
+                                        } else if (task.linkedLearnSectionId != null) {
                                             Icon(
                                                 imageVector = Icons.Default.MenuBook,
                                                 contentDescription = null,
@@ -6643,11 +6644,6 @@ fun LearnItemCard(
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "${item.type} - ${item.unit}: ${item.totalAmount}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             if (sections.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
@@ -6765,8 +6761,6 @@ fun LearnItemDialog(
     var title by remember { mutableStateOf(existingItem?.title ?: "") }
     var type by remember { mutableStateOf(existingItem?.type?.uppercase()?.let { if (it == "BOOK" || it == "COURSE") it else "BOOK" } ?: "BOOK") }
     var totalSections by remember { mutableStateOf(existingItem?.totalSections?.toString() ?: "1") }
-    var unit by remember { mutableStateOf(existingItem?.unit?.uppercase()?.let { if (it == "PAGES" || it == "MINUTES") it else "PAGES" } ?: "PAGES") }
-    var totalAmount by remember { mutableStateOf(existingItem?.totalAmount?.toString() ?: "") }
     var priorityLevel by remember { mutableStateOf(existingItem?.priorityLevel ?: "Medium") }
     var selectedGroupId by remember { mutableStateOf(existingItem?.groupId) }
     var showNewGroupDialog by remember { mutableStateOf(false) }
@@ -6802,30 +6796,6 @@ fun LearnItemDialog(
                         label = { Text("Course") }
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                if (type == "BOOK") {
-                    Text("Unit", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = unit == "PAGES",
-                            onClick = { unit = "PAGES" },
-                            label = { Text("Pages") }
-                        )
-                        FilterChip(
-                            selected = unit == "MINUTES",
-                            onClick = { unit = "MINUTES" },
-                            label = { Text("Minutes") }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-                OutlinedTextField(
-                    value = totalAmount,
-                    onValueChange = { totalAmount = it.filter { c -> c.isDigit() } },
-                    label = { Text(if (type == "BOOK") "Total pages" else "Total minutes") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = totalSections,
@@ -6918,9 +6888,8 @@ fun LearnItemDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val amount = totalAmount.toIntOrNull() ?: return@TextButton
                     val sections = totalSections.toIntOrNull() ?: return@TextButton
-                    if (title.isBlank() || amount <= 0 || sections <= 0) return@TextButton
+                    if (title.isBlank() || sections <= 0) return@TextButton
                     if (isEditing) {
                         existingItem?.let { item ->
                             viewModel.updateLearnItem(
@@ -6928,8 +6897,6 @@ fun LearnItemDialog(
                                 newTitle = title,
                                 newType = type,
                                 newTotalSections = sections,
-                                newUnit = unit,
-                                newTotalAmount = amount,
                                 newPriorityLevel = priorityLevel,
                                 newGroupId = selectedGroupId
                             )
@@ -6939,15 +6906,13 @@ fun LearnItemDialog(
                             title = title,
                             type = type,
                             totalSections = sections,
-                            unit = unit,
-                            totalAmount = amount,
                             priorityLevel = priorityLevel,
                             groupId = selectedGroupId
                         )
                     }
                     onDismiss()
                 },
-                enabled = title.isNotBlank() && (totalAmount.toIntOrNull() ?: 0) > 0 && (totalSections.toIntOrNull() ?: 0) > 0
+                enabled = title.isNotBlank() && (totalSections.toIntOrNull() ?: 0) > 0
             ) { Text(if (isEditing) "Save" else "Add") }
         },
         dismissButton = {

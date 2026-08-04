@@ -20,8 +20,6 @@ data class LearnItemEntity(
     val title: String,
     val type: String, // BOOK or COURSE
     val totalSections: Int,
-    val unit: String = "PAGES", // PAGES or MINUTES
-    val totalAmount: Int = 0,
     val sectionsPerDay: Int = 1,
     val groupId: Long? = null,
     val status: String = "NOT_STARTED", // NOT_STARTED, ACTIVE, COMPLETED, ARCHIVED

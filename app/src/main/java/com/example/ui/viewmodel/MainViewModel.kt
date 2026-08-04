@@ -831,7 +831,7 @@ class MainViewModel(
             }
             taskRepository.updateTask(updated)
 
-            afterLearnTaskCompleted(updated)
+            handleLearnTaskToggle(original = task, updated = updated)
 
             updated.linkedTodoId?.let { linkedId ->
                 val linkedTodo = todoRepository.getTodoById(linkedId)
@@ -846,7 +846,7 @@ class MainViewModel(
                 }
             }
 
-            if (effectiveDuration > 0 && task.type != "LEARN_STUDY" && task.type != "LEARN_REVIEW") {
+            if (effectiveDuration > 0) {
                 val timestamp = computeStartTimestamp(startHour, startMinute)
                 timerRepository.insertSession(
                     TimerSessionEntity(
@@ -1941,7 +1941,6 @@ class MainViewModel(
 
     fun toggleTaskCompletion(task: TaskEntity, subtasks: List<TaskEntity> = emptyList()) {
         viewModelScope.launch {
-            if (handleLearnTaskCompletion(task)) return@launch
             if (task.status != "COMPLETED") {
                 val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
                 if (incompleteSubtasks.isNotEmpty()) {
@@ -1963,7 +1962,7 @@ class MainViewModel(
                     }
                 }
             }
-            afterLearnTaskCompleted(updated)
+            handleLearnTaskToggle(original = task, updated = updated)
         }
     }
 
@@ -2010,7 +2009,6 @@ class MainViewModel(
         endMinute: Int? = null
     ) {
         viewModelScope.launch {
-            if (handleLearnTaskCompletion(task)) return@launch
             val effectiveDuration = if (startHour != null && startMinute != null && endHour != null && endMinute != null) {
                 (endHour * 60 + endMinute - startHour * 60 - startMinute).coerceAtLeast(0)
             } else {
@@ -2035,7 +2033,7 @@ class MainViewModel(
             )
             taskRepository.updateTask(updated)
 
-            afterLearnTaskCompleted(updated)
+            handleLearnTaskToggle(original = task, updated = updated)
 
             updated.linkedTodoId?.let { todoId ->
                 val linkedTodo = todoRepository.getTodoById(todoId)
@@ -2044,7 +2042,7 @@ class MainViewModel(
                 }
             }
 
-            if (effectiveDuration > 0 && task.type != "LEARN_STUDY" && task.type != "LEARN_REVIEW") {
+            if (effectiveDuration > 0) {
                 val timestamp = computeStartTimestamp(startHour, startMinute)
                 timerRepository.insertSession(
                     TimerSessionEntity(
@@ -2714,7 +2712,6 @@ class MainViewModel(
     fun markTaskCompleteFromTimer(taskId: Long) {
         viewModelScope.launch {
             val task = taskRepository.getTaskById(taskId) ?: return@launch
-            if (handleLearnTaskCompletion(task)) return@launch
             val subtasks = taskRepository.getSubtasks(task.id)
             val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
             if (incompleteSubtasks.isNotEmpty()) {
@@ -2725,7 +2722,7 @@ class MainViewModel(
             }
             val updated = task.copy(status = "COMPLETED")
             taskRepository.updateTask(updated)
-            afterLearnTaskCompleted(updated)
+            handleLearnTaskToggle(original = task, updated = updated)
             updated.linkedTodoId?.let { todoId ->
                 val linkedTodo = todoRepository.getTodoById(todoId)
                 if (linkedTodo != null && linkedTodo.status != "DONE") {
@@ -3650,22 +3647,16 @@ class MainViewModel(
         title: String,
         type: String,
         totalSections: Int,
-        unit: String,
-        totalAmount: Int,
         priorityLevel: String = "Medium",
         groupId: Long? = null
     ) {
         viewModelScope.launch {
             try {
-                val base = if (totalSections > 0) totalAmount / totalSections else 0
-                val remainder = if (totalSections > 0) totalAmount % totalSections else 0
                 val itemId = learnRepository.insertItem(
                     LearnItemEntity(
                         title = title.trim(),
                         type = type,
                         totalSections = totalSections,
-                        unit = unit,
-                        totalAmount = totalAmount,
                         priorityLevel = priorityLevel,
                         groupId = groupId
                     )
@@ -3676,13 +3667,11 @@ class MainViewModel(
                         "COURSE" -> "Lesson"
                         else -> "Section"
                     }
-                    val amount = base + if (i == totalSections - 1) remainder else 0
                     learnRepository.insertSection(
                         LearnSectionEntity(
                             learnItemId = itemId,
                             orderIndex = i,
-                            title = "$chapNum ${i + 1}",
-                            amount = amount
+                            title = "$chapNum ${i + 1}"
                         )
                     )
                 }
@@ -3697,8 +3686,6 @@ class MainViewModel(
         newTitle: String,
         newType: String,
         newTotalSections: Int,
-        newUnit: String,
-        newTotalAmount: Int,
         newPriorityLevel: String = "Medium",
         newGroupId: Long? = item.groupId
     ) {
@@ -3711,8 +3698,6 @@ class MainViewModel(
                         title = newTitle.trim(),
                         type = newType,
                         totalSections = newTotalSections,
-                        unit = newUnit,
-                        totalAmount = newTotalAmount,
                         priorityLevel = newPriorityLevel,
                         groupId = newGroupId
                     )
@@ -3721,21 +3706,17 @@ class MainViewModel(
                     for (section in existingSections) {
                         learnRepository.deleteSection(section)
                     }
-                    val base = if (newTotalSections > 0) newTotalAmount / newTotalSections else 0
-                    val remainder = if (newTotalSections > 0) newTotalAmount % newTotalSections else 0
                     for (i in 0 until newTotalSections) {
                         val chapNum = when (newType) {
                             "BOOK" -> "Chapter"
                             "COURSE" -> "Lesson"
                             else -> "Section"
                         }
-                        val amount = base + if (i == newTotalSections - 1) remainder else 0
                         learnRepository.insertSection(
                             LearnSectionEntity(
                                 learnItemId = item.id,
                                 orderIndex = i,
-                                title = "$chapNum ${i + 1}",
-                                amount = amount
+                                title = "$chapNum ${i + 1}"
                             )
                         )
                     }
@@ -3815,10 +3796,9 @@ class MainViewModel(
                     val task = TaskEntity(
                         title = "📖 $shortTitle — ${section.title}",
                         date = taskDate,
-                        type = "LEARN_STUDY",
+                        type = "TASK",
                         status = "PENDING",
-                        durationMinutes = section.amount,
-                        label = "Learn",
+                        label = "Study",
                         labelColor = 0xFFFFB300,
                         linkedLearnSectionId = section.id,
                         priorityLevel = item.priorityLevel
@@ -3858,10 +3838,9 @@ class MainViewModel(
                     val newReviewTaskId = taskRepository.insertTask(TaskEntity(
                         title = task.title.replace("📖", "🔄"),
                         date = nextDate,
-                        type = "LEARN_REVIEW",
+                        type = "TASK",
                         status = "PENDING",
-                        durationMinutes = section.amount,
-                        label = "Learn",
+                        label = "Review",
                         labelColor = 0xFFFFB300,
                         linkedLearnSectionId = section.id,
                         priorityLevel = task.priorityLevel
@@ -3874,9 +3853,6 @@ class MainViewModel(
                         reviewTaskId = newReviewTaskId
                     ))
                 }
-
-                val updatedTask = task.copy(status = "COMPLETED")
-                taskRepository.updateTask(updatedTask)
 
                 _pendingReviewTask.value = null
                 _pendingReviewSection.value = null
@@ -3894,48 +3870,62 @@ class MainViewModel(
         _pendingReviewLearnItem.value = null
     }
 
-    private suspend fun handleLearnTaskCompletion(task: TaskEntity): Boolean {
-        // Returns true if normal flow should be blocked (pending review or un-complete blocked)
-        if (task.status == "COMPLETED" && (task.type == "LEARN_STUDY" || task.type == "LEARN_REVIEW")) {
-            return true
-        }
-        if (task.status != "COMPLETED" && task.type == "LEARN_REVIEW") {
-            val section = learnRepository.getSectionByReviewTaskId(task.id)
-            if (section != null) {
-                val item = learnRepository.getItemById(section.learnItemId)
-                _pendingReviewTask.value = task
-                _pendingReviewSection.value = section
-                _pendingReviewLearnItem.value = item
-                return true
-            }
-        }
-        return false
-    }
+    private suspend fun handleLearnTaskToggle(original: TaskEntity, updated: TaskEntity) {
+        val sectionId = updated.linkedLearnSectionId ?: return
+        val section = learnRepository.getSectionById(sectionId) ?: return
 
-    private suspend fun afterLearnTaskCompleted(task: TaskEntity) {
-        if (task.type == "LEARN_STUDY") {
-            val section = learnRepository.getSectionByStudyTaskId(task.id) ?: return
+        if (original.status == "COMPLETED" && updated.status != "COMPLETED") {
+            when (section.status) {
+                "IN_REVIEW" -> {
+                    section.reviewTaskId?.let { taskRepository.deleteTaskById(it) }
+                    learnRepository.updateSection(section.copy(
+                        status = "NOT_STARTED",
+                        reviewStage = -1,
+                        lastReviewDate = null,
+                        nextReviewDate = null,
+                        reviewTaskId = null
+                    ))
+                }
+                "MASTERED" -> {
+                    learnRepository.updateSection(section.copy(
+                        status = "NOT_STARTED",
+                        reviewStage = -1,
+                        lastReviewDate = null,
+                        nextReviewDate = null
+                    ))
+                }
+            }
+        } else if (original.status != "COMPLETED" && updated.status == "COMPLETED") {
             val today = _todayDate.value
-            val nextDate = addDays(today, LEITNER_INTERVALS[0])
-            val reviewTaskId = taskRepository.insertTask(TaskEntity(
-                title = task.title.replace("📖", "🔄"),
-                date = nextDate,
-                type = "LEARN_REVIEW",
-                status = "PENDING",
-                durationMinutes = section.amount,
-                label = "Learn",
-                labelColor = 0xFFFFB300,
-                linkedLearnSectionId = section.id,
-                priorityLevel = task.priorityLevel
-            ))
-            learnRepository.updateSection(section.copy(
-                status = "IN_REVIEW",
-                reviewStage = 0,
-                lastReviewDate = today,
-                nextReviewDate = nextDate,
-                reviewTaskId = reviewTaskId
-            ))
-            checkLearnItemCompletion(section.learnItemId)
+            val learnItem = learnRepository.getItemById(section.learnItemId)
+            when (updated.label) {
+                "Study" -> {
+                    val nextDate = addDays(today, LEITNER_INTERVALS[0])
+                    val reviewTaskId = taskRepository.insertTask(TaskEntity(
+                        title = updated.title.replace("📖", "🔄"),
+                        date = nextDate,
+                        type = "TASK",
+                        status = "PENDING",
+                        label = "Review",
+                        labelColor = 0xFFFFB300,
+                        linkedLearnSectionId = section.id,
+                        priorityLevel = updated.priorityLevel
+                    ))
+                    learnRepository.updateSection(section.copy(
+                        status = "IN_REVIEW",
+                        reviewStage = 0,
+                        lastReviewDate = today,
+                        nextReviewDate = nextDate,
+                        reviewTaskId = reviewTaskId
+                    ))
+                    checkLearnItemCompletion(section.learnItemId)
+                }
+                "Review" -> {
+                    _pendingReviewTask.value = updated
+                    _pendingReviewSection.value = section
+                    _pendingReviewLearnItem.value = learnItem
+                }
+            }
         }
     }
 

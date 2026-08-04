@@ -495,8 +495,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 val todayStr = sdf.format(Calendar.getInstance().time)
                 val database = AppDatabase.getDatabase(context)
                 val tasks = database.taskDao().getTasksForDateSync(todayStr)
-                val learnReviewCount = tasks.count { it.type == "LEARN_REVIEW" }
-                val learnStudyCount = tasks.count { it.type == "LEARN_STUDY" }
+                val learnReviewCount = tasks.count { it.linkedLearnSectionId != null && it.label == "Review" }
+                val learnStudyCount = tasks.count { it.linkedLearnSectionId != null && it.label == "Study" }
                 if (learnReviewCount == 0 && learnStudyCount == 0) return@launch
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
