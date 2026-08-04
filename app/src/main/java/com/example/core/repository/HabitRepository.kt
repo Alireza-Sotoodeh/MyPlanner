@@ -12,6 +12,10 @@ class HabitRepository(private val habitDao: HabitDao) {
 
     suspend fun insertHabit(habit: HabitEntity): Long = habitDao.insertHabit(habit)
 
+    suspend fun updateHabit(habit: HabitEntity) = habitDao.updateHabit(habit)
+
+    suspend fun getHabitById(id: Long): HabitEntity? = habitDao.getHabitById(id)
+
     suspend fun deleteHabit(habit: HabitEntity) = habitDao.deleteHabit(habit)
 
     suspend fun deleteHabitById(id: Long) = habitDao.deleteHabitById(id)

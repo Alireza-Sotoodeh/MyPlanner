@@ -1052,14 +1052,54 @@ class MainViewModel(
     }
 
     // --- Habit & Tracker Operations ---
-    fun addHabit(name: String, type: String, target: Float, unit: String) {
+    fun addHabit(
+        name: String, type: String, target: Float, unit: String,
+        recurrenceMode: String = "ALWAYS", recurrenceInterval: Int = 1,
+        recurrenceDaysOfWeek: String = "", recurrenceEndDate: String? = null,
+        habitTime: String? = null, reminderEnabled: Boolean = false
+    ) {
         viewModelScope.launch {
-            habitRepository.insertHabit(HabitEntity(name = name, type = type, target = target, unit = unit))
+            val newId = habitRepository.insertHabit(
+                HabitEntity(
+                    name = name, type = type, target = target, unit = unit,
+                    recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                    recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                    habitTime = habitTime, reminderEnabled = reminderEnabled
+                )
+            )
+            if (reminderEnabled && !habitTime.isNullOrBlank()) {
+                com.example.core.manager.ReminderManager.scheduleHabitReminder(
+                    context = context,
+                    habit = HabitEntity(
+                        id = newId, name = name, type = type, target = target, unit = unit,
+                        recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                        recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                        habitTime = habitTime, reminderEnabled = reminderEnabled
+                    ),
+                    vibrate = _eventReminderVibrate.value,
+                    sound = _eventReminderSound.value
+                )
+            }
+        }
+    }
+
+    fun updateHabit(habit: HabitEntity) {
+        viewModelScope.launch {
+            habitRepository.updateHabit(habit)
+            com.example.core.manager.ReminderManager.cancelHabitReminder(context, habit)
+            if (habit.reminderEnabled && !habit.habitTime.isNullOrBlank()) {
+                com.example.core.manager.ReminderManager.scheduleHabitReminder(
+                    context = context, habit = habit,
+                    vibrate = _eventReminderVibrate.value,
+                    sound = _eventReminderSound.value
+                )
+            }
         }
     }
 
     fun deleteHabit(habit: HabitEntity) {
         viewModelScope.launch {
+            com.example.core.manager.ReminderManager.cancelHabitReminder(context, habit)
             habitRepository.deleteHabit(habit)
         }
     }

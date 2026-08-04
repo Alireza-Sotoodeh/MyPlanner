@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.example.core.database.entity.HabitEntity
 import com.example.core.database.entity.TaskEntity
 import com.example.core.receiver.ReminderReceiver
 import java.text.SimpleDateFormat
@@ -135,19 +136,115 @@ object ReminderManager {
         }
     }
 
+    fun scheduleHabitReminder(context: Context, habit: HabitEntity, vibrate: Boolean, sound: Boolean) {
+        if (!habit.reminderEnabled || habit.habitTime.isNullOrBlank()) return
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val calendar = Calendar.getInstance()
+        val now = calendar.timeInMillis
+
+        val hour = habit.habitTime!!.substringBefore(":").toIntOrNull() ?: return
+        val minute = habit.habitTime!!.substringAfter(":").toIntOrNull() ?: return
+
+        if (habit.recurrenceMode == "ALWAYS") {
+            calendar.set(Calendar.HOUR_OF_DAY, hour)
+            calendar.set(Calendar.MINUTE, minute)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            if (calendar.timeInMillis <= now) calendar.add(Calendar.DAY_OF_YEAR, 1)
+
+            scheduleAlarm(
+                context = context,
+                alarmManager = alarmManager,
+                timeInMillis = calendar.timeInMillis,
+                taskId = habit.id * 100,
+                isNightBefore = false,
+                title = "Habit Reminder",
+                message = "Time to ${habit.name}!",
+                vibrate = vibrate,
+                sound = sound
+            )
+        } else if (habit.recurrenceMode == "WEEKLY") {
+            val daysOfWeek = habit.recurrenceDaysOfWeek.split(",").filter { it.isNotBlank() }.mapNotNull { it.toIntOrNull() }
+            if (daysOfWeek.isEmpty()) return
+
+            var nextAlarmTime: Long? = null
+            for (i in 0..7) {
+                val checkCal = Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_YEAR, i)
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val dayOfWeek = when (checkCal.get(Calendar.DAY_OF_WEEK)) {
+                    Calendar.SUNDAY -> 1
+                    Calendar.MONDAY -> 2
+                    Calendar.TUESDAY -> 3
+                    Calendar.WEDNESDAY -> 4
+                    Calendar.THURSDAY -> 5
+                    Calendar.FRIDAY -> 6
+                    Calendar.SATURDAY -> 7
+                    else -> -1
+                }
+                if (dayOfWeek in daysOfWeek && checkCal.timeInMillis > now) {
+                    val endDate = habit.recurrenceEndDate
+                    if (endDate != null) {
+                        try {
+                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                            val endCal = Calendar.getInstance().apply { time = sdf.parse(endDate)!!; add(Calendar.DAY_OF_YEAR, 1) }
+                            if (checkCal.timeInMillis > endCal.timeInMillis) continue
+                        } catch (_: Exception) {}
+                    }
+                    nextAlarmTime = checkCal.timeInMillis
+                    break
+                }
+            }
+
+            nextAlarmTime?.let { time ->
+                scheduleAlarm(
+                    context = context,
+                    alarmManager = alarmManager,
+                    timeInMillis = time,
+                    taskId = habit.id * 100,
+                    isNightBefore = false,
+                    title = "Habit Reminder",
+                    message = "Time to ${habit.name}!",
+                    vibrate = vibrate,
+                    sound = sound
+                )
+            }
+        }
+    }
+
+    fun cancelHabitReminder(context: Context, habit: HabitEntity) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, ReminderReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, (habit.id * 100).toInt(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        alarmManager.cancel(pendingIntent)
+    }
+
     suspend fun rescheduleAllAlarms(context: Context) {
         try {
             val database = com.example.core.database.AppDatabase.getDatabase(context)
             val events = database.taskDao().getUpcomingEventsSync()
-            
+
             val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
             val vibrate = prefs.getBoolean("event_reminder_vibrate", true)
             val sound = prefs.getBoolean("event_reminder_sound", true)
-            
+
             events.forEach { event ->
                 scheduleReminders(context, event, vibrate, sound)
             }
-            Log.d("ReminderManager", "Successfully rescheduled ${events.size} event alarms.")
+
+            val habits = database.habitDao().getAllHabitsSync()
+            habits.forEach { habit ->
+                scheduleHabitReminder(context, habit, vibrate, sound)
+            }
+
+            Log.d("ReminderManager", "Successfully rescheduled ${events.size} event alarms and ${habits.size} habit alarms.")
         } catch (e: Exception) {
             Log.e("ReminderManager", "Failed to reschedule alarms", e)
         }
