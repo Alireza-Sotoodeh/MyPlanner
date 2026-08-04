@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -1087,7 +1093,21 @@ private fun ActivityHeatmapSection(
                 }
             }
 
-            if (tappedCell != null) {
+            var showBanner by remember { mutableStateOf(false) }
+            var bannerCell by remember { mutableStateOf<DayCell?>(null) }
+            LaunchedEffect(tappedCell) {
+                if (tappedCell != null) {
+                    bannerCell = tappedCell
+                    showBanner = true
+                } else {
+                    showBanner = false
+                }
+            }
+            AnimatedVisibility(
+                visible = showBanner,
+                enter = slideInVertically(animationSpec = tween(250)) { -it / 4 } + fadeIn(animationSpec = tween(250)),
+                exit = slideOutVertically(animationSpec = tween(250)) { -it / 4 } + fadeOut(animationSpec = tween(250))
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -1102,13 +1122,13 @@ private fun ActivityHeatmapSection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = tappedCell!!.dateStr,
+                                text = bannerCell!!.dateStr,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = formatDuration(tappedCell!!.seconds),
+                                text = formatDuration(bannerCell!!.seconds),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
