@@ -6,7 +6,10 @@ import android.app.AlarmManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.ContentValues
 import android.os.Build
+import android.os.Build.VERSION_CODES
+import android.os.Environment
 import android.os.Process
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -16,6 +19,7 @@ import android.media.Ringtone
 import androidx.core.app.NotificationCompat
 import android.app.NotificationChannel
 import android.provider.Settings
+import android.provider.MediaStore
 import android.util.Log
 import kotlin.math.ceil
 import java.util.concurrent.ConcurrentHashMap
@@ -68,6 +72,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.nio.charset.StandardCharsets
+import java.io.IOException
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
 import android.app.PendingIntent
 import kotlinx.coroutines.Dispatchers
 import com.example.core.service.TimerForegroundService
@@ -565,7 +574,7 @@ class MainViewModel(
                 backupFile.writeText(jsonString)
 
                 // Gzip for Drive upload
-                val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
+                val jsonBytes = jsonString.toByteArray(StandardCharsets.UTF_8)
                 val bos = java.io.ByteArrayOutputStream()
                 java.util.zip.GZIPOutputStream(bos).use { it.write(jsonBytes) }
                 val gzipBytes = bos.toByteArray()
@@ -600,9 +609,9 @@ class MainViewModel(
                         if (driveBytes != null) {
                             jsonString = try {
                                 java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(driveBytes))
-                                    .use { it.reader(Charsets.UTF_8).readText() }
+                                    .use { it.reader(StandardCharsets.UTF_8).readText() }
                             } catch (_: java.util.zip.ZipException) {
-                                String(driveBytes, Charsets.UTF_8)
+                                String(driveBytes, StandardCharsets.UTF_8)
                             }
                         }
                     } catch (e: Exception) {
@@ -686,6 +695,260 @@ class MainViewModel(
                 Log.e(TAG, "Restore failed", e)
                 onResult(false, "Restore failed: ${e.localizedMessage}")
             }
+        }
+    }
+
+    // LLM Export
+    fun exportForLlm(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val exportJson = buildLlmExportJson()
+                writeToDownloads(exportJson)
+                onResult(true, "Exported to Downloads/bulletcoach_llm_export.json")
+            } catch (e: Exception) {
+                Log.e(TAG, "LLM export failed", e)
+                onResult(false, "Export failed: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    private suspend fun buildLlmExportJson(): String {
+        val tasks = taskRepository.getAllTasks().first()
+        val habits = habitRepository.allHabits.first()
+        val habitLogs = habitRepository.getAllLogs().first()
+        val sleepLogs = sleepLogRepository.allSleepLogs.first()
+        val ideaGroups = ideaRepository.allGroups.first()
+        val ideas = ideaRepository.getAllIdeas().first()
+        val ideaStages = ideas.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
+        val todos = todoRepository.allTodos.first()
+        val diaryEntries = diaryRepository.getAllEntries().first()
+        val shopItems = shopItemRepository.allItems.first()
+        val mottos = mottoRepository.allMottos.first()
+        val dayReviews = dayReviewRepository.getAllReviews().first()
+        val learnGroups = learnRepository.getAllGroupsSync()
+        val learnItemsList = learnItems.value
+        val learnSections = learnItemsList.flatMap { learnRepository.getSectionsForItemSync(it.id) }
+        val timerSessions = timerRepository.getAllSessions().first()
+
+        val summary = buildSummary(tasks, habits, habitLogs, sleepLogs, dayReviews, learnItemsList, timerSessions, diaryEntries)
+        val entities = buildEntitiesJson(tasks, habits, habitLogs, sleepLogs, ideaGroups, ideas, ideaStages, todos, diaryEntries, shopItems, mottos, dayReviews, learnGroups, learnItemsList, learnSections, timerSessions)
+        val settings = buildStructuredSettings()
+
+        val exportData = mapOf(
+            "backupVersion" to 1,
+            "createdAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date()),
+            "summary" to summary,
+            "entities" to entities,
+            "settings" to settings
+        )
+
+        val adapter = moshi.adapter(Map::class.java)
+        return adapter.toJson(exportData)
+    }
+
+    private fun buildSummary(
+        tasks: List<TaskEntity>,
+        habits: List<HabitEntity>,
+        habitLogs: List<HabitLogEntity>,
+        sleepLogs: List<SleepLogEntity>,
+        dayReviews: List<DayReviewEntity>,
+        learnItems: List<LearnItemEntity>,
+        timerSessions: List<TimerSessionEntity>,
+        diaryEntries: List<DiaryEntryEntity>
+    ): Map<String, Any> {
+        val completedTasks = tasks.count { it.status == "COMPLETED" }
+        val totalTasks = tasks.size
+        val completionRate = if (totalTasks > 0) completedTasks.toDouble() / totalTasks else 0.0
+
+        val longestStreak = computeLongestStreak(habits, habitLogs)
+        val avgSleep = computeAvgSleep(sleepLogs)
+        val avgMood = computeAvgMood(dayReviews)
+        val learnInProgress = learnItems.count { it.status == "IN_PROGRESS" }
+        val pomodorosCompleted = timerSessions.count { it.type == "POMODORO" }
+
+        return mapOf(
+            "totalTasks" to totalTasks,
+            "completedTasks" to completedTasks,
+            "completionRate" to completionRate,
+            "activeHabits" to habits.size,
+            "totalDiaryEntries" to diaryEntries.size,
+            "habitStreakDays" to longestStreak,
+            "averageSleepHours" to avgSleep,
+            "averageMoodRating" to avgMood,
+            "learnItemsInProgress" to learnInProgress,
+            "totalPomodorosCompleted" to pomodorosCompleted
+        )
+    }
+
+    private fun computeLongestStreak(habits: List<HabitEntity>, logs: List<HabitLogEntity>): Int {
+        var maxStreak = 0
+        for (habit in habits) {
+            val habitLogs = logs.filter { it.habitId == habit.id }.map { it.date }.distinct().sorted()
+            var currentStreak = 0
+            var lastDate: String? = null
+            for (date in habitLogs) {
+                if (lastDate == null || isConsecutiveDay(lastDate, date)) {
+                    currentStreak++
+                    maxStreak = maxOf(maxStreak, currentStreak)
+                } else {
+                    currentStreak = 1
+                }
+                lastDate = date
+            }
+        }
+        return maxStreak
+    }
+
+    private fun isConsecutiveDay(prev: String, curr: String): Boolean {
+        try {
+            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val prevDate = fmt.parse(prev)
+            val currDate = fmt.parse(curr)
+            val diff = (currDate?.time ?: 0) - (prevDate?.time ?: 0)
+            return diff == 24L * 60 * 60 * 1000
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    private fun computeAvgSleep(logs: List<SleepLogEntity>): Double {
+        if (logs.isEmpty()) return 0.0
+        return logs.map { it.hoursSlept }.average()
+    }
+
+    private fun computeAvgMood(reviews: List<DayReviewEntity>): Double {
+        if (reviews.isEmpty()) return 0.0
+        return reviews.map { it.moodRating.toDouble() }.average()
+    }
+
+    private fun buildEntitiesJson(
+        tasks: List<TaskEntity>,
+        habits: List<HabitEntity>,
+        habitLogs: List<HabitLogEntity>,
+        sleepLogs: List<SleepLogEntity>,
+        ideaGroups: List<IdeaGroupEntity>,
+        ideas: List<IdeaEntity>,
+        ideaStages: List<IdeaStageEntity>,
+        todos: List<TodoEntity>,
+        diaryEntries: List<DiaryEntryEntity>,
+        shopItems: List<ShopItemEntity>,
+        mottos: List<MottoEntity>,
+        dayReviews: List<DayReviewEntity>,
+        learnGroups: List<LearnGroupEntity>,
+        learnItems: List<LearnItemEntity>,
+        learnSections: List<LearnSectionEntity>,
+        timerSessions: List<TimerSessionEntity>
+    ): Map<String, Any> {
+        val tasksWithSubtasks = tasks.map { task ->
+            val subtasks = tasks.filter { it.parentTaskId == task.id }
+            mapOf(
+                "task" to task,
+                "subtasks" to subtasks
+            )
+        }
+
+        val ideasWithStages = ideas.map { idea ->
+            val stages = ideaStages.filter { it.ideaId == idea.id }.sortedBy { it.orderIndex }
+            mapOf(
+                "idea" to idea,
+                "stages" to stages
+            )
+        }
+
+        val learnItemsWithSections = learnItems.map { item ->
+            val sections = learnSections.filter { it.learnItemId == item.id }.sortedBy { it.orderIndex }
+            mapOf(
+                "learnItem" to item,
+                "sections" to sections
+            )
+        }
+
+        return mapOf(
+            "tasks" to tasksWithSubtasks,
+            "habits" to habits,
+            "habitLogs" to habitLogs,
+            "sleepLogs" to sleepLogs,
+            "ideaGroups" to ideaGroups,
+            "ideas" to ideasWithStages,
+            "todos" to todos,
+            "diaryEntries" to diaryEntries,
+            "shopItems" to shopItems,
+            "mottos" to mottos,
+            "dayReviews" to dayReviews,
+            "learnGroups" to learnGroups,
+            "learnItems" to learnItemsWithSections,
+            "timerSessions" to timerSessions
+        )
+    }
+
+    private fun buildStructuredSettings(): Map<String, Any> {
+        return mapOf(
+            "usePersianCalendar" to _usePersianCalendar.value,
+            "autoSortEnabled" to prefs.getBoolean("auto_sort_enabled", false),
+            "reminders" to mapOf(
+                "dayReview" to mapOf(
+                    "enabled" to prefs.getBoolean("reminder_day_review_enabled", true),
+                    "time" to prefs.getString("reminder_day_review_time", "20:00")
+                ),
+                "habitCheckin" to mapOf(
+                    "enabled" to prefs.getBoolean("reminder_habit_checkin_enabled", false),
+                    "time" to prefs.getString("reminder_habit_checkin_time", "09:00")
+                ),
+                "pomodoroBreak" to mapOf(
+                    "enabled" to prefs.getBoolean("reminder_pomodoro_break_enabled", true),
+                    "time" to prefs.getString("reminder_pomodoro_break_time", "")
+                ),
+                "sleepLog" to mapOf(
+                    "enabled" to prefs.getBoolean("reminder_sleep_log_enabled", false),
+                    "time" to prefs.getString("reminder_sleep_log_time", "22:00")
+                ),
+                "waterReminder" to mapOf(
+                    "enabled" to prefs.getBoolean("reminder_water_enabled", false),
+                    "intervalMinutes" to prefs.getInt("reminder_water_interval_minutes", 60)
+                ),
+                "postureReminder" to mapOf(
+                    "enabled" to prefs.getBoolean("reminder_posture_enabled", false),
+                    "intervalMinutes" to prefs.getInt("reminder_posture_interval_minutes", 60)
+                ),
+                "custom" to prefs.getString("reminder_custom_list", "[]")
+            ),
+            "pomodoro" to mapOf(
+                "dndEnabled" to _dndEnabled.value,
+                "ringtoneEnabled" to _pomodoroRingtoneEnabled.value,
+                "vibrateEnabled" to _pomodoroVibrateEnabled.value,
+                "defaultBreakMinutes" to _defaultBreakMinutes.value
+            ),
+            "eventReminders" to mapOf(
+                "enabled" to prefs.getBoolean("event_reminders_enabled", true),
+                "vibrate" to prefs.getBoolean("event_reminders_vibrate", true),
+                "sound" to prefs.getString("event_reminders_sound", "default")
+            )
+        )
+    }
+
+    private fun writeToDownloads(jsonString: String) {
+        val fileName = "bulletcoach_llm_export.json"
+        val jsonBytes = jsonString.toByteArray(StandardCharsets.UTF_8)
+
+        if (Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) { // API 33+
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+            }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                resolver.openOutputStream(uri)?.use { it.write(jsonBytes) }
+            } else {
+                throw IOException("Failed to create MediaStore entry for Downloads")
+            }
+        } else {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs()
+            }
+            val file = File(downloadsDir, fileName)
+            FileOutputStream(file).use { it.write(jsonBytes) }
         }
     }
 

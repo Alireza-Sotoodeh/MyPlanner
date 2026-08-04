@@ -90,6 +90,7 @@ import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
@@ -3560,6 +3561,7 @@ fun SettingsDialog(
 
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
+    var isExporting by remember { mutableStateOf(false) }
 
     val reviewReminderTime by viewModel.reviewReminderTime.collectAsState()
     val reviewReminderEnabled by viewModel.reviewReminderEnabled.collectAsState()
@@ -3822,6 +3824,33 @@ fun SettingsDialog(
                             focusedLabelColor = MaterialTheme.colorScheme.primary
                         )
                     )
+                }
+            }
+
+            // 1b. Export for AI Analysis
+            SettingsCard(title = "EXPORT FOR AI ANALYSIS") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            isExporting = true
+                            viewModel.exportForLlm { success, message ->
+                                isExporting = false
+                                isSuccessStatus = success
+                                statusMessage = message
+                            }
+                        },
+                        enabled = !isExporting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isExporting) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Export for AI Analysis")
+                    }
                 }
             }
 

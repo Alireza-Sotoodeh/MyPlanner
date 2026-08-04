@@ -263,77 +263,46 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 
 *Files: MainViewModel.kt, PlannerScreen.kt*
 
-### 6.1 — Create `exportForLlm()` function
+### 6.1 — Create `exportForLlm()` function `[x] DONE`
 
-- [ ] In `MainViewModel.kt`:
-  
+- [x] In `MainViewModel.kt`:
   ```kotlin
   fun exportForLlm(onResult: (Boolean, String) -> Unit) {
       viewModelScope.launch(Dispatchers.IO) {
           try {
-              // Build enhanced JSON
-              val exportData = buildLlmExportJson()
-              // Write to Downloads
-              writeToDownloads(exportData)
+              val exportJson = buildLlmExportJson()
+              writeToDownloads(exportJson)
               onResult(true, "Exported to Downloads/bulletcoach_llm_export.json")
           } catch (e: Exception) {
-              onResult(false, "Export failed: ${e.message}")
+              onResult(false, "Export failed: ${e.localizedMessage}")
           }
       }
   }
   ```
+- [x] **Verify:** `assembleDebug` succeeds
 
-### 6.2 — Build enhanced JSON
+### 6.2 — Build enhanced JSON `[x] DONE`
 
-- [ ] Compute `userSummary`:
-  
-  ```kotlin
-  val summary = mapOf(
-      "totalTasks" to allTasks.size,
-      "completedTasks" to allTasks.count { it.status == "COMPLETED" },
-      "completionRate" to if (allTasks.isNotEmpty()) allTasks.count { it.status == "COMPLETED" }.toDouble() / allTasks.size else 0.0,
-      "activeHabits" to habits.size,
-      "totalDiaryEntries" to diaryEntries.size,
-      "habitStreakDays" to computeLongestStreak(habits, habitLogs),
-      "averageSleepHours" to computeAvgSleep(sleepLogs),
-      "averageMoodRating" to computeAvgMood(dayReviews),
-      "learnItemsInProgress" to learnItems.count { it.status == "IN_PROGRESS" },
-      "totalPomodorosCompleted" to timerSessions.count { it.type == "FOCUS" }
-  )
-  ```
-- [ ] Build nested entities:
-  - Tasks with inline subtasks (parentTaskId → child tasks)
+- [x] Compute `userSummary`:
+  - `totalTasks`, `completedTasks`, `completionRate`
+  - `activeHabits`, `totalDiaryEntries`
+  - `habitStreakDays` (longest streak across all habits)
+  - `averageSleepHours` (from sleep logs)
+  - `averageMoodRating` (from day reviews)
+  - `learnItemsInProgress` (status == IN_PROGRESS)
+  - `totalPomodorosCompleted` (timerSessions type == POMODORO)
+- [x] Build nested entities:
+  - Tasks with inline subtasks (parentTaskId → children)
   - Ideas with inline stages
   - Learn items with inline sections
-- [ ] Build structured settings:
-  
-  ```kotlin
-  val structuredSettings = mapOf(
-      "usePersianCalendar" to _usePersianCalendar.value,
-      "autoSortEnabled" to prefs.getBoolean("auto_sort_enabled", false),
-      "reminders" to mapOf(
-          "dayReview" to mapOf("enabled" to ..., "time" to "..."),
-          // ... all 7 reminders
-      ),
-      "pomodoro" to mapOf(
-          "dndEnabled" to _dndEnabled.value,
-          "ringtoneEnabled" to _pomodoroRingtoneEnabled.value,
-          "vibrateEnabled" to _pomodoroVibrateEnabled.value,
-          "defaultBreakMinutes" to _defaultBreakMinutes.value
-      ),
-      "eventReminders" to mapOf(
-          "enabled" to ...,
-          "vibrate" to ...,
-          "sound" to ...
-      )
-  )
-  ```
-- [ ] Assemble final JSON structure with `backupVersion`, `createdAt`, `summary`, `entities`, `settings`
+- [x] Build structured settings:
+  - Calendar, auto-sort, all 7 reminders, pomodoro settings, event reminders
+- [x] Assemble final JSON: `backupVersion`, `createdAt`, `summary`, `entities`, `settings`
+- [x] **Verify:** `assembleDebug` succeeds
 
-### 6.3 — Write to Downloads directory
+### 6.3 — Write to Downloads directory `[x] DONE`
 
-- [ ] Android 13+ (`API 33+`): Use `MediaStore.Downloads`:
-  
+- [x] Android 13+ (API 33+): Use `MediaStore.Downloads`:
   ```kotlin
   val contentValues = ContentValues().apply {
       put(MediaStore.Downloads.DISPLAY_NAME, "bulletcoach_llm_export.json")
@@ -342,19 +311,18 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
   val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
   context.contentResolver.openOutputStream(uri!!)?.use { it.write(jsonBytes) }
   ```
-- [ ] Android 12- (`API < 33`): Request `WRITE_EXTERNAL_STORAGE` permission, then:
-  
+- [x] Android 12- (API < 33): Request `WRITE_EXTERNAL_STORAGE` permission, then:
   ```kotlin
   val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "bulletcoach_llm_export.json")
   file.writeText(jsonString)
   ```
-- [ ] **Edge case:** Downloads directory unavailable (no external storage) → fall back to `context.cacheDir`, show different path in message
-- [ ] **Edge case:** File already exists → overwrite (user expects latest export)
+- [x] **Edge case:** Downloads directory unavailable → fall back to `context.cacheDir`, show different path in message
+- [x] **Edge case:** File already exists → overwrite (user expects latest export)
+- [x] **Verify:** `assembleDebug` succeeds
 
-### 6.4 — Add UI button in SettingsDialog
+### 6.4 — Add UI button in SettingsDialog `[x] DONE`
 
-- [ ] After Backup/Restore buttons in SettingsDialog:
-  
+- [x] After Backup/Restore buttons in SettingsDialog (`PlannerScreen.kt`):
   ```kotlin
   Row(
       modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -378,7 +346,8 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
       }
   }
   ```
-- [ ] Add `isExporting` state variable alongside `isBackingUp`/`isRestoring`
+- [x] Add `isExporting` state variable alongside `isBackingUp`/`isRestoring`
+- [x] **Verify:** `assembleDebug` succeeds
 
 ---
 
