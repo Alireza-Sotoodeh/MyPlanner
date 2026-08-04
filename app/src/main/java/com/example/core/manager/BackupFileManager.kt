@@ -73,25 +73,30 @@ class BackupFileManager(private val context: Context) {
     }
 
     fun hasWritePermission(uri: Uri): Boolean {
-        cleanupTestFiles(uri)
         return try {
+            cleanupTestFiles(uri)
             val testFile = DocumentsContract.createDocument(
-                contentResolver, uri, "application/json", ".write_test_${System.currentTimeMillis()}"
+                contentResolver, uri, "application/json", "write_test_p_${System.currentTimeMillis()}"
             )
             if (testFile != null) {
                 deleteDocument(testFile)
             }
             testFile != null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "hasWritePermission failed for $uri", e)
             false
         }
     }
 
     private fun cleanupTestFiles(uri: Uri) {
-        for (child in listChildren(uri)) {
-            if (child.name.startsWith(".write_test_")) {
-                deleteDocument(child.uri)
+        try {
+            for (child in listChildren(uri)) {
+                if (child.name.startsWith("write_test_p_")) {
+                    deleteDocument(child.uri)
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "cleanupTestFiles failed for $uri", e)
         }
     }
 

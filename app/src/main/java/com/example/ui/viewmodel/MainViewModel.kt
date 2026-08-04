@@ -450,7 +450,7 @@ private val mottoRepository: MottoRepository,
             prefs.edit().remove("backup_location_uri").apply()
         }
         _backupLocationUri.value = uri
-        refreshBackupWritable()
+        viewModelScope.launch(Dispatchers.IO) { refreshBackupWritable() }
     }
 
     fun setBackupMaxMonths(count: Int) {
