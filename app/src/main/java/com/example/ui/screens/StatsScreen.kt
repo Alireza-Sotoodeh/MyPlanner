@@ -763,7 +763,8 @@ private data class GridData(
     val cells: List<List<DayCell?>>,
     val maxSeconds: Int,
     val numWeeks: Int,
-    val monthLabel: String
+    val monthLabel: String,
+    val quintiles: List<Int> = emptyList()
 )
 
 @Composable
@@ -828,13 +829,10 @@ private fun ActivityHeatmapSection(
 
             Spacer(Modifier.height(8.dp))
 
-            val dayLabels = if (isPersian) listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
-            else listOf("Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri")
-
             Row(modifier = Modifier.fillMaxWidth()) {
-                dayLabels.forEach { label ->
+                (1..7).forEach { n ->
                     Text(
-                        label,
+                        "$n",
                         fontSize = 9.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
@@ -848,23 +846,24 @@ private fun ActivityHeatmapSection(
                 Row(modifier = Modifier.fillMaxWidth()) {
                     for (colIdx in 0 until gridData.numWeeks) {
                         val cell = gridData.cells[rowIdx][colIdx]
-                        val color = if (cell != null) {
-                            if (cell.isCurrentMonth) {
-                                if (cell.seconds > 0 && gridData.maxSeconds > 0) {
-                                    val ratio = cell.seconds.toFloat() / gridData.maxSeconds
-                                    val alpha = when {
-                                        ratio <= 0.20f -> 0.15f
-                                        ratio <= 0.40f -> 0.35f
-                                        ratio <= 0.60f -> 0.55f
-                                        ratio <= 0.80f -> 0.75f
+                        val color = if (cell != null && cell.isCurrentMonth) {
+                            if (cell.seconds > 0) {
+                                val alpha = if (gridData.quintiles.isNotEmpty()) {
+                                    val bucket = gridData.quintiles.indexOfFirst { cell.seconds <= it }
+                                    when {
+                                        bucket < 0 -> 1.0f
+                                        bucket == 0 -> 0.15f
+                                        bucket == 1 -> 0.35f
+                                        bucket == 2 -> 0.55f
+                                        bucket == 3 -> 0.75f
                                         else -> 1.0f
                                     }
-                                    MaterialTheme.colorScheme.primary.copy(alpha = alpha)
                                 } else {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+                                    0.55f
                                 }
+                                MaterialTheme.colorScheme.primary.copy(alpha = alpha)
                             } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
                             }
                         } else Color.Transparent
                         Box(
@@ -884,7 +883,7 @@ private fun ActivityHeatmapSection(
                 Text("Less", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    listOf(0.05f, 0.15f, 0.35f, 0.55f, 0.75f, 1.0f).forEach { alpha ->
+                    listOf(0.15f, 0.35f, 0.55f, 0.75f, 1.0f).forEach { alpha ->
                         Box(
                             modifier = Modifier
                                 .size(12.dp)
@@ -895,6 +894,15 @@ private fun ActivityHeatmapSection(
                 Spacer(Modifier.weight(1f))
                 Text("More", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "1: Sat  2: Sun  3: Mon  4: Tue  5: Wed  6: Thu  7: Fri",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -918,20 +926,30 @@ private fun computeGridData(
         start to end
     }
 
+    val monthLabel = if (isPersian) {
+        "${PersianCalendarHelper.monthNames[month - 1]} $year"
+    } else {
+        val names = arrayOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+        "${names[month - 1]} $year"
+    }
+
+    val parsedStart = sdf.parse(startDateStr) ?: return GridData(emptyList(), 0, 0, monthLabel)
+    val parsedEnd = sdf.parse(endDateStr) ?: return GridData(emptyList(), 0, 0, monthLabel)
+
     val perDaySeconds = mutableMapOf<String, Int>()
     sessions.forEach { session ->
-        if (session.date >= startDateStr && session.date <= endDateStr) {
+        if (session.date >= startDateStr && session.date < endDateStr) {
             perDaySeconds[session.date] = (perDaySeconds[session.date] ?: 0) + session.durationSeconds
         }
     }
     val maxSeconds = perDaySeconds.values.maxOrNull() ?: 0
 
-    cal.time = sdf.parse(startDateStr)!!
+    cal.time = parsedStart
     val firstDow = cal.get(Calendar.DAY_OF_WEEK) % 7
     cal.add(Calendar.DAY_OF_MONTH, -firstDow)
     val firstTime = cal.time.time
 
-    cal.time = sdf.parse(endDateStr)!!
+    cal.time = parsedEnd
     val lastDow = cal.get(Calendar.DAY_OF_WEEK) % 7
     cal.add(Calendar.DAY_OF_MONTH, (6 - lastDow) % 7)
     val diffDays = ((cal.time.time - firstTime) / 86400000L).toInt()
@@ -944,20 +962,29 @@ private fun computeGridData(
     for (w in 0 until numWeeks) {
         for (d in 0..6) {
             val dateStr = sdf.format(cal.time)
+            val isCurrent = if (isPersian) {
+                val (y, m, _) = PersianCalendarHelper.getPersianDateParts(dateStr)
+                y == year && m == month
+            } else {
+                dateStr.startsWith(monthPrefix)
+            }
             cells[d][w] = DayCell(
                 seconds = perDaySeconds[dateStr] ?: 0,
-                isCurrentMonth = dateStr.startsWith(monthPrefix)
+                isCurrentMonth = isCurrent
             )
             cal.add(Calendar.DAY_OF_MONTH, 1)
         }
     }
 
-    val monthLabel = if (isPersian) {
-        "${PersianCalendarHelper.monthNames[month - 1]} $year"
+    val extracted = cells.flatten().filterNotNull()
+        .filter { it.isCurrentMonth && it.seconds > 0 }
+        .map { it.seconds }
+        .sorted()
+    val quintiles = if (extracted.size >= 5) {
+        (1..4).map { extracted[(extracted.size * it / 5).coerceAtMost(extracted.size - 1)] }
     } else {
-        val names = arrayOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
-        "${names[month - 1]} $year"
+        emptyList()
     }
 
-    return GridData(cells, maxSeconds, numWeeks, monthLabel)
+    return GridData(cells, maxSeconds, numWeeks, monthLabel, quintiles)
 }
