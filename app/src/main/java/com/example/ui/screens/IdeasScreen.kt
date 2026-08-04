@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -275,7 +280,7 @@ private fun IdeaCard(
     val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
     var showAddStage by remember { mutableStateOf(false) }
     var newStageTitle by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(true) }
     var showIdeaMenu by remember { mutableStateOf(false) }
     var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
 
@@ -315,6 +320,18 @@ private fun IdeaCard(
                         )
                     }
                 }
+                IconButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
                 Box {
                     IconButton(onClick = { showIdeaMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(20.dp))
@@ -327,74 +344,96 @@ private fun IdeaCard(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-            Spacer(Modifier.height(8.dp))
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    if (idea.description.isBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Spacer(Modifier.height(8.dp))
+                    }
 
-            stages.forEach { stage ->
-                StageRow(
-                    stage = stage,
-                    stages = stages,
-                    viewModel = viewModel,
-                    onDelete = { viewModel.deleteStage(it) }
-                )
-                Spacer(Modifier.height(4.dp))
-            }
-
-            if (showAddStage && addStageIdeaId == idea.id) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = newStageTitle,
-                        onValueChange = { newStageTitle = it },
-                        placeholder = { Text("Stage title...", fontSize = 13.sp) },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    stages.forEach { stage ->
+                        StageRow(
+                            stage = stage,
+                            stages = stages,
+                            viewModel = viewModel,
+                            onDelete = { viewModel.deleteStage(it) }
                         )
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
-                            if (newStageTitle.isNotBlank()) {
-                                viewModel.addStage(idea.id, newStageTitle.trim())
-                                newStageTitle = ""
-                                showAddStage = false
-                                addStageIdeaId = null
+                        Spacer(Modifier.height(4.dp))
+                    }
+
+                    if (showAddStage && addStageIdeaId == idea.id) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = newStageTitle,
+                                onValueChange = { newStageTitle = it },
+                                placeholder = { Text("Stage title...", fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                )
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            IconButton(
+                                onClick = {
+                                    if (newStageTitle.isNotBlank()) {
+                                        viewModel.addStage(idea.id, newStageTitle.trim())
+                                        newStageTitle = ""
+                                        showAddStage = false
+                                        addStageIdeaId = null
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = "Add", modifier = Modifier.size(16.dp))
+                            }
+                            IconButton(
+                                onClick = { showAddStage = false; newStageTitle = ""; addStageIdeaId = null },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(16.dp))
                             }
                         }
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = "Add", modifier = Modifier.size(20.dp))
+                    } else {
+                        TextButton(
+                            onClick = { showAddStage = true; addStageIdeaId = idea.id },
+                            modifier = Modifier.height(24.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "Add Stage",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                            )
+                        }
                     }
-                    IconButton(onClick = { showAddStage = false; newStageTitle = ""; addStageIdeaId = null }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(20.dp))
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        TextButton(
+                            onClick = { onAddToPlanner(idea) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.PlaylistAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Planner", fontSize = 12.sp)
+                        }
                     }
-                }
-            } else {
-                TextButton(
-                    onClick = { showAddStage = true; addStageIdeaId = idea.id },
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add Stage", fontSize = 12.sp)
-                }
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                TextButton(
-                    onClick = { onAddToPlanner(idea) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(Icons.Default.PlaylistAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Planner", fontSize = 12.sp)
                 }
             }
         }
