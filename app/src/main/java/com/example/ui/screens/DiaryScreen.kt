@@ -324,9 +324,10 @@ fun DiaryScreen(
             IconButton(onClick = { navigateDate(-1) }) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 if (currentDate in dateSet) {
+                    Spacer(Modifier.width(4.dp))
                     Text("\u25CF", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
