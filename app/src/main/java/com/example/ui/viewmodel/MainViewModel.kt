@@ -246,6 +246,48 @@ class MainViewModel(
         val LEITNER_INTERVALS = intArrayOf(1, 3, 7, 16, 35, 90)
     }
 
+    private fun parseDaysOfWeek(daysOfWeek: String): Set<Int> =
+        daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+
+    private fun isAllowedDay(dateStr: String, daysOfWeek: String): Boolean {
+        if (daysOfWeek.isBlank()) return true
+        val allowed = parseDaysOfWeek(daysOfWeek)
+        if (allowed.isEmpty()) return true
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val cal = java.util.Calendar.getInstance()
+        cal.time = fmt.parse(dateStr) ?: return true
+        return cal.get(java.util.Calendar.DAY_OF_WEEK) in allowed
+    }
+
+    private fun nextAllowedDate(dateStr: String, daysOfWeek: String): String {
+        if (daysOfWeek.isBlank()) return dateStr
+        val allowed = parseDaysOfWeek(daysOfWeek)
+        if (allowed.isEmpty()) return dateStr
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val cal = java.util.Calendar.getInstance()
+        cal.time = fmt.parse(dateStr) ?: return dateStr
+        for (i in 0..6) {
+            if (cal.get(java.util.Calendar.DAY_OF_WEEK) in allowed) return fmt.format(cal.time)
+            cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        return dateStr
+    }
+
+    private fun countAllowedDaysBetween(from: String, to: String, daysOfWeek: String): Int {
+        if (daysOfWeek.isBlank()) return daysBetweenDates(from, to)
+        val allowed = parseDaysOfWeek(daysOfWeek)
+        if (allowed.isEmpty()) return daysBetweenDates(from, to)
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val startCal = java.util.Calendar.getInstance().apply { time = fmt.parse(from) ?: return 1 }
+        val endCal = java.util.Calendar.getInstance().apply { time = fmt.parse(to) ?: return 1 }
+        var count = 0
+        while (!startCal.after(endCal)) {
+            if (startCal.get(java.util.Calendar.DAY_OF_WEEK) in allowed) count++
+            startCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        return count.coerceAtLeast(1)
+    }
+
     private val _pendingReviewTask = MutableStateFlow<TaskEntity?>(null)
     val pendingReviewTask: StateFlow<TaskEntity?> = _pendingReviewTask.asStateFlow()
 
@@ -3805,7 +3847,9 @@ class MainViewModel(
         itemId: Long,
         startDate: String,
         sectionsPerDay: Int,
-        deadline: String? = null
+        deadline: String? = null,
+        scheduleMode: String = "CONTINUOUS",
+        scheduleDaysOfWeek: String = ""
     ) {
         viewModelScope.launch {
             try {
@@ -3814,35 +3858,71 @@ class MainViewModel(
                 if (sections.isEmpty()) return@launch
 
                 val effectivePerDay = if (deadline != null && deadline.isNotBlank()) {
-                    val daysBetween = daysBetweenDates(startDate, deadline).coerceAtLeast(1)
-                    ceil(sections.size.toFloat() / daysBetween.toFloat()).toInt()
+                    if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isNotBlank()) {
+                        val allowedDays = countAllowedDaysBetween(startDate, deadline, scheduleDaysOfWeek)
+                        ceil(sections.size.toFloat() / allowedDays.toFloat()).toInt()
+                    } else {
+                        val daysBetween = daysBetweenDates(startDate, deadline).coerceAtLeast(1)
+                        ceil(sections.size.toFloat() / daysBetween.toFloat()).toInt()
+                    }
                 } else {
                     sectionsPerDay.coerceAtLeast(1)
                 }
 
                 learnRepository.updateItem(item.copy(
                     status = "ACTIVE",
-                    sectionsPerDay = effectivePerDay
+                    sectionsPerDay = effectivePerDay,
+                    scheduleMode = scheduleMode,
+                    scheduleDaysOfWeek = scheduleDaysOfWeek
                 ))
 
                 val perDay = effectivePerDay
-                for (i in sections.indices) {
-                    val section = sections[i]
-                    val dayOffset = i / perDay
-                    val taskDate = addDays(startDate, dayOffset)
-                    val shortTitle = if (item.title.length > 30) item.title.take(27) + "..." else item.title
-                    val task = TaskEntity(
-                        title = "📖 $shortTitle — ${section.title}",
-                        date = taskDate,
-                        type = "TASK",
-                        status = "PENDING",
-                        label = "Study",
-                        labelColor = 0xFFFFB300,
-                        linkedLearnSectionId = section.id,
-                        priorityLevel = item.priorityLevel
-                    )
-                    val taskId = taskRepository.insertTask(task)
-                    learnRepository.updateSection(section.copy(studyTaskId = taskId))
+
+                if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isNotBlank()) {
+                    val firstDate = nextAllowedDate(startDate, scheduleDaysOfWeek)
+                    val totalBatches = ceil(sections.size.toFloat() / perDay.toFloat()).toInt()
+                    val allowedDates = generateSequence(firstDate) { addDays(it, 1) }
+                        .filter { nextAllowedDate(it, scheduleDaysOfWeek) == it }
+                        .take(totalBatches)
+                        .toList()
+
+                    for (i in sections.indices) {
+                        val section = sections[i]
+                        val batchIndex = i / perDay
+                        val taskDate = allowedDates[batchIndex]
+                        val shortTitle = if (item.title.length > 30) item.title.take(27) + "..." else item.title
+                        val task = TaskEntity(
+                            title = "📖 $shortTitle — ${section.title}",
+                            date = taskDate,
+                            type = "TASK",
+                            status = "PENDING",
+                            label = "Study",
+                            labelColor = 0xFFFFB300,
+                            linkedLearnSectionId = section.id,
+                            priorityLevel = item.priorityLevel
+                        )
+                        val taskId = taskRepository.insertTask(task)
+                        learnRepository.updateSection(section.copy(studyTaskId = taskId))
+                    }
+                } else {
+                    for (i in sections.indices) {
+                        val section = sections[i]
+                        val dayOffset = i / perDay
+                        val taskDate = addDays(startDate, dayOffset)
+                        val shortTitle = if (item.title.length > 30) item.title.take(27) + "..." else item.title
+                        val task = TaskEntity(
+                            title = "📖 $shortTitle — ${section.title}",
+                            date = taskDate,
+                            type = "TASK",
+                            status = "PENDING",
+                            label = "Study",
+                            labelColor = 0xFFFFB300,
+                            linkedLearnSectionId = section.id,
+                            priorityLevel = item.priorityLevel
+                        )
+                        val taskId = taskRepository.insertTask(task)
+                        learnRepository.updateSection(section.copy(studyTaskId = taskId))
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to apply learning algorithm", e)
@@ -3906,8 +3986,17 @@ class MainViewModel(
                 for (section in sections) {
                     when (section.status) {
                         "NOT_STARTED" -> {
-                            val dayOffset = notStartedIndex / perDay
-                            val taskDate = addDays(todayStr, dayOffset)
+                            val taskDate = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank()) {
+                                val firstAllowed = nextAllowedDate(todayStr, item.scheduleDaysOfWeek)
+                                val totalBatches = ceil(sections.count { it.status == "NOT_STARTED" }.toFloat() / perDay.toFloat()).toInt()
+                                val allowedDates = generateSequence(firstAllowed) { addDays(it, 1) }
+                                    .filter { nextAllowedDate(it, item.scheduleDaysOfWeek) == it }
+                                    .take(totalBatches)
+                                    .toList()
+                                allowedDates[notStartedIndex / perDay]
+                            } else {
+                                addDays(todayStr, notStartedIndex / perDay)
+                            }
                             val taskId = taskRepository.insertTask(TaskEntity(
                                 title = "📖 $shortTitle — ${section.title}",
                                 date = taskDate,
@@ -3923,9 +4012,12 @@ class MainViewModel(
                         }
                         "STUDIED" -> {
                             if (gapDays > LEITNER_INTERVALS[0]) {
+                                val nextDate = addDays(todayStr, LEITNER_INTERVALS[0])
+                                val adjustedDate = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank())
+                                    nextAllowedDate(nextDate, item.scheduleDaysOfWeek) else nextDate
                                 val taskId = taskRepository.insertTask(TaskEntity(
                                     title = "🔄 $shortTitle — ${section.title}",
-                                    date = todayStr,
+                                    date = adjustedDate,
                                     type = "TASK",
                                     status = "PENDING",
                                     label = "Review",
@@ -3937,14 +4029,16 @@ class MainViewModel(
                                     status = "IN_REVIEW",
                                     reviewStage = 0,
                                     lastReviewDate = null,
-                                    nextReviewDate = addDays(todayStr, LEITNER_INTERVALS[0]),
+                                    nextReviewDate = adjustedDate,
                                     reviewTaskId = taskId
                                 ))
                             } else {
                                 val nextDate = addDays(todayStr, LEITNER_INTERVALS[0])
+                                val adjustedDate = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank())
+                                    nextAllowedDate(nextDate, item.scheduleDaysOfWeek) else nextDate
                                 val taskId = taskRepository.insertTask(TaskEntity(
                                     title = "🔄 $shortTitle — ${section.title}",
-                                    date = nextDate,
+                                    date = adjustedDate,
                                     type = "TASK",
                                     status = "PENDING",
                                     label = "Review",
@@ -3956,7 +4050,7 @@ class MainViewModel(
                                     status = "IN_REVIEW",
                                     reviewStage = 0,
                                     lastReviewDate = null,
-                                    nextReviewDate = nextDate,
+                                    nextReviewDate = adjustedDate,
                                     reviewTaskId = taskId
                                 ))
                             }
@@ -3964,9 +4058,11 @@ class MainViewModel(
                         "IN_REVIEW" -> {
                             val stage = section.reviewStage.coerceIn(0, 5)
                             if (gapDays > LEITNER_INTERVALS[stage]) {
+                                val todayOrAllowed = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank())
+                                    nextAllowedDate(todayStr, item.scheduleDaysOfWeek) else todayStr
                                 val taskId = taskRepository.insertTask(TaskEntity(
                                     title = "🔄 $shortTitle — ${section.title}",
-                                    date = todayStr,
+                                    date = todayOrAllowed,
                                     type = "TASK",
                                     status = "PENDING",
                                     label = "Review",
@@ -3974,9 +4070,12 @@ class MainViewModel(
                                     linkedLearnSectionId = section.id,
                                     priorityLevel = item.priorityLevel
                                 ))
+                                val nextDate = addDays(todayOrAllowed, LEITNER_INTERVALS[stage])
+                                val adjustedDate = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank())
+                                    nextAllowedDate(nextDate, item.scheduleDaysOfWeek) else nextDate
                                 learnRepository.updateSection(section.copy(
                                     lastReviewDate = null,
-                                    nextReviewDate = addDays(todayStr, LEITNER_INTERVALS[stage]),
+                                    nextReviewDate = adjustedDate,
                                     reviewTaskId = taskId
                                 ))
                             } else if (section.nextReviewDate != null) {
@@ -4025,9 +4124,14 @@ class MainViewModel(
                     ))
                 } else {
                     val nextDate = addDays(completionDate, LEITNER_INTERVALS[newStage])
+                    val learnItem = learnRepository.getItemById(section.learnItemId)
+                    val adjustedDate = learnItem?.let { li ->
+                        if (li.scheduleMode == "WEEKLY" && li.scheduleDaysOfWeek.isNotBlank())
+                            nextAllowedDate(nextDate, li.scheduleDaysOfWeek) else nextDate
+                    } ?: nextDate
                     val newReviewTaskId = taskRepository.insertTask(TaskEntity(
                         title = task.title.replace("📖", "🔄"),
-                        date = nextDate,
+                        date = adjustedDate,
                         type = "TASK",
                         status = "PENDING",
                         label = "Review",
@@ -4039,7 +4143,7 @@ class MainViewModel(
                         status = "IN_REVIEW",
                         reviewStage = newStage,
                         lastReviewDate = completionDate,
-                        nextReviewDate = nextDate,
+                        nextReviewDate = adjustedDate,
                         reviewTaskId = newReviewTaskId
                     ))
                 }
@@ -4091,9 +4195,13 @@ class MainViewModel(
             when (updated.label) {
                 "Study" -> {
                     val nextDate = addDays(completionDate, LEITNER_INTERVALS[0])
+                    val adjustedDate = learnItem?.let { li ->
+                        if (li.scheduleMode == "WEEKLY" && li.scheduleDaysOfWeek.isNotBlank())
+                            nextAllowedDate(nextDate, li.scheduleDaysOfWeek) else nextDate
+                    } ?: nextDate
                     val reviewTaskId = taskRepository.insertTask(TaskEntity(
                         title = updated.title.replace("📖", "🔄"),
-                        date = nextDate,
+                        date = adjustedDate,
                         type = "TASK",
                         status = "PENDING",
                         label = "Review",
@@ -4105,7 +4213,7 @@ class MainViewModel(
                         status = "IN_REVIEW",
                         reviewStage = 0,
                         lastReviewDate = completionDate,
-                        nextReviewDate = nextDate,
+                        nextReviewDate = adjustedDate,
                         reviewTaskId = reviewTaskId
                     ))
                     checkLearnItemCompletion(section.learnItemId)

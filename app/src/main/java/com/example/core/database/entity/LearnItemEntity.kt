@@ -26,5 +26,7 @@ data class LearnItemEntity(
     val pausedAt: Long = 0,
     val priorityLevel: String = "Medium", // Low, Medium, High
     val sortOrder: Int = 0,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val scheduleMode: String = "CONTINUOUS",  // CONTINUOUS or WEEKLY
+    val scheduleDaysOfWeek: String = ""       // comma-separated 1=Sun..7=Sat
 )

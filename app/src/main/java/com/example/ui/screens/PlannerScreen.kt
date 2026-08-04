@@ -158,6 +158,7 @@ import com.example.core.database.entity.LearnGroupEntity
 import com.example.core.database.entity.LearnItemEntity
 import com.example.core.database.entity.LearnSectionEntity
 import com.example.ui.components.ActiveTimerWidget
+import com.example.ui.components.CalendarDatePickerDialog
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -201,10 +202,6 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val ideaGroups by viewModel.ideaGroups.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS", "LEARN")
 
-    LaunchedEffect(selectedTab) {
-        viewModel.selectDate(viewModel.todayDate.value)
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -238,7 +235,10 @@ fun PlannerScreen(viewModel: MainViewModel) {
                 val isSelected = selectedTab == index
                 Box(
                     modifier = Modifier
-                        .clickable { selectedTab = index }
+                        .clickable {
+                            selectedTab = index
+                            if (index == 0) viewModel.selectDate(todayDate)
+                        }
                         .padding(horizontal = 0.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -523,6 +523,21 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
         }
     }
 
+    var showCalendarDialog by remember { mutableStateOf(false) }
+    val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
+
+    if (showCalendarDialog) {
+        CalendarDatePickerDialog(
+            initialSelectedDate = selectedDate,
+            initialUsePersian = usePersianCalendar,
+            onDismiss = { showCalendarDialog = false },
+            onDateSelected = { date ->
+                viewModel.selectDate(date)
+                showCalendarDialog = false
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -619,6 +634,15 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     letterSpacing = 1.sp
+                )
+            }
+
+            IconButton(onClick = { showCalendarDialog = true }) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = "Pick Date",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
@@ -6425,18 +6449,22 @@ fun LearnTab(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.primary,
                             letterSpacing = 1.5.sp
                         )
-                        IconButton(
-                            onClick = { viewModel.toggleExpandAllLearnItems() },
-                            modifier = Modifier.size(24.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                imageVector = if (expandAllLearnItems) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (expandAllLearnItems) "Collapse All" else "Expand All",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Box {
+                            IconButton(
+                                onClick = { viewModel.toggleExpandAllLearnItems() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (expandAllLearnItems) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (expandAllLearnItems) "Collapse All" else "Expand All",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Box {
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
@@ -6546,6 +6574,7 @@ fun LearnTab(viewModel: MainViewModel) {
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                     }
@@ -7442,6 +7471,48 @@ fun StartLearningDialog(
     var sectionsPerDay by remember { mutableStateOf("1") }
     var deadlineDate by remember { mutableStateOf(viewModel.todayDate.value) }
     var startDate by remember { mutableStateOf(viewModel.todayDate.value) }
+    var scheduleMode by remember { mutableStateOf("CONTINUOUS") }
+    var scheduleDaysOfWeek by remember { mutableStateOf("") }
+
+    val daysOfWeekList = listOf(
+        Pair(java.util.Calendar.SUNDAY, "S"),
+        Pair(java.util.Calendar.MONDAY, "M"),
+        Pair(java.util.Calendar.TUESDAY, "T"),
+        Pair(java.util.Calendar.WEDNESDAY, "W"),
+        Pair(java.util.Calendar.THURSDAY, "T"),
+        Pair(java.util.Calendar.FRIDAY, "F"),
+        Pair(java.util.Calendar.SATURDAY, "S")
+    )
+    val currentDays = scheduleDaysOfWeek.split(",").filter { it.isNotBlank() }
+
+    fun countAllowedDaysBetween(from: String, to: String, daysOfWeek: String): Int {
+        if (daysOfWeek.isBlank()) {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            return try {
+                val fromCal = java.util.Calendar.getInstance().apply { time = fmt.parse(from) ?: return 1 }
+                val toCal = java.util.Calendar.getInstance().apply { time = fmt.parse(to) ?: return 1 }
+                ((toCal.timeInMillis - fromCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+            } catch (_: Exception) { 1 }
+        }
+        val allowed = daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+        if (allowed.isEmpty()) {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            return try {
+                val fromCal = java.util.Calendar.getInstance().apply { time = fmt.parse(from) ?: return 1 }
+                val toCal = java.util.Calendar.getInstance().apply { time = fmt.parse(to) ?: return 1 }
+                ((toCal.timeInMillis - fromCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+            } catch (_: Exception) { 1 }
+        }
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val cal = java.util.Calendar.getInstance().apply { time = fmt.parse(from) ?: return 1 }
+        val endCal = java.util.Calendar.getInstance().apply { time = fmt.parse(to) ?: return 1 }
+        var count = 0
+        while (!cal.after(endCal)) {
+            if (cal.get(java.util.Calendar.DAY_OF_WEEK) in allowed) count++
+            cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        return count.coerceAtLeast(1)
+    }
 
     val effectivePerDay = if (useDeadline) {
         val perDay = sectionsPerDay.toIntOrNull() ?: 1
@@ -7449,8 +7520,15 @@ fun StartLearningDialog(
     } else {
         sectionsPerDay.toIntOrNull() ?: 0
     }
-    val totalDays = remember(useDeadline, effectivePerDay, startDate, deadlineDate) {
-        if (useDeadline && effectivePerDay > 0) {
+    val totalDays = remember(useDeadline, effectivePerDay, scheduleMode, scheduleDaysOfWeek, startDate, deadlineDate) {
+        if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isNotBlank()) {
+            val allowed = scheduleDaysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+            if (useDeadline && effectivePerDay > 0) {
+                countAllowedDaysBetween(startDate, deadlineDate, scheduleDaysOfWeek)
+            } else if (effectivePerDay > 0) {
+                ceil(learnItem.totalSections.toFloat() / effectivePerDay.toFloat()).toInt()
+            } else 0
+        } else if (useDeadline && effectivePerDay > 0) {
             try {
                 val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
                 val from = fmt.parse(startDate)
@@ -7469,6 +7547,47 @@ fun StartLearningDialog(
         title = { Text("Start Learning: ${learnItem.title}") },
         text = {
             Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = scheduleMode == "CONTINUOUS",
+                        onClick = { scheduleMode = "CONTINUOUS" },
+                        label = { Text("Daily") }
+                    )
+                    FilterChip(
+                        selected = scheduleMode == "WEEKLY",
+                        onClick = { scheduleMode = "WEEKLY" },
+                        label = { Text("Weekly") }
+                    )
+                }
+                if (scheduleMode == "WEEKLY") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Repeat on:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        daysOfWeekList.forEach { (dayVal, enLabel) ->
+                            val isSelected = currentDays.contains(dayVal.toString())
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(36.dp).clickable {
+                                    val mutableDays = currentDays.toMutableList()
+                                    if (isSelected) mutableDays.remove(dayVal.toString()) else mutableDays.add(dayVal.toString())
+                                    scheduleDaysOfWeek = mutableDays.joinToString(",")
+                                }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = enLabel, fontSize = 12.sp, color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -7506,6 +7625,25 @@ fun StartLearningDialog(
                     date = startDate,
                     onDateSelected = { startDate = it }
                 )
+                if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isNotBlank()) {
+                    val dayNames = scheduleDaysOfWeek.split(",").map { dayNum ->
+                        when (dayNum) {
+                            "1" -> "Sun"
+                            "2" -> "Mon"
+                            "3" -> "Tue"
+                            "4" -> "Wed"
+                            "5" -> "Thu"
+                            "6" -> "Fri"
+                            "7" -> "Sat"
+                            else -> ""
+                        }
+                    }.filter { it.isNotBlank() }
+                    Text(
+                        text = "Repeat on: ${dayNames.joinToString(", ")}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
                 if (totalDays > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -7521,14 +7659,22 @@ fun StartLearningDialog(
                 onClick = {
                     val perDay = sectionsPerDay.toIntOrNull() ?: 0
                     if (perDay <= 0 && !useDeadline) return@TextButton
+                    if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isBlank()) return@TextButton
                     viewModel.applyLearningAlgorithm(
                         learnItem.id, startDate,
                         if (useDeadline) 1 else perDay,
-                        deadline = if (useDeadline) deadlineDate else null
+                        deadline = if (useDeadline) deadlineDate else null,
+                        scheduleMode = scheduleMode,
+                        scheduleDaysOfWeek = scheduleDaysOfWeek
                     )
                     onDismiss()
                 },
-                enabled = if (useDeadline) true else (sectionsPerDay.toIntOrNull() ?: 0) > 0
+                enabled = when {
+                    useDeadline && scheduleMode == "WEEKLY" -> scheduleDaysOfWeek.isNotBlank()
+                    useDeadline -> true
+                    scheduleMode == "WEEKLY" -> (sectionsPerDay.toIntOrNull() ?: 0) > 0 && scheduleDaysOfWeek.isNotBlank()
+                    else -> (sectionsPerDay.toIntOrNull() ?: 0) > 0
+                }
             ) { Text("Start") }
         },
         dismissButton = {
