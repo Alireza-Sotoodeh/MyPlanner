@@ -87,6 +87,7 @@ sealed class UndoSnapshot(val typeLabel: String) {
         val todo: TodoEntity,
         val linkedTask: TaskEntity?,
         val linkedSubtasks: List<TaskEntity>,
+        val subTodos: List<TodoEntity> = emptyList(),
     ) : UndoSnapshot("To-Do")
     data class IdeaSnapshot(
         val idea: IdeaEntity,
@@ -121,6 +122,11 @@ data class PendingTaskCompletion(
     val subtasks: List<TaskEntity>,
     val durationMinutes: Int = 0,
     val todoId: Long? = null
+)
+
+data class PendingSubTodoCompletion(
+    val todo: TodoEntity,
+    val subTodos: List<TodoEntity>
 )
 
 class MainViewModel(
@@ -601,6 +607,9 @@ class MainViewModel(
     private val _pendingTaskCompletion = MutableStateFlow<PendingTaskCompletion?>(null)
     val pendingTaskCompletion: StateFlow<PendingTaskCompletion?> = _pendingTaskCompletion.asStateFlow()
 
+    private val _pendingSubTodoCompletion = MutableStateFlow<PendingSubTodoCompletion?>(null)
+    val pendingSubTodoCompletion: StateFlow<PendingSubTodoCompletion?> = _pendingSubTodoCompletion.asStateFlow()
+
     fun confirmCompleteTask(completeChildren: Boolean) {
         val pending = _pendingTaskCompletion.value ?: return
         _pendingTaskCompletion.value = null
@@ -628,6 +637,12 @@ class MainViewModel(
                 val linkedTodo = todoRepository.getTodoById(linkedId)
                 if (linkedTodo != null && linkedTodo.status != "DONE") {
                     todoRepository.updateTodo(linkedTodo.copy(status = "DONE"))
+                    if (completeChildren) {
+                        val linkedSubTodos = todoRepository.getSubTodosSync(linkedTodo.id)
+                        linkedSubTodos.filter { it.status != "DONE" }.forEach {
+                            todoRepository.updateTodo(it.copy(status = "DONE"))
+                        }
+                    }
                 }
             }
 
@@ -654,6 +669,83 @@ class MainViewModel(
 
     fun cancelPendingTaskCompletion() {
         _pendingTaskCompletion.value = null
+    }
+
+    // === Sub-To-Do Operations ===
+
+    fun confirmCompleteTodoWithSubtodos(completeChildren: Boolean) {
+        val pending = _pendingSubTodoCompletion.value ?: return
+        _pendingSubTodoCompletion.value = null
+        viewModelScope.launch {
+            try {
+                val (todo, subTodos) = pending
+                if (completeChildren) {
+                    subTodos.filter { it.status != "DONE" }.forEach {
+                        todoRepository.updateTodo(it.copy(status = "DONE"))
+                    }
+                }
+                todoRepository.updateTodo(todo.copy(status = "DONE"))
+                if (todo.linkedTaskId != null) {
+                    val linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
+                    if (linkedTask != null && linkedTask.status != "COMPLETED") {
+                        val subtasks = taskRepository.getSubtasks(linkedTask.id)
+                        val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
+                        if (incompleteSubtasks.isEmpty()) {
+                            taskRepository.updateTask(linkedTask.copy(status = "COMPLETED"))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to confirm complete todo with subtodos", e)
+            }
+        }
+    }
+
+    fun cancelPendingSubTodoCompletion() {
+        _pendingSubTodoCompletion.value = null
+    }
+
+    fun addSubTodo(parentTodo: TodoEntity, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val allTodos = todoRepository.getAllTodosSync()
+                val nextOrder = (allTodos.maxOfOrNull { it.sortOrder } ?: -1) + 1
+                todoRepository.insertTodo(
+                    TodoEntity(
+                        title = title.trim(),
+                        description = "",
+                        priority = parentTodo.priority,
+                        parentTodoId = parentTodo.id,
+                        status = "PENDING",
+                        sortOrder = nextOrder
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add subtodo", e)
+            }
+        }
+    }
+
+    fun toggleSubTodoCompletion(subTodo: TodoEntity) {
+        viewModelScope.launch {
+            try {
+                val newStatus = if (subTodo.status == "DONE") "PENDING" else "DONE"
+                todoRepository.updateTodo(subTodo.copy(status = newStatus))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to toggle subtodo completion", e)
+            }
+        }
+    }
+
+    fun deleteSubTodo(subTodo: TodoEntity) {
+        viewModelScope.launch {
+            try {
+                todoRepository.deleteTodo(subTodo)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete subtodo", e)
+            }
+        }
     }
 
     private var pomodoroJob: Job? = null
@@ -2221,12 +2313,12 @@ class MainViewModel(
     fun deleteTodo(todo: TodoEntity) {
         viewModelScope.launch {
             try {
+                todoRepository.deleteTodoAndSubTodos(todo)
                 if (todo.linkedTaskId != null) {
                     taskRepository.getTaskById(todo.linkedTaskId)?.let { linkedTask ->
                         taskRepository.deleteTaskAndSubtasks(linkedTask)
                     }
                 }
-                todoRepository.deleteTodo(todo)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete todo", e)
             }
@@ -2244,9 +2336,10 @@ class MainViewModel(
                         linkedSubtasks = taskRepository.getSubtasks(linkedTask.id)
                     }
                 }
+                val subTodos = todoRepository.getSubTodosSync(todo.id)
                 deleteTodo(todo)
                 pushUndo(
-                    UndoSnapshot.TodoSnapshot(todo, linkedTask, linkedSubtasks),
+                    UndoSnapshot.TodoSnapshot(todo, linkedTask, linkedSubtasks, subTodos),
                     todo.title
                 )
             } catch (e: Exception) {
@@ -2266,10 +2359,11 @@ class MainViewModel(
                         linkedSubtasks = taskRepository.getSubtasks(linkedTask.id)
                     }
                 }
+                val subTodos = todoRepository.getSubTodosSync(todo.id)
                 unlinkTodoFromTask(todo)
                 todoRepository.deleteTodo(todo)
                 pushUndo(
-                    UndoSnapshot.TodoSnapshot(todo, linkedTask, linkedSubtasks),
+                    UndoSnapshot.TodoSnapshot(todo, linkedTask, linkedSubtasks, subTodos),
                     todo.title
                 )
             } catch (e: Exception) {
@@ -2282,6 +2376,17 @@ class MainViewModel(
         viewModelScope.launch {
             try {
                 val newStatus = if (todo.status == "DONE") "PENDING" else "DONE"
+
+                if (newStatus == "DONE") {
+                    val subTodos = allTodos.value.filter { it.parentTodoId == todo.id }
+                    val incompleteSubTodos = subTodos.filter { it.status != "DONE" }
+                    if (incompleteSubTodos.isNotEmpty()) {
+                        _pendingSubTodoCompletion.value = PendingSubTodoCompletion(
+                            todo = todo, subTodos = subTodos
+                        )
+                        return@launch
+                    }
+                }
 
                 if (todo.linkedTaskId != null && newStatus == "DONE") {
                     val linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
@@ -2308,6 +2413,8 @@ class MainViewModel(
     fun linkTodoToTask(todo: TodoEntity, targetDate: String) {
         viewModelScope.launch {
             try {
+                val subTodos = allTodos.value.filter { it.parentTodoId == todo.id }
+
                 val taskId = taskRepository.insertTask(
                     TaskEntity(
                         title = todo.title,
@@ -2320,6 +2427,19 @@ class MainViewModel(
                         priority = dailyTasks.value.size + 1
                     )
                 )
+                subTodos.forEach { subTodo ->
+                    taskRepository.insertTask(
+                        TaskEntity(
+                            title = subTodo.title,
+                            description = "",
+                            date = targetDate,
+                            type = "TASK",
+                            label = "TODO",
+                            parentTaskId = taskId,
+                            priority = 0
+                        )
+                    )
+                }
                 todoRepository.updateTodo(todo.copy(linkedTaskId = taskId))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to link todo to task", e)
@@ -2343,23 +2463,27 @@ class MainViewModel(
     fun moveTaskToTodo(task: TaskEntity, subtasks: List<TaskEntity>) {
         viewModelScope.launch {
             try {
-                val mergedDescription = buildString {
-                    append(task.description)
-                    if (subtasks.isNotEmpty()) {
-                        append("\n\nSubtasks:\n")
-                        subtasks.forEachIndexed { i, s -> append("${i + 1}. ${s.title}\n") }
-                    }
-                }
-                todoRepository.insertTodo(
+                val todoId = todoRepository.insertTodo(
                     TodoEntity(
                         title = task.title,
-                        description = mergedDescription.trim(),
+                        description = task.description,
                         priority = task.priorityLevel,
                         status = "PENDING"
                     )
                 )
-                task.linkedTodoId?.let { todoId ->
-                    todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                subtasks.forEach { subtask ->
+                    todoRepository.insertTodo(
+                        TodoEntity(
+                            title = subtask.title,
+                            description = "",
+                            priority = task.priorityLevel,
+                            status = "PENDING",
+                            parentTodoId = todoId
+                        )
+                    )
+                }
+                task.linkedTodoId?.let { linkedTodoId ->
+                    todoRepository.getTodoById(linkedTodoId)?.let { linkedTodo ->
                         todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = null))
                     }
                 }
@@ -2559,6 +2683,9 @@ class MainViewModel(
                             }
                         } else {
                             newTodoId = todoRepository.insertTodo(snap.todo.copy(id = 0))
+                        }
+                        for (subTodo in snap.subTodos) {
+                            todoRepository.insertTodo(subTodo.copy(id = 0, parentTodoId = newTodoId))
                         }
                     }
                     is UndoSnapshot.IdeaSnapshot -> {

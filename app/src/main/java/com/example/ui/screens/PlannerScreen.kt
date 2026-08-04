@@ -3662,6 +3662,9 @@ private fun TodoTab(viewModel: MainViewModel) {
     val todoItemHeights = remember { androidx.compose.runtime.mutableStateMapOf<Long, Int>() }
     val densityD = androidx.compose.ui.platform.LocalDensity.current
 
+    val allRootTodos = allTodos.filter { it.parentTodoId == null }
+    var expandedSubTodosMap by remember { mutableStateOf(mapOf<Long, Boolean>()) }
+
     var showFilterChips by remember { mutableStateOf(true) }
     val filterChipScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
@@ -3674,9 +3677,9 @@ private fun TodoTab(viewModel: MainViewModel) {
     }
 
     val displayTodos = (when (filter) {
-        TodoTabFilter.ALL -> allTodos
-        TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
-        TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
+        TodoTabFilter.ALL -> allRootTodos
+        TodoTabFilter.PENDING -> allRootTodos.filter { it.status == "PENDING" }
+        TodoTabFilter.DONE -> allRootTodos.filter { it.status == "DONE" }
     }).let { list -> draggedTodos ?: list }
 
     Column(
@@ -3729,9 +3732,9 @@ private fun TodoTab(viewModel: MainViewModel) {
                         color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 1.5.sp
                     )
-                    val pendingTodos = allTodos.filter { it.status == "PENDING" }
+                    val pendingTodos = allRootTodos.filter { it.status == "PENDING" }
                     val pendingCount = pendingTodos.size
-                    val linkedCount = allTodos.count { it.linkedTaskId != null && it.status == "PENDING" }
+                    val linkedCount = allRootTodos.count { it.linkedTaskId != null && it.status == "PENDING" }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -3916,6 +3919,8 @@ private fun TodoTab(viewModel: MainViewModel) {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(displayTodos, key = { it.id }) { todo ->
+                            val subTodos = allTodos.filter { it.parentTodoId == todo.id }
+                            val expandedSubTodos = expandedSubTodosMap[todo.id] ?: false
                             Box(modifier = Modifier.animateItem()) {
                                 TodoItem(
                                     modifier = Modifier.onGloballyPositioned {
@@ -3925,6 +3930,11 @@ private fun TodoTab(viewModel: MainViewModel) {
                                     expanded = expandAllDescriptions,
                                     viewModel = viewModel,
                                     linkedItemTitle = todo.linkedTaskId?.let { id -> allTasks.find { it.id == id }?.title },
+                                    subTodos = subTodos,
+                                    expandedSubTodos = expandedSubTodos,
+                                    onToggleSubTodosExpanded = {
+                                        expandedSubTodosMap = expandedSubTodosMap + (todo.id to !expandedSubTodos)
+                                    },
                                     isDragging = draggingTodoId == todo.id,
                                     dragOffsetX = if (draggingTodoId == todo.id) dragOffsetX else 0f,
                                     dragOffsetY = if (draggingTodoId == todo.id) dragOffsetY else 0f,
@@ -3977,9 +3987,9 @@ private fun TodoTab(viewModel: MainViewModel) {
                                     onDragEnd = {
                                         if (draggingTodoId == todo.id) {
                                             val originalTodos = when (filter) {
-                                                TodoTabFilter.ALL -> allTodos
-                                                TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
-                                                TodoTabFilter.DONE -> allTodos.filter { it.status == "DONE" }
+                                                TodoTabFilter.ALL -> allRootTodos
+                                                TodoTabFilter.PENDING -> allRootTodos.filter { it.status == "PENDING" }
+                                                TodoTabFilter.DONE -> allRootTodos.filter { it.status == "DONE" }
                                             }
                                             val originalIndex = originalTodos.indexOfFirst { it.id == todo.id }
                                             val currentList = draggedTodos
@@ -4049,6 +4059,34 @@ private fun TodoTab(viewModel: MainViewModel) {
             onConfirm = { viewModel.unlinkTodoFromTask(todo); showUnlinkConfirm = null }
         )
     }
+
+    val pendingSubTodoCompletion by viewModel.pendingSubTodoCompletion.collectAsState()
+    pendingSubTodoCompletion?.let { pending ->
+        val incompleteCount = pending.subTodos.count { it.status != "DONE" }
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingSubTodoCompletion() },
+            title = { Text("Complete with Sub-To-Dos?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("'${pending.todo.title}' has $incompleteCount incomplete subtask(s). Complete all $incompleteCount subtask(s) as well?")
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmCompleteTodoWithSubtodos(true) }) {
+                    Text("Complete Subtasks")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { viewModel.confirmCompleteTodoWithSubtodos(false) }) {
+                        Text("Only This Task")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = { viewModel.cancelPendingSubTodoCompletion() }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -4059,6 +4097,9 @@ private fun TodoItem(
     expanded: Boolean = false,
     viewModel: MainViewModel,
     linkedItemTitle: String? = null,
+    subTodos: List<TodoEntity> = emptyList(),
+    expandedSubTodos: Boolean = false,
+    onToggleSubTodosExpanded: () -> Unit = {},
     isDragging: Boolean = false,
     dragOffsetX: Float = 0f,
     dragOffsetY: Float = 0f,
@@ -4071,6 +4112,7 @@ private fun TodoItem(
     onUnlink: (TodoEntity) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var addSubTodoText by remember { mutableStateOf("") }
     val isDone = todo.status == "DONE"
 
     val scale by androidx.compose.animation.core.animateFloatAsState(
@@ -4231,6 +4273,179 @@ private fun TodoItem(
                             .fillMaxWidth()
                             .padding(start = 28.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
                     )
+                }
+            }
+
+            // Subtasks
+            if (subTodos.isNotEmpty()) {
+                val completedSubTodos = subTodos.count { it.status == "DONE" }
+                val totalSubTodos = subTodos.size
+                val subProgress = completedSubTodos.toFloat() / totalSubTodos
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { onToggleSubTodosExpanded() }
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (completedSubTodos == totalSubTodos) Color(0xFF43A047).copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "$completedSubTodos/$totalSubTodos SUBTASKS",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (completedSubTodos == totalSubTodos) Color(0xFF43A047)
+                            else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${(subProgress * 100).toInt()}%",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = if (expandedSubTodos) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Toggle Subtasks",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = expandedSubTodos,
+                    enter = expandVertically(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+                        )
+                    ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(250)),
+                    exit = shrinkVertically(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+                        )
+                    ) + fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier.padding(start = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            subTodos.forEach { subTodo ->
+                                val subDone = subTodo.status == "DONE"
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SubdirectoryArrowRight,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp).padding(end = 4.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                            .clickable { viewModel.toggleSubTodoCompletion(subTodo) }
+                                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (subDone) Icons.Default.Check else Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = if (subDone) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = subTodo.title,
+                                            fontSize = 11.sp,
+                                            color = if (subDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textDecoration = if (subDone) TextDecoration.LineThrough else null,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    Box {
+                                        var subMenuExpanded by remember { mutableStateOf(false) }
+                                        IconButton(onClick = { subMenuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "Subtask Actions",
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                        }
+                                        DropdownMenu(
+                                            expanded = subMenuExpanded,
+                                            onDismissRequest = { subMenuExpanded = false },
+                                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Done/Undone") },
+                                                onClick = {
+                                                    viewModel.toggleSubTodoCompletion(subTodo)
+                                                    subMenuExpanded = false
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Remove", color = MaterialTheme.colorScheme.error) },
+                                                onClick = {
+                                                    viewModel.deleteSubTodo(subTodo)
+                                                    subMenuExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Inline add subtodo
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(start = 18.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = addSubTodoText,
+                                    onValueChange = { addSubTodoText = it },
+                                    placeholder = { Text("Add subtask...", fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = {
+                                        if (addSubTodoText.isNotBlank()) {
+                                            viewModel.addSubTodo(todo, addSubTodoText)
+                                            addSubTodoText = ""
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "Add Subtask",
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -27,6 +27,12 @@ interface TodoDao {
     @Query("SELECT * FROM todos WHERE linkedTaskId = :taskId LIMIT 1")
     suspend fun getTodoByLinkedTaskId(taskId: Long): TodoEntity?
 
+    @Query("SELECT * FROM todos WHERE parentTodoId = :parentId ORDER BY sortOrder ASC, id DESC")
+    suspend fun getSubTodosSync(parentId: Long): List<TodoEntity>
+
+    @Query("DELETE FROM todos WHERE parentTodoId = :parentId")
+    suspend fun deleteSubTodos(parentId: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTodo(todo: TodoEntity): Long
 
@@ -35,6 +41,12 @@ interface TodoDao {
 
     @Delete
     suspend fun deleteTodo(todo: TodoEntity)
+
+    @Transaction
+    suspend fun deleteTodoAndSubTodos(todo: TodoEntity) {
+        deleteSubTodos(todo.id)
+        deleteTodo(todo)
+    }
 
     @Transaction
     suspend fun updateTodoSortOrders(todos: List<TodoEntity>) {

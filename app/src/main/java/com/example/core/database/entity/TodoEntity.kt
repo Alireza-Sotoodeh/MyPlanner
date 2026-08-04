@@ -10,6 +10,7 @@ data class TodoEntity(
     val description: String = "",
     val priority: String = "Medium",
     val linkedTaskId: Long? = null,
+    val parentTodoId: Long? = null,
     val status: String = "PENDING",
     val createdAt: Long = System.currentTimeMillis(),
     val sortOrder: Int = 0
