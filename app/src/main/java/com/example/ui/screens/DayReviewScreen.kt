@@ -32,6 +32,7 @@ fun DayReviewScreen(
     val currentDate = initialDate ?: todayDate
     val review by viewModel.reviewForDate(currentDate).collectAsState(initial = null)
 
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var good by remember { mutableStateOf(review?.good ?: "") }
     var bad by remember { mutableStateOf(review?.bad ?: "") }
     var improve by remember { mutableStateOf(review?.improve ?: "") }
@@ -105,6 +106,12 @@ fun DayReviewScreen(
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                 }
+            }
+            IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
+                Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            }
+            IconButton(onClick = { showSettingsDialog = true }) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
         }
 
@@ -192,6 +199,9 @@ fun DayReviewScreen(
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             }
         )
+    }
+    if (showSettingsDialog) {
+        SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 }
 

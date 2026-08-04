@@ -30,6 +30,7 @@ fun MottoManagementScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingMotto by remember { mutableStateOf<MottoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<MottoEntity?>(null) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(
@@ -61,6 +62,12 @@ fun MottoManagementScreen(
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("Add")
+            }
+            IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
+                Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            }
+            IconButton(onClick = { showSettingsDialog = true }) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
         }
 
@@ -135,6 +142,9 @@ fun MottoManagementScreen(
                 TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
             }
         )
+    }
+    if (showSettingsDialog) {
+        SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 }
 

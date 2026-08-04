@@ -48,6 +48,7 @@ fun MoreScreen(
     onNavigateToPlanner: () -> Unit = {}
 ) {
     var currentScreen by remember { mutableStateOf<MoreSubScreen>(MoreSubScreen.None) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     if (currentScreen !is MoreSubScreen.None) {
         when (currentScreen) {
@@ -82,6 +83,7 @@ fun MoreScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
@@ -98,6 +100,14 @@ fun MoreScreen(
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
+                        Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    }
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    }
                 }
             }
 
@@ -149,6 +159,9 @@ fun MoreScreen(
                 }
             }
         }
+    }
+    if (showSettingsDialog) {
+        SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 }
 

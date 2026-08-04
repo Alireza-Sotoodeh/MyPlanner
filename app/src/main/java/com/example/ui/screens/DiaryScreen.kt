@@ -88,6 +88,7 @@ fun DiaryScreen(
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Row 1: Label + actions
@@ -113,6 +114,9 @@ fun DiaryScreen(
                 enabled = entry != null || content.isNotBlank() || title.isNotBlank()
             ) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+            }
+            IconButton(onClick = { showSettingsDialog = true }) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
             }
         }
 
@@ -227,5 +231,8 @@ fun DiaryScreen(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+    if (showSettingsDialog) {
+        SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 }

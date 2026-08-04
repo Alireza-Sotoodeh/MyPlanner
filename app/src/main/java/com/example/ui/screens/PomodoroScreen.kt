@@ -41,6 +41,7 @@ fun PomodoroScreen(viewModel: MainViewModel) {
     // Pomodoro Phase/Goodtime Session States
     var currentPhase by remember { mutableStateOf("FOCUS") } // FOCUS, SHORT_BREAK, LONG_BREAK
     var completedSessionsCount by remember { mutableIntStateOf(0) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     val totalSessionsTarget = 4
 
     // Local custom timer for break session when no active task task is set or during break
@@ -103,19 +104,27 @@ fun PomodoroScreen(viewModel: MainViewModel) {
                 )
             }
 
-            // Session counter chips
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-            ) {
-                Text(
-                    text = "Session ${completedSessionsCount % totalSessionsTarget + 1}/$totalSessionsTarget",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Session counter chips
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Text(
+                        text = "Session ${completedSessionsCount % totalSessionsTarget + 1}/$totalSessionsTarget",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
+                    Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                }
+                IconButton(onClick = { showSettingsDialog = true }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                }
             }
         }
 
@@ -779,5 +788,8 @@ fun PomodoroScreen(viewModel: MainViewModel) {
             },
             shape = RoundedCornerShape(16.dp)
         )
+    }
+    if (showSettingsDialog) {
+        SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 }
