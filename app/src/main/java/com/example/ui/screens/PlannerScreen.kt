@@ -207,7 +207,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
                 Box(
                     modifier = Modifier
                         .clickable { selectedTab = index }
-                        .padding(horizontal = 5.dp, vertical = 14.dp),
+                        .padding(horizontal = 2.dp, vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
