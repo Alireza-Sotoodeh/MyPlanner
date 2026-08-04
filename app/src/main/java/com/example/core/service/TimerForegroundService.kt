@@ -9,8 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.core.database.AppDatabase
@@ -321,7 +323,7 @@ class TimerForegroundService : Service() {
 
     private fun fireCompletionNotification(state: TimerServiceState) {
         try {
-            val channelId = "pomodoro_session_complete_fs"
+            val channelId = "pomodoro_session_channel_fs"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 notificationManager.deleteNotificationChannel(channelId)
                 val channel = NotificationChannel(
@@ -372,9 +374,19 @@ class TimerForegroundService : Service() {
                 .setAutoCancel(true)
                 .build()
 
-            notificationManager.notify(4003, notification)
+            if (hasNotificationPermission()) {
+                notificationManager.notify(4003, notification)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "fireCompletionNotification failed", e)
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
     }
 

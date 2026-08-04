@@ -202,6 +202,9 @@ class MainViewModel(
     private val _eventReminderSound = MutableStateFlow(prefs.getBoolean("event_reminder_sound", true))
     val eventReminderSound: StateFlow<Boolean> = _eventReminderSound.asStateFlow()
 
+    private val _eventReminderEnabled = MutableStateFlow(prefs.getBoolean("event_reminder_enabled", true))
+    val eventReminderEnabled: StateFlow<Boolean> = _eventReminderEnabled.asStateFlow()
+
     private val _pomodoroRingtoneUri = MutableStateFlow(prefs.getString("pomodoro_ringtone_uri", "") ?: "")
     val pomodoroRingtoneUri: StateFlow<String> = _pomodoroRingtoneUri.asStateFlow()
 
@@ -281,6 +284,11 @@ class MainViewModel(
     fun updateEventReminderSound(enabled: Boolean) {
         prefs.edit().putBoolean("event_reminder_sound", enabled).apply()
         _eventReminderSound.value = enabled
+    }
+
+    fun updateEventReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("event_reminder_enabled", enabled).apply()
+        _eventReminderEnabled.value = enabled
     }
 
     fun updatePomodoroRingtoneUri(uri: String) {
@@ -1079,6 +1087,7 @@ class MainViewModel(
     }
 
     fun sendImmediateDayReviewNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
         createDayReviewChannel(context)
         val intent = Intent(context, com.example.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -1231,6 +1240,7 @@ class MainViewModel(
     }
 
     fun sendImmediateSleepReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
         createSleepReminderChannel(context)
         val intent = Intent(context, com.example.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -1249,6 +1259,7 @@ class MainViewModel(
     }
 
     fun sendImmediateDiaryReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
         createDiaryReminderChannel(context)
         val intent = Intent(context, com.example.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -1268,6 +1279,7 @@ class MainViewModel(
     }
 
     fun sendImmediatePlannerReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
         createPlannerReminderChannel(context)
         val todayStr = getTodayDateString()
         viewModelScope.launch {
@@ -1304,6 +1316,7 @@ class MainViewModel(
     }
 
     fun sendImmediateHabitsReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
         createHabitsReminderChannel(context)
         val todayStr = getTodayDateString()
         viewModelScope.launch {
@@ -1348,6 +1361,7 @@ class MainViewModel(
     }
 
     fun sendImmediateTomorrowPlannerReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
         createTomorrowPlannerReminderChannel(context)
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val cal = Calendar.getInstance()
@@ -2351,33 +2365,6 @@ class MainViewModel(
         context.startActivity(intent)
     }
 
-    private fun showPomodoroTestNotification(context: Context) {
-        try {
-            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channelId = "pomodoro_session_channel"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(channelId, "Pomodoro Sessions", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Notifications for focus and break intervals"
-                    enableVibration(true)
-                    setBypassDnd(true)
-                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                }
-                notificationManager.createNotificationChannel(channel)
-            }
-            val notification = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle("Pomodoro Alarm Test")
-                .setContentText("This is what you will see when a session completes.")
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setAutoCancel(true)
-                .build()
-            notificationManager.notify(4005, notification)
-        } catch (e: Exception) {
-            Log.e(TAG, "showPomodoroTestNotification failed", e)
-        }
-    }
-
     // --- Chronometer ---
     fun startChronometer(taskId: Long? = null) {
         if (_chronoRunning.value) return
@@ -2537,36 +2524,8 @@ class MainViewModel(
         }
     }
 
-    private fun triggerSessionFeedback(context: Context, title: String, message: String) {
-        try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channelId = "pomodoro_session_channel"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    channelId,
-                    "Pomodoro Sessions",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Notifications for focus and break intervals"
-                    enableVibration(true)
-                }
-                notificationManager.createNotificationChannel(channel)
-            }
-            val notification = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle(title)
-                .setContentText(message)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setAutoCancel(true)
-                .build()
-            notificationManager.notify(4002, notification)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun firePomodoroCompletionNotification(context: Context, state: PomodoroCompletionState) {
+        if (!hasNotificationPermission(context)) return
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "pomodoro_session_channel_fs"

@@ -15,6 +15,9 @@ import java.util.Locale
 
 object ReminderManager {
     fun scheduleReminders(context: Context, task: TaskEntity, vibrate: Boolean, sound: Boolean) {
+        val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("event_reminder_enabled", true)) return
+
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         if (task.type != "EVENT" || task.eventTime.isNullOrBlank()) return

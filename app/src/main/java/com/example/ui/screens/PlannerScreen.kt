@@ -3432,11 +3432,13 @@ fun SettingsDialog(
     val dndEnabled by viewModel.dndEnabled.collectAsState()
     val eventReminderVibrate by viewModel.eventReminderVibrate.collectAsState()
     val eventReminderSound by viewModel.eventReminderSound.collectAsState()
+    val eventReminderEnabled by viewModel.eventReminderEnabled.collectAsState()
 
     var enteredEmail by remember { mutableStateOf(googleDriveEmail) }
     var enteredDndEnabled by remember { mutableStateOf(dndEnabled) }
     var enteredEventVibrate by remember { mutableStateOf(eventReminderVibrate) }
     var enteredEventSound by remember { mutableStateOf(eventReminderSound) }
+    var enteredEventEnabled by remember { mutableStateOf(eventReminderEnabled) }
 
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
@@ -3818,6 +3820,24 @@ fun SettingsDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
+                                text = "Enable Event Reminders",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Switch(
+                            checked = enteredEventEnabled,
+                            onCheckedChange = { enteredEventEnabled = it }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
                                 text = "Vibrate on Reminder",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -4162,6 +4182,7 @@ fun SettingsDialog(
                     viewModel.updateDndEnabled(enteredDndEnabled)
                     viewModel.updateEventReminderVibrate(enteredEventVibrate)
                     viewModel.updateEventReminderSound(enteredEventSound)
+                    viewModel.updateEventReminderEnabled(enteredEventEnabled)
                     viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
                     viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
                     viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
