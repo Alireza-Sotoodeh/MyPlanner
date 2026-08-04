@@ -776,23 +776,70 @@ private fun TaskSelectorSection(
     viewModel: MainViewModel,
     isLocked: Boolean = false
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        if (availableTasks.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().height(72.dp),
-                contentAlignment = Alignment.Center
-            ) {
+    // Wrapped in a unified Card matching the TIMER SETUP card style
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            // Section header inside the card
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "No tasks or notes available",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "TASK / NOTE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.5.sp,
+                    modifier = Modifier.weight(1f)
                 )
+                if (isLocked) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = "Locked",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
             }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                availableTasks.forEach { task ->
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (availableTasks.isEmpty()) {
+                // Beautiful empty state matching app pattern
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.List,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "No tasks or notes available",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "Create a task or note in the planner first",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                    }
+                }
+            } else {
+                availableTasks.forEachIndexed { index, task ->
                     val isSelected = task.id == selectedTaskId
-                    TaskSelectorCard(
+                    TaskSectionItem(
                         task = task,
                         isSelected = isSelected,
                         isLocked = isLocked,
@@ -803,6 +850,13 @@ private fun TaskSelectorSection(
                         },
                         onMarkComplete = { viewModel.markTaskCompleteFromTimer(task.id) }
                     )
+                    if (index < availableTasks.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 2.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
+                            thickness = 1.dp
+                        )
+                    }
                 }
             }
         }
@@ -810,96 +864,120 @@ private fun TaskSelectorSection(
 }
 
 @Composable
-private fun TaskSelectorCard(
+private fun TaskSectionItem(
     task: TaskEntity,
     isSelected: Boolean,
     isLocked: Boolean,
     onSelect: () -> Unit,
     onMarkComplete: () -> Unit
 ) {
-    val containerColor = when {
-        isSelected -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    }
-    val borderStroke = when {
-        isSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-        else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-    }
+    val alpha = if (isLocked && !isSelected) 0.5f else 1f
 
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !isLocked) { onSelect() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = borderStroke
+            .clickable(enabled = !isLocked) { onSelect() }
+            .then(
+                if (isSelected) Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
+                else Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
+            ),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        // Selection checkbox
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .size(22.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .border(
+                    width = if (isSelected) 0.dp else 1.5.dp,
+                    color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(6.dp)
+                )
+                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent),
+            contentAlignment = Alignment.Center
         ) {
-            // Selection checkbox
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .border(
-                        width = if (isSelected) 0.dp else 1.5.dp,
-                        color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(6.dp)
-                    )
-                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSelected) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Selected",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
+            if (isSelected) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(14.dp)
+                )
             }
+        }
 
-            Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-            // Task info
-            Column(modifier = Modifier.weight(1f)) {
+        // Task info
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = task.title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                if (task.label.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(6.dp))
+                // Type badge
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (task.type == "NOTE") MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                ) {
                     Text(
-                        text = task.label,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (task.type == "NOTE") "NOTE" else "TASK",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (task.type == "NOTE") MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
             }
-
-            // Mark complete button
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                    .clickable { onMarkComplete() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.CheckCircleOutline,
-                    contentDescription = "Mark complete",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (task.label.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        text = task.label.uppercase(),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Mark complete button
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                )
+                .clickable { onMarkComplete() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.CheckCircleOutline,
+                contentDescription = "Mark complete",
+                tint = if (isSelected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
