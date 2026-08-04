@@ -4650,7 +4650,7 @@ private fun CreateIdeaDialog(
     initialDescription: String = "",
     initialGroupId: Long? = null,
     onDismiss: () -> Unit,
-    onConfirm: (Long, String, String) -> Unit,
+    onConfirm: (Long?, String, String) -> Unit,
     onShowCreateGroup: () -> Unit
 ) {
     var title by remember { mutableStateOf(initialTitle) }
@@ -4723,7 +4723,7 @@ private fun CreateIdeaDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId ?: 0L, title.trim(), description.trim()) },
+                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim()) },
                 enabled = title.isNotBlank()
             ) { Text(if (initialTitle.isNotEmpty()) "Save" else "Create") }
         },
