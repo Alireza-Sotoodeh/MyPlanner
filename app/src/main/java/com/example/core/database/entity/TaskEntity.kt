@@ -55,4 +55,11 @@ data class TaskEntity(
     val postponed: Boolean = false,
     val isDeleted: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
-)
+) {
+    val dateType: String
+        get() = when {
+            date.matches(Regex("^\\d{4}-\\d{2}$")) -> "monthly"
+            date.matches(Regex("^\\d{4}-W\\d{2}$")) -> "weekly"
+            else -> "daily"
+        }
+}
