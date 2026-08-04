@@ -1366,25 +1366,8 @@ fun BulletTaskItem(
                         )
                     }
                 }
-                
-                if (task.linkedTodoId != null && linkedTodoTitle != null) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    ) {
-                        Text(
-                            text = linkedTodoTitle,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
             }
-
+            
             androidx.compose.animation.AnimatedVisibility(
                 visible = isExpanded,
                 enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
@@ -1392,26 +1375,26 @@ fun BulletTaskItem(
             ) {
                 Column {
                     if (task.type == "EVENT" && !task.eventTime.isNullOrBlank()) {
-                Text(
-                    text = "🕐 ${task.eventTime}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            if (task.description.isNotEmpty()) {
-                Text(
-                    text = task.description,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = "${task.durationMinutes * task.pomodorosCompleted} min and ${task.pomodorosCompleted} session(s) done",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-            )
+                        Text(
+                            text = "🕐 ${task.eventTime}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (task.description.isNotEmpty()) {
+                        Text(
+                            text = task.description,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "${task.durationMinutes * task.pomodorosCompleted} min and ${task.pomodorosCompleted} session(s) done",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    )
                 }
             }
 

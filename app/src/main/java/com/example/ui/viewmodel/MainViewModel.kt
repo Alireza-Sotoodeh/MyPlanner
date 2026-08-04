@@ -2206,6 +2206,7 @@ class MainViewModel(
                         type = "TASK",
                         label = "TODO",
                         linkedTodoId = todo.id,
+                        priorityLevel = todo.priority,
                         priority = dailyTasks.value.size + 1
                     )
                 )
