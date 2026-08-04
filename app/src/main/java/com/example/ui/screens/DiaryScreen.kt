@@ -89,10 +89,6 @@ fun DiaryScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    DisposableEffect(currentDate) {
-        onDispose { saveNow() }
-    }
-
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Row 1: Label + actions
         Row(
@@ -168,8 +164,8 @@ fun DiaryScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp)) {
             BasicTextField(
                 value = content,
-                onValueChange = {
-                    content = it
+                onValueChange = { newValue ->
+                    content = newValue
                     triggerAutoSave()
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -177,7 +173,7 @@ fun DiaryScreen(
                 decorationBox = { innerTextField ->
                     if (content.isEmpty()) {
                         Text(
-                            "Write in markdown...",
+                            "Write your thoughts...",
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                         )
@@ -219,6 +215,7 @@ fun DiaryScreen(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
                         val cal = Calendar.getInstance().apply { timeInMillis = millis }
+                        saveNow()
                         currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
                     }
                     showDatePicker = false
