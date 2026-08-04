@@ -3842,7 +3842,7 @@ class MainViewModel(
                         if (task != null && task.status != "COMPLETED") {
                             taskRepository.deleteTaskById(section.reviewTaskId)
                         }
-                        updated = updated.copy(reviewTaskId = null, nextReviewDate = null)
+                        updated = updated.copy(reviewTaskId = null)
                     }
                     if (updated != section) {
                         learnRepository.updateSection(updated)
