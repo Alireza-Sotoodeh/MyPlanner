@@ -537,9 +537,9 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
     val nestedScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                if (available.y < -15) {
+                if (available.y < -30) {
                     showHeaderExtras = false
-                } else if (available.y > 15) {
+                } else if (available.y > 30) {
                     showHeaderExtras = true
                 }
                 return androidx.compose.ui.geometry.Offset.Zero
@@ -586,7 +586,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     FilterChip(
                         selected = filterLabels.isEmpty() && !showPostponedOnly,
                         onClick = { onLabelsSelected(emptySet()); onPostponedToggle(false) },
-                        label = { Text("All", fontSize = 10.sp) },
+                        label = { Text("All", fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(26.dp)
                     )
                 }
@@ -595,7 +595,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                         FilterChip(
                             selected = showPostponedOnly,
                             onClick = { onPostponedToggle(!showPostponedOnly) },
-                            label = { Text("Postponed ($postponedCount)", fontSize = 10.sp) },
+                            label = { Text("Postponed ($postponedCount)", fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.height(26.dp)
                         )
                     }
@@ -622,7 +622,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                 }
-                                Text("${info.name.uppercase()} (${info.count})", fontSize = 10.sp)
+                                Text("${info.name.uppercase()} (${info.count})", fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         },
                         modifier = Modifier.height(26.dp)
@@ -832,7 +832,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                            Text("🔴 High", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
+                                                            Text("High", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
                                                             Text("$mainHighCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
                                                         }
                                                     }
@@ -846,7 +846,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                            Text("🟡 Med", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFB8C00))
+                                                            Text("Medium", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFB8C00))
                                                             Text("$mainMediumCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFB8C00))
                                                         }
                                                     }
@@ -860,7 +860,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                            Text("🟢 Low", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047))
+                                                            Text("Low", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047))
                                                             Text("$mainLowCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047))
                                                         }
                                                     }
@@ -891,7 +891,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                            Text("⭐ Important", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                            Text("Important", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                                             Text("$importantSubtaskCount", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                                                         }
                                                     }
@@ -905,7 +905,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                            Text("☕ Optional", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                            Text("Optional", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                             Text("$optionalSubtaskCount", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                         }
                                                     }
@@ -962,6 +962,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val lazyListState = rememberLazyListState()
 
+                    // Cleanup itemHeights for deleted tasks
+                    val allTaskIds = allTasks.map { it.id }.toSet()
+                    androidx.compose.runtime.SideEffect {
+                        val keysToRemove = itemHeights.keys.filter { it !in allTaskIds }
+                        keysToRemove.forEach { itemHeights.remove(it) }
+                    }
+
                     LaunchedEffect(filterLabels, showPostponedOnly) {
                         lazyListState.animateScrollToItem(0)
                     }
@@ -985,7 +992,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
 
                         val displayedActiveTasks = draggedTasks ?: sortedActiveTasks
 
-                        items(displayedActiveTasks, key = { it.id }) { task ->
+                        items(displayedActiveTasks, key = { "active-${it.id}" }) { task ->
                             var showInteractDialog by remember { mutableStateOf(false) }
                             val taskSubtasks = allTasks.filter { it.parentTaskId == task.id }.sortedWith(compareBy({ it.priority }, { it.id }))
 
@@ -1146,7 +1153,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                             }
 
                             if (showCompleted) {
-                                items(completedTasks, key = { it.id }) { task ->
+                                items(completedTasks, key = { "done-${it.id}" }) { task ->
                                     var showInteractDialog by remember { mutableStateOf(false) }
                                     val taskSubtasks = allTasks.filter { it.parentTaskId == task.id }.sortedWith(compareBy({ it.priority }, { it.id }))
 
@@ -3505,13 +3512,13 @@ fun TaskInteractionDialog(
 // Utility functions for Date calculations
 fun getRelativeDayString(selectedDate: String, todayDate: String): String {
     try {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val selected = sdf.parse(selectedDate) ?: return "TODAY"
         val today = sdf.parse(todayDate) ?: return "TODAY"
-        
+
         val diff = selected.time - today.time
-        val days = Math.round(diff.toFloat() / (1000 * 60 * 60 * 24)).toInt()
-        
+        val days = Math.round(diff.toDouble() / (1000 * 60 * 60 * 24)).toInt()
+
         return when {
             days == 0 -> "TODAY"
             days == 1 -> "TOMORROW"
@@ -3526,12 +3533,16 @@ fun getRelativeDayString(selectedDate: String, todayDate: String): String {
 }
 
 fun getOffsetDateString(dateStr: String, offsetDays: Int): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val date = sdf.parse(dateStr) ?: Date()
-    val cal = Calendar.getInstance()
-    cal.time = date
-    cal.add(Calendar.DAY_OF_YEAR, offsetDays)
-    return sdf.format(cal.time)
+    try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date = sdf.parse(dateStr) ?: return dateStr
+        val cal = Calendar.getInstance()
+        cal.time = date
+        cal.add(Calendar.DAY_OF_MONTH, offsetDays)
+        return sdf.format(cal.time)
+    } catch (e: Exception) {
+        return dateStr
+    }
 }
 
 fun getOffsetMonthString(monthStr: String, offsetMonths: Int): String {

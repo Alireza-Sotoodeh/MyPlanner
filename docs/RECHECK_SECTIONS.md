@@ -28,7 +28,7 @@ Use this file to systematically recheck every section of the app. Each checkbox 
 - [x] `PlannerScreen.kt:410-487` — `HeaderSection`: formatted date (Gregorian + Persian), day-of-week display, HeaderActions (home + settings icons)
 
 ### 2.3 Daily Planner View
-- [ ] `PlannerScreen.kt:468-1204` — `DailyPlannerView`: label FilterChip row, day navigator (prev/next), tasks LazyColumn with active+completed tasks, drag-to-reorder with `detectDragGesturesAfterLongPress`, CalendarDatePickerDialog, TaskInteractionDialog, Pending Details Popup (priority/subtask breakdown)
+- [x] `PlannerScreen.kt:490-1207` — `DailyPlannerView`: label FilterChip row, day navigator (prev/next), tasks LazyColumn with active+completed tasks, drag-to-reorder with `detectDragGesturesAfterLongPress`, CalendarDatePickerDialog, TaskInteractionDialog, Pending Details Popup (priority/subtask breakdown)
 
 ### 2.4 Task Item Card
 - [ ] `PlannerScreen.kt:1206-2189` — `BulletTaskItem`: bullet type indicator (•/○/–/□/—), checkbox, title, priority/label/subtask badges, expanded description, subtask list with drag-to-reorder, pomodoro trigger button, 3-dot DropdownMenu (Edit/Migrate/Reschedule/Move to To-Do/Turn into Idea/Delete), subtask selector dialog, reschedule dialogs (Gregorian DatePickerDialog + Persian manual input)
