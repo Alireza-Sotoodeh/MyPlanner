@@ -2099,8 +2099,22 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
     // Initializes from selectedDate each time WeeklyPlannerView enters composition.
     var weekAnchorDate by remember { mutableStateOf(selectedDate) }
 
-    val weekDays = remember(weekAnchorDate, usePersianCalendar) {
-        getDaysOfWeek(weekAnchorDate, usePersianCalendar)
+    val weekDays = remember(weekAnchorDate) {
+        getDaysOfWeek(weekAnchorDate)
+    }
+
+    val displayDays = remember(weekDays, usePersianCalendar) {
+        if (usePersianCalendar) {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val satIndex = weekDays.indexOfFirst { day ->
+                val date = sdf.parse(day) ?: return@remember weekDays
+                Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY
+            }
+            if (satIndex > 0) weekDays.subList(satIndex, weekDays.size) + weekDays.subList(0, satIndex)
+            else weekDays
+        } else {
+            weekDays
+        }
     }
 
     val isCurrentWeek = remember(weekDays, todayDate) {
@@ -2186,17 +2200,15 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                 }
             }
 
-            TextButton(
-                onClick = { viewModel.toggleUsePersianCalendar() },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Text(
-                    text = if (usePersianCalendar) "FA" else "EN",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+            Text(
+                text = if (usePersianCalendar) "FA" else "EN",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable { viewModel.toggleUsePersianCalendar() }
+                    .padding(horizontal = 4.dp)
+            )
 
             IconButton(onClick = {
                 weekAnchorDate = getOffsetDateString(weekAnchorDate, 7)
@@ -2217,7 +2229,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)
         ) {
-            items(weekDays) { dayDate ->
+            items(displayDays) { dayDate ->
             val topLevelTasks = allTasks.filter { it.date == dayDate && it.parentTaskId == null && (filterLabel == null || it.label == filterLabel) }
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val dateObj = sdf.parse(dayDate)
@@ -3394,12 +3406,12 @@ fun getOffsetMonthString(monthStr: String, offsetMonths: Int): String {
     return sdf.format(cal.time)
 }
 
-fun getDaysOfWeek(dateStr: String, usePersian: Boolean = false): List<String> {
+fun getDaysOfWeek(dateStr: String): List<String> {
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val date = sdf.parse(dateStr) ?: Date()
     val cal = Calendar.getInstance()
     cal.time = date
-    cal.set(Calendar.DAY_OF_WEEK, if (usePersian) Calendar.SATURDAY else cal.firstDayOfWeek)
+    cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
 
     val list = mutableListOf<String>()
     for (i in 0..6) {
