@@ -1492,6 +1492,26 @@ class MainViewModel(
         }
     }
 
+    fun triggerReorderIdeasByPriority() {
+        viewModelScope.launch {
+            val currentIdeas = ideaRepository.getAllIdeasSync()
+            val sorted = currentIdeas.sortedWith(
+                compareBy<IdeaEntity> {
+                    when (it.priority) {
+                        "High" -> 1
+                        "Medium" -> 2
+                        "Low" -> 3
+                        else -> 4
+                    }
+                }.thenBy { it.sortOrder }
+            )
+            val updated = sorted.mapIndexed { index, idea ->
+                idea.copy(sortOrder = index)
+            }
+            ideaRepository.updateIdeaSortOrders(updated)
+        }
+    }
+
     fun reorderIdea(idea: IdeaEntity, activeIdeas: List<IdeaEntity>, deltaIndex: Int) {
         viewModelScope.launch {
             val currentIndex = activeIdeas.indexOf(idea)

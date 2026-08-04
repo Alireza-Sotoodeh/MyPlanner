@@ -4456,6 +4456,17 @@ private fun IdeasTab(viewModel: MainViewModel) {
                         letterSpacing = 1.5.sp
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(
+                            onClick = { viewModel.triggerReorderIdeasByPriority() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sort,
+                                contentDescription = "Sort by Priority",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                         Text(
                             "${filteredIdeas.size} ideas",
                             fontSize = 11.sp,
