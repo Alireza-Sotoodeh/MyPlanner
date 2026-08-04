@@ -1387,11 +1387,8 @@ class MainViewModel(
         _pomodoroPhase.value = "FOCUS"
     }
 
-    fun adjustPomodoroMinusOne() {
-        val current = _pomodoroSecondsLeft.value
-        if (current > 0) {
-            _pomodoroSecondsLeft.value = (current - 60).coerceAtLeast(0)
-        }
+    fun adjustPomodoroPlusOne() {
+        _pomodoroSecondsLeft.value += 60
     }
 
     private fun startTimerJob(context: Context) {

@@ -423,7 +423,8 @@ private fun PomodoroTab(
                             else viewModel.resumePomodoro(context)
                         },
                         onStop = { viewModel.stopPomodoroEarly(context) },
-                        onMinusOne = { viewModel.adjustPomodoroMinusOne() },
+                        onMinusOne = { viewModel.adjustPomodoroPlusOne() },
+                        minusOneLabel = "+1m",
                         onReset = { viewModel.resetPomodoro() },
                         isDiscardConfirm = showStopConfirm,
                         onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
@@ -980,6 +981,7 @@ private fun TimerControls(
     onStartPause: () -> Unit,
     onStop: () -> Unit,
     onMinusOne: () -> Unit,
+    minusOneLabel: String = "-1m",
     onReset: () -> Unit,
     isDiscardConfirm: Boolean,
     onDiscardConfirmDismiss: () -> Unit,
@@ -1079,7 +1081,7 @@ private fun TimerControls(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "-1m",
+                text = minusOneLabel,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
