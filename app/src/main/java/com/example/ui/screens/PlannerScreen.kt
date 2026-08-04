@@ -124,9 +124,6 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -1308,11 +1305,6 @@ fun BulletTaskItem(
     val subtaskItemHeights = remember { androidx.compose.runtime.mutableStateMapOf<Long, Int>() }
     var showSubtaskSelectorDialog by remember { mutableStateOf(false) }
     var showRescheduleDialog by remember { mutableStateOf(false) }
-    var isReschedulePersian by remember { mutableStateOf(false) }
-    var rescheduleDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-    var reschedulePYear by remember { mutableIntStateOf(0) }
-    var reschedulePMonth by remember { mutableIntStateOf(0) }
-    var reschedulePDay by remember { mutableIntStateOf(0) }
 
     val currentOnDragStart by rememberUpdatedState(onDragStart)
     val currentOnDrag by rememberUpdatedState(onDrag)
@@ -2085,9 +2077,6 @@ fun BulletTaskItem(
                     text = { Text("Reschedule...") },
                     leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
                     onClick = {
-                        isReschedulePersian = false
-                        rescheduleDateMillis = System.currentTimeMillis()
-                        reschedulePYear = 0; reschedulePMonth = 0; reschedulePDay = 0
                         showRescheduleDialog = true
                         expandedMenu = false
                     }
@@ -2135,120 +2124,15 @@ fun BulletTaskItem(
         )
     }
     if (showRescheduleDialog) {
-        if (!isReschedulePersian) {
-            val dpState = rememberDatePickerState(
-                initialSelectedDateMillis = rescheduleDateMillis
-            )
-            DatePickerDialog(
-                onDismissRequest = { showRescheduleDialog = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        dpState.selectedDateMillis?.let { millis ->
-                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                            val todayNorm = Calendar.getInstance().apply {
-                                set(Calendar.HOUR_OF_DAY, 0)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }.timeInMillis
-                            if (millis >= todayNorm) {
-                                onMigrate(sdf.format(Date(millis)))
-                                showRescheduleDialog = false
-                            }
-                        }
-                    }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showRescheduleDialog = false }) { Text("Cancel") }
-                }
-            ) {
-                Column {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = {
-                            val parts = com.example.core.utils.PersianCalendarHelper.getPersianDateParts(
-                                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(rescheduleDateMillis))
-                            )
-                            reschedulePYear = parts.first; reschedulePMonth = parts.second; reschedulePDay = parts.third
-                            isReschedulePersian = true
-                        }) { Text("Switch to Persian Calendar") }
-                    }
-                    DatePicker(state = dpState)
-                }
+        CalendarDatePickerDialog(
+            minDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+            onDismiss = { showRescheduleDialog = false },
+            onDateSelected = { date ->
+                onMigrate(date)
+                showRescheduleDialog = false
             }
-        } else {
-            AlertDialog(
-                onDismissRequest = { showRescheduleDialog = false },
-                title = { Text("Select Persian Date") },
-                text = {
-                    Column {
-                        Row(
-                            Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(onClick = { isReschedulePersian = false }) {
-                                Text("Switch to Western Calendar")
-                            }
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedTextField(
-                                value = if (reschedulePYear > 0) reschedulePYear.toString() else "",
-                                onValueChange = { reschedulePYear = it.toIntOrNull() ?: 0 },
-                                label = { Text("Year") },
-                                modifier = Modifier.weight(1.2f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = if (reschedulePMonth > 0) reschedulePMonth.toString() else "",
-                                onValueChange = { reschedulePMonth = (it.toIntOrNull() ?: 0).coerceIn(0, 12) },
-                                label = { Text("Month") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = if (reschedulePDay > 0) reschedulePDay.toString() else "",
-                                onValueChange = { reschedulePDay = (it.toIntOrNull() ?: 0).coerceIn(0, 31) },
-                                label = { Text("Day") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (reschedulePYear > 0 && reschedulePMonth in 1..12 && reschedulePDay in 1..31) {
-                            val greg = com.example.core.utils.PersianCalendarHelper.getGregorianDateString(
-                                reschedulePYear, reschedulePMonth, reschedulePDay
-                            )
-                            if (greg.isNotBlank()) {
-                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                val selected = sdf.parse(greg)?.time ?: 0L
-                                val todayNorm = Calendar.getInstance().apply {
-                                    set(Calendar.HOUR_OF_DAY, 0)
-                                    set(Calendar.MINUTE, 0)
-                                    set(Calendar.SECOND, 0)
-                                    set(Calendar.MILLISECOND, 0)
-                                }.timeInMillis
-                                if (selected >= todayNorm) {
-                                    onMigrate(greg)
-                                    showRescheduleDialog = false
-                                }
-                            }
-                        }
-                    }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showRescheduleDialog = false }) { Text("Cancel") }
-                }
-            )
-        }
-        }
+        )
+    }
     }
 
 }
@@ -5898,7 +5782,6 @@ private fun PriorityBadge(priority: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LinkToPlannerDialog(
     todo: TodoEntity,
@@ -5910,29 +5793,14 @@ private fun LinkToPlannerDialog(
     var showDatePicker by remember { mutableStateOf(false) }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = try {
-                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
-                    ?: System.currentTimeMillis()
-            } catch (_: Exception) { System.currentTimeMillis() }
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        CalendarDatePickerDialog(
+            initialSelectedDate = date,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { d ->
+                date = d
+                showDatePicker = false
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 
     AlertDialog(
@@ -5975,7 +5843,6 @@ private fun LinkToPlannerDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MoveToPlannerDialog(
     todo: TodoEntity,
@@ -5988,29 +5855,14 @@ private fun MoveToPlannerDialog(
     val subTodos = viewModel.allTodos.collectAsState().value.filter { it.parentTodoId == todo.id }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = try {
-                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
-                    ?: System.currentTimeMillis()
-            } catch (_: Exception) { System.currentTimeMillis() }
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        CalendarDatePickerDialog(
+            initialSelectedDate = date,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { d ->
+                date = d
+                showDatePicker = false
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 
     AlertDialog(
@@ -6956,7 +6808,6 @@ private fun CreateGroupDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddToPlannerDialog(
     idea: IdeaEntity,
@@ -6971,29 +6822,14 @@ private fun AddToPlannerDialog(
     var selectedStageId by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = try {
-                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
-                    ?: System.currentTimeMillis()
-            } catch (_: Exception) { System.currentTimeMillis() }
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
-                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        CalendarDatePickerDialog(
+            initialSelectedDate = date,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { d ->
+                date = d
+                showDatePicker = false
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 
     AlertDialog(
@@ -8198,6 +8034,7 @@ fun StartLearningDialog(
     var startDate by remember { mutableStateOf(viewModel.todayDate.value) }
     var scheduleMode by remember { mutableStateOf("CONTINUOUS") }
     var scheduleDaysOfWeek by remember { mutableStateOf("") }
+    val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
 
     fun daysBetweenDates(from: String, to: String): Int {
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
@@ -8342,6 +8179,7 @@ fun StartLearningDialog(
                     DatePickerField(
                         label = "Deadline",
                         date = deadlineDate,
+                        usePersianCalendar = usePersianCalendar,
                         onDateSelected = { deadlineDate = it }
                     )
                 } else {
@@ -8376,6 +8214,7 @@ fun StartLearningDialog(
                 DatePickerField(
                     label = "Start Date",
                     date = startDate,
+                    usePersianCalendar = usePersianCalendar,
                     onDateSelected = { startDate = it }
                 )
                 if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isNotBlank()) {
@@ -8503,19 +8342,14 @@ fun ReviewRatingSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatePickerField(
     label: String,
     date: String,
+    usePersianCalendar: Boolean = false,
     onDateSelected: (String) -> Unit
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = try {
-            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date)?.time
-        } catch (_: Exception) { null }
-    )
 
     OutlinedTextField(
         value = date,
@@ -8531,23 +8365,15 @@ fun DatePickerField(
     )
 
     if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                        onDateSelected(sdf.format(Date(millis)))
-                    }
-                    showDatePicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        CalendarDatePickerDialog(
+            initialSelectedDate = date,
+            initialUsePersian = usePersianCalendar,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { d ->
+                onDateSelected(d)
+                showDatePicker = false
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 }
 
