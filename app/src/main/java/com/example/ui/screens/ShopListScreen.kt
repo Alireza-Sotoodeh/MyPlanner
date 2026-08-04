@@ -12,9 +12,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -278,6 +280,7 @@ private fun AddEditShopItemDialog(
 ) {
     var name by remember { mutableStateOf(initialName) }
     var quantity by remember { mutableIntStateOf(initialQuantity) }
+    var qtyText by remember { mutableStateOf(initialQuantity.toString()) }
     var priceText by remember { mutableStateOf(initialPrice?.let { String.format("%.2f", it) } ?: "") }
     var notes by remember { mutableStateOf(initialNotes) }
 
@@ -297,12 +300,31 @@ private fun AddEditShopItemDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Qty:", fontSize = 14.sp, modifier = Modifier.width(40.dp))
-                    IconButton(onClick = { if (quantity > 1) quantity-- }) {
+                    IconButton(onClick = { if (quantity > 1) { quantity--; qtyText = quantity.toString() } }) {
                         Icon(Icons.Default.Remove, contentDescription = "Decrease")
                     }
-                    Text("$quantity", fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.width(32.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    IconButton(onClick = { quantity++ }) {
+                    OutlinedTextField(
+                        value = qtyText,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }
+                            if (filtered.length <= 9) {
+                                qtyText = filtered
+                                if (filtered.isNotEmpty()) {
+                                    quantity = filtered.toInt().coerceAtLeast(1)
+                                }
+                            }
+                        },
+                        modifier = Modifier.width(72.dp)
+                            .onFocusChanged { if (!it.isFocused) { val p = qtyText.toIntOrNull() ?: 1; quantity = p.coerceAtLeast(1); qtyText = quantity.toString() } },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    IconButton(onClick = { quantity++; qtyText = quantity.toString() }) {
                         Icon(Icons.Default.Add, contentDescription = "Increase")
                     }
                 }
