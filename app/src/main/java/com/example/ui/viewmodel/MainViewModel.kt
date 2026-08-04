@@ -531,6 +531,10 @@ class MainViewModel(
     val allHabitLogs: StateFlow<List<HabitLogEntity>> = habitRepository.getAllLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // All sleep logs (for history tab)
+    val allSleepLogs: StateFlow<List<SleepLogEntity>> = sleepLogRepository.allSleepLogs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Sleep Log for selected date
     val sleepLog: StateFlow<SleepLogEntity?> = _selectedDate.flatMapLatest { date ->
         sleepLogRepository.getSleepLogForDateFlow(date)
@@ -1581,13 +1585,13 @@ class MainViewModel(
         }
     }
 
-    fun saveSleepLog(hours: Float, quality: Int, bedTime: String, wakeTime: String, notes: String) {
+    fun saveSleepLog(hours: Float, quality: Int, bedTime: String, wakeTime: String, notes: String, date: String? = null) {
         viewModelScope.launch {
-            val today = _selectedDate.value
-            val existing = sleepLogRepository.getSleepLogForDate(today)
+            val targetDate = date ?: _selectedDate.value
+            val existing = sleepLogRepository.getSleepLogForDate(targetDate)
             val log = SleepLogEntity(
                 id = existing?.id ?: 0L,
-                date = today,
+                date = targetDate,
                 hoursSlept = hours,
                 sleepQuality = quality,
                 sleepTime = bedTime,
@@ -1595,6 +1599,12 @@ class MainViewModel(
                 notes = notes
             )
             sleepLogRepository.insertSleepLog(log)
+        }
+    }
+
+    fun deleteSleepLog(date: String) {
+        viewModelScope.launch {
+            sleepLogRepository.deleteSleepLogByDate(date)
         }
     }
 

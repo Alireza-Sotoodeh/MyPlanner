@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -76,6 +79,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,6 +105,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
     val sleepLog by viewModel.sleepLog.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val allHabitLogs by viewModel.allHabitLogs.collectAsState()
+    val allSleepLogs by viewModel.allSleepLogs.collectAsState()
 
     var tabIndex by remember { mutableIntStateOf(0) }
     var showCreateHabitDialog by remember { mutableStateOf(false) }
@@ -375,6 +382,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
                 HabitsHistoryTab(
                     habits = habits,
                     allLogs = allHabitLogs,
+                    allSleepLogs = allSleepLogs,
                     viewModel = viewModel
                 )
             }
@@ -432,6 +440,8 @@ fun HabitRowItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp),
@@ -462,20 +472,30 @@ fun HabitRowItem(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Habit logger interactions based on type (BINARY or QUANTITATIVE)
             if (habit.type == "BINARY") {
                 val isDone = logValue >= 1f
+                val bgColor by animateColorAsState(
+                    targetValue = if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    animationSpec = tween(300)
+                )
+                val borderColor by animateColorAsState(
+                    targetValue = if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    animationSpec = tween(300)
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (isDone) 1f else 0.8f,
+                    animationSpec = tween(300)
+                )
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .border(
-                            width = 2.dp,
-                            color = if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                            shape = CircleShape
-                        )
-                        .background(if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        .clickable { onLog(if (isDone) 0f else 1f) },
+                        .border(2.dp, borderColor, CircleShape)
+                        .background(bgColor)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLog(if (isDone) 0f else 1f)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (isDone) {
@@ -483,27 +503,42 @@ fun HabitRowItem(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Completed",
                             tint = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp).graphicsLayer(scaleX = scale, scaleY = scale)
                         )
                     }
                 }
             } else {
                 val goalReached = logValue >= habit.target
+                val bgColor by animateColorAsState(
+                    targetValue = if (goalReached) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    animationSpec = tween(300)
+                )
+                val borderColor by animateColorAsState(
+                    targetValue = if (goalReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    animationSpec = tween(300)
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (goalReached) 1f else 0.8f,
+                    animationSpec = tween(300)
+                )
                 if (goalReached) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .border(2.dp, MaterialTheme.colorScheme.primary, shape = CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { onLog(0f) },
+                            .border(2.dp, borderColor, CircleShape)
+                            .background(bgColor)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLog(0f)
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Completed",
                             tint = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp).graphicsLayer(scaleX = scale, scaleY = scale)
                         )
                     }
                 } else {
@@ -512,7 +547,10 @@ fun HabitRowItem(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         IconButton(
-                            onClick = { if (logValue > 0f) onLog(logValue - 1f) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (logValue > 0f) onLog(logValue - 1f)
+                            },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
@@ -536,7 +574,10 @@ fun HabitRowItem(
                         )
 
                         IconButton(
-                            onClick = { onLog(logValue + 1f) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLog(logValue + 1f)
+                            },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
@@ -1200,6 +1241,7 @@ private fun ManageHabitCard(
 private fun HabitsHistoryTab(
     habits: List<HabitEntity>,
     allLogs: List<HabitLogEntity>,
+    allSleepLogs: List<SleepLogEntity>,
     viewModel: MainViewModel
 ) {
     val todayStr = remember {
@@ -1214,12 +1256,16 @@ private fun HabitsHistoryTab(
     var dateChip by remember { mutableStateOf("today") }
     var showDatePicker by remember { mutableStateOf(false) }
     var editingLog by remember { mutableStateOf<HabitLogEntity?>(null) }
+    var showLogSleepDialog by remember { mutableStateOf(false) }
 
     val dateLogs = remember(allLogs, selectedDate) {
         allLogs.filter { it.date == selectedDate }
     }
-    val highlightedDates = remember(allLogs) {
-        allLogs.map { it.date }.toSet()
+    val dateSleepLog = remember(allSleepLogs, selectedDate) {
+        allSleepLogs.find { it.date == selectedDate }
+    }
+    val highlightedDates = remember(allLogs, allSleepLogs) {
+        (allLogs.map { it.date } + allSleepLogs.map { it.date }).toSet()
     }
 
     Column(
@@ -1293,6 +1339,55 @@ private fun HabitsHistoryTab(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
+                // Sleep log card for the selected date
+                item {
+                    val sleep = dateSleepLog
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                            .clickable { showLogSleepDialog = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "SLEEP LOG",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    letterSpacing = 1.5.sp
+                                )
+                                if (sleep != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "${sleep.hoursSlept} hrs · ${"★".repeat(sleep.sleepQuality)}${"☆".repeat(5 - sleep.sleepQuality)}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "No sleep logged.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                            if (sleep != null) {
+                                IconButton(onClick = { viewModel.deleteSleepLog(selectedDate) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete sleep log", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 items(habits, key = { it.id }) { habit ->
                     val log = dateLogs.find { it.habitId == habit.id }
                     HistoryHabitRowItem(
@@ -1339,6 +1434,17 @@ private fun HabitsHistoryTab(
             editingLog = null
         }
     }
+
+    if (showLogSleepDialog) {
+        LogSleepDialog(
+            sleepLog = dateSleepLog,
+            onDismiss = { showLogSleepDialog = false },
+            onConfirm = { hours, quality, bedTime, wakeTime, notes ->
+                viewModel.saveSleepLog(hours, quality, bedTime, wakeTime, notes, date = selectedDate)
+                showLogSleepDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -1349,6 +1455,8 @@ private fun HistoryHabitRowItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp),
@@ -1379,41 +1487,77 @@ private fun HistoryHabitRowItem(
 
             if (habit.type == "BINARY") {
                 val isDone = logValue >= 1f
+                val bgColor by animateColorAsState(
+                    targetValue = if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    animationSpec = tween(300)
+                )
+                val borderColor by animateColorAsState(
+                    targetValue = if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    animationSpec = tween(300)
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (isDone) 1f else 0.8f,
+                    animationSpec = tween(300)
+                )
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .border(2.dp, if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)
-                        .background(if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        .clickable { onLog(if (isDone) 0f else 1f) },
+                        .border(2.dp, borderColor, CircleShape)
+                        .background(bgColor)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLog(if (isDone) 0f else 1f)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     if (isDone) {
-                        Icon(Icons.Default.Check, contentDescription = "Completed", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Check, contentDescription = "Completed", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp).graphicsLayer(scaleX = scale, scaleY = scale))
                     }
                 }
             } else {
                 val goalReached = logValue >= habit.target
+                val bgColor by animateColorAsState(
+                    targetValue = if (goalReached) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    animationSpec = tween(300)
+                )
+                val borderColor by animateColorAsState(
+                    targetValue = if (goalReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    animationSpec = tween(300)
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (goalReached) 1f else 0.8f,
+                    animationSpec = tween(300)
+                )
                 if (goalReached) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { onLog(0f) },
+                            .border(2.dp, borderColor, CircleShape)
+                            .background(bgColor)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLog(0f)
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Completed", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Check, contentDescription = "Completed", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp).graphicsLayer(scaleX = scale, scaleY = scale))
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        IconButton(onClick = { if (logValue > 0f) onLog(logValue - 1f) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (logValue > 0f) onLog(logValue - 1f)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         }
                         Text(text = "${logValue.toInt()}", fontSize = 18.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
                         Text(text = "/ ${habit.target.toInt()}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        IconButton(onClick = { onLog(logValue + 1f) }, modifier = Modifier.size(32.dp)) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLog(logValue + 1f)
+                        }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Add, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         }
                     }
