@@ -6446,15 +6446,17 @@ private fun IdeasTab(viewModel: MainViewModel) {
         )
     }
     editingIdea?.let { idea ->
-        val ideaStages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
-        com.example.ui.components.TaskManagerDialog(
-            viewModel = viewModel,
-            initialDate = "",
-            ideaToEdit = idea,
-            initialIdeaStages = ideaStages,
-            ideaGroups = groups,
-            onDismiss = { editingIdea = null }
-        )
+        val ideaStages by viewModel.stagesForIdea(idea.id).collectAsState(initial = null)
+        ideaStages?.let { loadedStages ->
+            com.example.ui.components.TaskManagerDialog(
+                viewModel = viewModel,
+                initialDate = "",
+                ideaToEdit = idea,
+                initialIdeaStages = loadedStages,
+                ideaGroups = groups,
+                onDismiss = { editingIdea = null }
+            )
+        }
     }
     showDeleteIdeaConfirm?.let { idea ->
         DeleteConfirmDialog(
