@@ -577,17 +577,27 @@ private fun CreateIdeaDialog(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.height(32.dp)
+                    modifier = Modifier.padding(top = 4.dp).height(32.dp)
                 ) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier.clickable { showNewGroupDialog = true }.fillMaxHeight()
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text("+ New", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
                     item {
                         val isNone = selectedGroupId == null
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = if (isNone) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                             border = if (isNone) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .clickable { selectedGroupId = null }
+                            modifier = Modifier.clickable { selectedGroupId = null }.fillMaxHeight()
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
                                 Text(
@@ -595,20 +605,6 @@ private fun CreateIdeaDialog(
                                     fontSize = 14.sp,
                                     color = if (isNone) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-                        }
-                    }
-                    item {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .clickable { showNewGroupDialog = true }
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
-                                Text("+ New", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -627,18 +623,12 @@ private fun CreateIdeaDialog(
                                     }
                                 )
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(group.color))
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text(
+                                    group.name,
+                                    fontSize = 14.sp,
+                                    color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(Modifier.width(6.dp))
-                                Text(group.name, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
@@ -739,29 +729,26 @@ private fun CreateIdeaDialog(
         var selectedColor by remember { mutableStateOf(presetColors[0]) }
         AlertDialog(
             onDismissRequest = { showNewGroupDialog = false },
-            shape = RoundedCornerShape(16.dp),
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("New Group", fontWeight = FontWeight.Bold) },
+            title = { Text("New Group") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column {
                     OutlinedTextField(
                         value = newGroupName,
                         onValueChange = { newGroupName = it },
-                        label = { Text("Group name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text("Group Name") }
                     )
-                    Text("Color", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        presetColors.forEach { color ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(presetColors) { color ->
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
                                     .background(Color(color))
                                     .border(
-                                        if (selectedColor == color) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                        2.dp,
+                                        if (selectedColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent,
                                         CircleShape
                                     )
                                     .clickable { selectedColor = color }
@@ -771,18 +758,15 @@ private fun CreateIdeaDialog(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newGroupName.isNotBlank()) {
-                            viewModel.addGroup(newGroupName.trim(), selectedColor)
-                            showNewGroupDialog = false
-                        }
-                    },
-                    enabled = newGroupName.isNotBlank()
-                ) { Text("Save") }
+                TextButton(onClick = {
+                    if (newGroupName.isNotBlank()) {
+                        viewModel.addGroup(newGroupName.trim(), selectedColor)
+                        showNewGroupDialog = false
+                    }
+                }) { Text("ADD") }
             },
             dismissButton = {
-                TextButton(onClick = { showNewGroupDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showNewGroupDialog = false }) { Text("CANCEL") }
             }
         )
     }
