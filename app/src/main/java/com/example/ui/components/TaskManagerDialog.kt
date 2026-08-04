@@ -60,6 +60,7 @@ fun TaskManagerDialog(
     initialDate: String,
     taskToEdit: TaskEntity? = null,
     initialSubtasks: List<TaskEntity> = emptyList(),
+    initialType: String? = null,
     onDismiss: () -> Unit
 ) {
     val customLabels by viewModel.customLabels.collectAsState()
@@ -68,7 +69,7 @@ fun TaskManagerDialog(
     var titleError by remember { mutableStateOf(false) }
     var description by remember { mutableStateOf(taskToEdit?.description ?: "") }
     var showDescription by remember { mutableStateOf(taskToEdit?.description?.isNotEmpty() == true) }
-    var type by remember { mutableStateOf(taskToEdit?.type ?: "TASK") }
+    var type by remember { mutableStateOf(initialType ?: taskToEdit?.type ?: "TASK") }
     var priorityLevel by remember { mutableStateOf(taskToEdit?.priorityLevel ?: "Medium") }
     
     // Label System

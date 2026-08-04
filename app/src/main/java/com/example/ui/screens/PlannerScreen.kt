@@ -9,6 +9,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -79,6 +80,7 @@ import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Checkbox
@@ -159,8 +161,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 @Composable
 fun PlannerScreen(viewModel: MainViewModel) {
     val todayDate by viewModel.todayDate.collectAsState()
+    val selectedDate by viewModel.selectedDate.collectAsState()
+    val groups by viewModel.ideaGroups.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showCreateMenu by remember { mutableStateOf(false) }
+    var pendingCreateType by remember { mutableStateOf<String?>(null) }
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
 
@@ -248,8 +254,55 @@ fun PlannerScreen(viewModel: MainViewModel) {
                             )
                         }
                     }
-                3 -> TodoTab(viewModel)
-                4 -> IdeasTab(viewModel)
+                 3 -> TodoTab(viewModel)
+                 4 -> IdeasTab(viewModel)
+            }
+
+            if (selectedTab == 0 || selectedTab == 3 || selectedTab == 4) {
+                if (showCreateMenu) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .clickable { showCreateMenu = false }
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (showCreateMenu) {
+                        CreateMenuItem("Idea", Icons.Default.Lightbulb) {
+                            pendingCreateType = "IDEA"; showCreateMenu = false
+                        }
+                        CreateMenuItem("To-Do", Icons.Default.Checklist) {
+                            pendingCreateType = "TODO"; showCreateMenu = false
+                        }
+                        CreateMenuItem("Note", Icons.Default.Edit) {
+                            pendingCreateType = "NOTE"; showCreateMenu = false
+                        }
+                        CreateMenuItem("Event", Icons.Default.DateRange) {
+                            pendingCreateType = "EVENT"; showCreateMenu = false
+                        }
+                        CreateMenuItem("Task", Icons.Default.Task) {
+                            pendingCreateType = "TASK"; showCreateMenu = false
+                        }
+                    }
+
+                    FloatingActionButton(
+                        onClick = { showCreateMenu = !showCreateMenu },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.background,
+                        shape = CircleShape
+                    ) {
+                        Icon(
+                            imageVector = if (showCreateMenu) Icons.Default.Close else Icons.Default.Add,
+                            contentDescription = "Create"
+                        )
+                    }
+                }
             }
         }
     }
@@ -479,6 +532,63 @@ fun PlannerScreen(viewModel: MainViewModel) {
             },
             shape = RoundedCornerShape(16.dp)
         )
+    }
+
+    pendingCreateType?.let { type ->
+        when (type) {
+            "TASK", "NOTE", "EVENT" -> com.example.ui.components.TaskManagerDialog(
+                viewModel = viewModel,
+                initialDate = selectedDate,
+                initialType = type,
+                onDismiss = { pendingCreateType = null }
+            )
+            "TODO" -> AddTodoDialog(
+                onDismiss = { pendingCreateType = null },
+                onConfirm = { title, description, priority ->
+                    viewModel.addTodo(title, description, priority)
+                    pendingCreateType = null
+                }
+            )
+            "IDEA" -> CreateIdeaDialog(
+                viewModel = viewModel,
+                groups = groups,
+                onDismiss = { pendingCreateType = null },
+                onConfirm = { groupId, title, description, stages, priority ->
+                    viewModel.addIdea(groupId, title, description, stages, priority)
+                    pendingCreateType = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CreateMenuItem(label: String, icon: ImageVector, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
+        modifier = Modifier.size(width = 120.dp, height = 44.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
@@ -1184,40 +1294,9 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                         }
                     }
                 }
-
             }
 
-            // FLOATING ACTION BUTTON inside the container or at bottom right
-            FloatingActionButton(
-                onClick = { 
-                    taskToEdit = null
-                    subtasksToEdit = emptyList()
-                    showAddTaskDialog = true 
-                },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.background,
-                shape = CircleShape, // Pure round for clean icon vibe
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Intention")
-            }
         }
-    }
-
-    if (showAddTaskDialog) {
-        com.example.ui.components.TaskManagerDialog(
-            viewModel = viewModel,
-            initialDate = selectedDate,
-            taskToEdit = taskToEdit,
-            initialSubtasks = subtasksToEdit,
-            onDismiss = { 
-                showAddTaskDialog = false
-                taskToEdit = null
-                subtasksToEdit = emptyList()
-            }
-        )
     }
 
 }
@@ -3687,7 +3766,6 @@ private fun TodoTab(viewModel: MainViewModel) {
     val allTasks by viewModel.allTasks.collectAsState()
 
     var filter by remember { mutableStateOf(TodoTabFilter.PENDING) }
-    var showAddDialog by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
@@ -4045,30 +4123,11 @@ private fun TodoTab(viewModel: MainViewModel) {
                         }
                     }
                 }
-
-                FloatingActionButton(
-                    onClick = { showAddDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.background,
-                    shape = CircleShape,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add To-Do")
                 }
             }
         }
     }
-    }
 
-    if (showAddDialog) {
-        AddTodoDialog(
-            onDismiss = { showAddDialog = false },
-            onConfirm = { title, description, priority ->
-                viewModel.addTodo(title, description, priority)
-                showAddDialog = false
-            }
-        )
-    }
     editingTodo?.let { todo ->
         EditTodoDialog(
             todo = todo,
@@ -4558,7 +4617,6 @@ private fun IdeasTab(viewModel: MainViewModel) {
     val ideas by viewModel.allIdeas.collectAsState()
 
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
-    var showCreateIdeaDialog by remember { mutableStateOf(false) }
     var editingIdea by remember { mutableStateOf<IdeaEntity?>(null) }
     var showDeleteIdeaConfirm by remember { mutableStateOf<IdeaEntity?>(null) }
     var showDeleteGroupConfirm by remember { mutableStateOf<IdeaGroupEntity?>(null) }
@@ -4773,19 +4831,10 @@ private fun IdeasTab(viewModel: MainViewModel) {
                         }
                     }
                 }
-
-                FloatingActionButton(
-                    onClick = { showCreateIdeaDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.background,
-                    shape = CircleShape,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Idea")
                 }
+
             }
         }
-    }
     }
 
     editingGroup?.let { group ->
@@ -4794,14 +4843,6 @@ private fun IdeasTab(viewModel: MainViewModel) {
             initialColor = group.color,
             onDismiss = { editingGroup = null },
             onConfirm = { name, color -> viewModel.updateGroup(group.copy(name = name, color = color)); editingGroup = null }
-        )
-    }
-    if (showCreateIdeaDialog) {
-        CreateIdeaDialog(
-            viewModel = viewModel,
-            groups = groups,
-            onDismiss = { showCreateIdeaDialog = false },
-            onConfirm = { groupId, title, description, stages, priority -> viewModel.addIdea(groupId, title, description, stages, priority); showCreateIdeaDialog = false }
         )
     }
     editingIdea?.let { idea ->
