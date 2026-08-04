@@ -95,7 +95,7 @@ fun DiaryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(end = 4.dp, top = 12.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { saveNow(); onBack() }) {
