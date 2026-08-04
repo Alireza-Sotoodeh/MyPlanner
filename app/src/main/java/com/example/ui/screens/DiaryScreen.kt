@@ -185,7 +185,6 @@ fun DiaryScreen(
     onBack: () -> Unit
 ) {
     val todayDate by viewModel.todayDate.collectAsState()
-    val diaryDates by viewModel.diaryAllDates.collectAsState()
 
     var currentDate by remember { mutableStateOf(todayDate) }
     val entry by viewModel.diaryEntryForDate(currentDate).collectAsState(initial = null)
@@ -193,7 +192,6 @@ fun DiaryScreen(
     var title by remember { mutableStateOf(entry?.title ?: "") }
     var content by remember { mutableStateOf(entry?.content ?: "") }
 
-    val dateSet = diaryDates.toSet()
     val scope = rememberCoroutineScope()
 
     val titleHistory = remember { HistoryStack() }
@@ -324,13 +322,7 @@ fun DiaryScreen(
             IconButton(onClick = { navigateDate(-1) }) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                if (currentDate in dateSet) {
-                    Spacer(Modifier.width(4.dp))
-                    Text("\u25CF", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary)
-                }
-            }
+            Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             IconButton(onClick = { navigateDate(1) }) {
                 Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
             }
