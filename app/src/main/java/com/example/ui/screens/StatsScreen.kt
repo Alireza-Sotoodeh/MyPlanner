@@ -398,21 +398,29 @@ fun StatsScreen(viewModel: MainViewModel) {
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Center
                                 )
-                                IconButton(
-                                    onClick = {
-                                        if (usePersianCalendar) {
-                                            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(lineGraphYear, lineGraphMonth, 1)
-                                            lineGraphYear = y; lineGraphMonth = m
-                                        } else {
-                                            if (lineGraphMonth == 12) { lineGraphYear++; lineGraphMonth = 1 }
-                                            else lineGraphMonth++
-                                        }
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, "Next", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                }
-                            } else {
+                                    IconButton(
+                                        onClick = {
+                                            if (usePersianCalendar) {
+                                                val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(lineGraphYear, lineGraphMonth, 1)
+                                                lineGraphYear = y; lineGraphMonth = m
+                                            } else {
+                                                if (lineGraphMonth == 12) { lineGraphYear++; lineGraphMonth = 1 }
+                                                else lineGraphMonth++
+                                            }
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, "Next", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    }
+                                    IconButton(onClick = { viewModel.toggleUsePersianCalendar() }, modifier = Modifier.size(28.dp)) {
+                                        Text(
+                                            if (usePersianCalendar) "EN" else "FA",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
                                 Text(
                                     text = if (selectedRangeMode == "7D") "Last 7 Days" else "Last 30 Days",
                                     fontSize = 12.sp,
@@ -1354,23 +1362,11 @@ private fun HabitLineGraphCanvas(
                     )
                 )
 
-                // Smooth line path (Catmull-Rom to Bezier)
+                // Straight line segments connecting data points
                 val linePath = Path().apply {
                     moveTo(points[0].x, points[0].y)
                     for (i in 1 until points.size) {
-                        val prev = points[i - 1]
-                        val curr = points[i]
-                        val prevPrev = if (i >= 2) points[i - 2] else prev
-                        val next = if (i + 1 < points.size) points[i + 1] else curr
-                        val cp1 = Offset(
-                            prev.x + (curr.x - prevPrev.x) / 6f,
-                            prev.y + (curr.y - prevPrev.y) / 6f
-                        )
-                        val cp2 = Offset(
-                            curr.x - (next.x - prev.x) / 6f,
-                            curr.y - (next.y - prev.y) / 6f
-                        )
-                        cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, curr.x, curr.y)
+                        lineTo(points[i].x, points[i].y)
                     }
                 }
                 drawPath(
