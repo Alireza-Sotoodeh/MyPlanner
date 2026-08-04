@@ -527,6 +527,10 @@ class MainViewModel(
         habitRepository.getLogsForDate(date)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // All habit logs (used for line graph in Stats screen)
+    val allHabitLogs: StateFlow<List<HabitLogEntity>> = habitRepository.getAllLogs()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Sleep Log for selected date
     val sleepLog: StateFlow<SleepLogEntity?> = _selectedDate.flatMapLatest { date ->
         sleepLogRepository.getSleepLogForDateFlow(date)

@@ -63,6 +63,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.style.TextAlign
 import com.example.core.utils.PersianCalendarHelper
 import com.example.core.database.entity.TimerSessionEntity
+import com.example.core.database.entity.HabitLogEntity
+import com.example.core.database.entity.HabitEntity
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.Canvas
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.nativeCanvas
+import kotlin.math.roundToInt
 
 @Composable
 fun StatsScreen(viewModel: MainViewModel) {
@@ -76,8 +90,27 @@ fun StatsScreen(viewModel: MainViewModel) {
     val allTimerSessions by viewModel.allTimerSessions.collectAsState()
     val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
     val todayDateStr by viewModel.todayDate.collectAsState()
+    val allHabitLogs by viewModel.allHabitLogs.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
+
+    // Line graph state
+    var lineGraphYear by remember(usePersianCalendar) { mutableIntStateOf(
+        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear()
+        else Calendar.getInstance().get(Calendar.YEAR)
+    ) }
+    var lineGraphMonth by remember(usePersianCalendar) { mutableIntStateOf(
+        if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth()
+        else Calendar.getInstance().get(Calendar.MONTH) + 1
+    ) }
+    var selectedRangeMode by remember { mutableStateOf("MONTH") }
+
+    val lineGraphRange = remember(lineGraphYear, lineGraphMonth, usePersianCalendar, selectedRangeMode) {
+        computeLineGraphRange(lineGraphYear, lineGraphMonth, usePersianCalendar, selectedRangeMode)
+    }
+    val dailyData = remember(lineGraphRange, habits, allHabitLogs) {
+        computeDailyCompletions(lineGraphRange.first, lineGraphRange.second, habits, allHabitLogs)
+    }
     var heatmapYear by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear() else Calendar.getInstance().get(Calendar.YEAR)) }
     var heatmapMonth by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth() else Calendar.getInstance().get(Calendar.MONTH) + 1) }
 
@@ -238,7 +271,7 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 2. Habit Completion Progress
+        // 2. Habit Completion Progress + Line Graph
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -331,6 +364,137 @@ fun StatsScreen(viewModel: MainViewModel) {
                                 .height(12.dp)
                                 .clip(CircleShape)
                         )
+
+                        // --- Divider ---
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // --- Line Graph ---
+                        // Nav + range toggle row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (selectedRangeMode == "MONTH") {
+                                IconButton(
+                                    onClick = {
+                                        if (usePersianCalendar) {
+                                            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(lineGraphYear, lineGraphMonth, -1)
+                                            lineGraphYear = y; lineGraphMonth = m
+                                        } else {
+                                            if (lineGraphMonth == 1) { lineGraphYear--; lineGraphMonth = 12 }
+                                            else lineGraphMonth--
+                                        }
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, "Previous", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                }
+                                Text(
+                                    text = lineGraphRange.third,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center
+                                )
+                                IconButton(
+                                    onClick = {
+                                        if (usePersianCalendar) {
+                                            val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(lineGraphYear, lineGraphMonth, 1)
+                                            lineGraphYear = y; lineGraphMonth = m
+                                        } else {
+                                            if (lineGraphMonth == 12) { lineGraphYear++; lineGraphMonth = 1 }
+                                            else lineGraphMonth++
+                                        }
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, "Next", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                }
+                            } else {
+                                Text(
+                                    text = if (selectedRangeMode == "7D") "Last 7 Days" else "Last 30 Days",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            Spacer(Modifier.width(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("7D", "30D", "MONTH").forEach { mode ->
+                                    val isSelected = selectedRangeMode == mode
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.clickable {
+                                            selectedRangeMode = mode
+                                            if (mode == "MONTH") {
+                                                if (usePersianCalendar) {
+                                                    lineGraphYear = PersianCalendarHelper.getCurrentPersianYear()
+                                                    lineGraphMonth = PersianCalendarHelper.getCurrentPersianMonth()
+                                                } else {
+                                                    val now = Calendar.getInstance()
+                                                    lineGraphYear = now.get(Calendar.YEAR)
+                                                    lineGraphMonth = now.get(Calendar.MONTH) + 1
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Text(
+                                            text = mode,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val primaryColor = MaterialTheme.colorScheme.primary
+                        val onSurfaceColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
+                        val maxY = remember(dailyData) { dailyData.maxOfOrNull { it.completed } ?: 1 }
+                        val trailingAvg = remember(dailyData) {
+                            if (dailyData.size >= 7) dailyData.takeLast(7).map { it.completed }.average().toFloat()
+                            else null
+                        }
+                        val monthCompletedDays = remember(dailyData) { dailyData.count { it.completed > 0 } }
+
+                        HabitLineGraphCanvas(
+                            data = dailyData,
+                            maxY = maxY,
+                            trailingAvg = trailingAvg,
+                            primaryColor = primaryColor,
+                            surfaceVariantColor = surfaceVariantColor,
+                            onSurfaceColor = onSurfaceColor
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = trailingAvg?.let { "Last 7d avg: ${"%.1f".format(it)}/day" } ?: "",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$monthCompletedDays of ${dailyData.size} days with habits",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -1010,4 +1174,285 @@ private fun computeGridData(
     }
 
     return GridData(cells, maxSeconds, numWeeks, monthLabel, quintiles)
+}
+
+// ── Line Graph Helpers ──
+
+private data class DailyCompletion(
+    val dateStr: String,
+    val day: Int,
+    val completed: Int
+)
+
+private fun computeDailyCompletions(
+    startDate: String,
+    endDate: String,
+    habits: List<HabitEntity>,
+    allLogs: List<HabitLogEntity>
+): List<DailyCompletion> {
+    if (startDate.isBlank() || endDate.isBlank() || habits.isEmpty()) return emptyList()
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+    val start = sdf.parse(startDate) ?: return emptyList()
+    val end = sdf.parse(endDate) ?: return emptyList()
+
+    val logMap = allLogs.filter { it.date in startDate..endDate }.groupBy { it.date }
+    val results = mutableListOf<DailyCompletion>()
+    cal.time = start
+    while (!cal.time.after(end)) {
+        val dateStr = sdf.format(cal.time)
+        val dayLogs = logMap[dateStr] ?: emptyList()
+        val completed = habits.count { habit ->
+            dayLogs.any { it.habitId == habit.id && it.value >= habit.target }
+        }
+        results.add(DailyCompletion(dateStr, cal.get(Calendar.DAY_OF_MONTH), completed))
+        cal.add(Calendar.DAY_OF_MONTH, 1)
+    }
+    return results
+}
+
+private fun computeLineGraphRange(
+    year: Int,
+    month: Int,
+    isPersian: Boolean,
+    rangeMode: String
+): Triple<String, String, String> {
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+    val now = sdf.format(cal.time)
+
+    return when (rangeMode) {
+        "7D" -> {
+            cal.add(Calendar.DAY_OF_MONTH, -6)
+            val start = sdf.format(cal.time)
+            Triple(start, now, "Last 7 Days")
+        }
+        "30D" -> {
+            cal.add(Calendar.DAY_OF_MONTH, -29)
+            val start = sdf.format(cal.time)
+            Triple(start, now, "Last 30 Days")
+        }
+        else -> {
+            val (start, end) = if (isPersian) {
+                PersianCalendarHelper.getGregorianDateRange(year, month)
+            } else {
+                cal.set(year, month - 1, 1)
+                val s = sdf.format(cal.time)
+                cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+                s to sdf.format(cal.time)
+            }
+            val label = if (isPersian) {
+                "${PersianCalendarHelper.monthNames[month - 1]} $year"
+            } else {
+                val names = arrayOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+                "${names[month - 1]} $year"
+            }
+            Triple(start, end, label)
+        }
+    }
+}
+
+@Composable
+private fun HabitLineGraphCanvas(
+    data: List<DailyCompletion>,
+    maxY: Int,
+    trailingAvg: Float?,
+    primaryColor: Color,
+    surfaceVariantColor: Color,
+    onSurfaceColor: Color
+) {
+    var tooltipIndex by remember { mutableStateOf<Int?>(null) }
+    val labelPaint = remember {
+        android.graphics.Paint().apply {
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+
+    if (data.isEmpty()) {
+        Text(
+            text = "No habit data for this period.",
+            fontSize = 13.sp,
+            color = onSurfaceColor
+        )
+        return
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .pointerInput(data) {
+                    detectTapGestures { offset ->
+                        if (data.size < 2) return@detectTapGestures
+                        val leftPad = 40.dp.toPx()
+                        val drawW = size.width - leftPad - 16.dp.toPx()
+                        val stepW = drawW / (data.size - 1)
+                        val idx = ((offset.x - leftPad) / stepW).roundToInt()
+                            .coerceIn(0, data.size - 1)
+                        tooltipIndex = if (tooltipIndex == idx) null else idx
+                    }
+                }
+        ) {
+            val leftPad = 40.dp.toPx()
+            val rightPad = 16.dp.toPx()
+            val topPad = 8.dp.toPx()
+            val bottomPad = 24.dp.toPx()
+            val drawW = size.width - leftPad - rightPad
+            val drawH = size.height - topPad - bottomPad
+            val maxYf = maxY.toFloat().coerceAtLeast(1f)
+
+            val yStep = when {
+                maxYf <= 3f -> 1
+                maxYf <= 8f -> 2
+                maxYf <= 20f -> 5
+                else -> (maxYf / 4f).roundToInt().coerceAtLeast(5)
+            }
+
+            // Y-axis grid lines and labels
+            var yVal = 0
+            while (yVal <= maxYf.roundToInt()) {
+                val yPos = topPad + drawH - (yVal.toFloat() / maxYf * drawH)
+                drawLine(
+                    color = surfaceVariantColor,
+                    start = Offset(leftPad, yPos),
+                    end = Offset(size.width - rightPad, yPos),
+                    strokeWidth = 1.dp.toPx()
+                )
+                labelPaint.color = onSurfaceColor.hashCode()
+                labelPaint.textSize = 9.sp.toPx()
+                drawContext.canvas.nativeCanvas.drawText(
+                    yVal.toString(),
+                    leftPad - 8.dp.toPx(),
+                    yPos + 3.dp.toPx(),
+                    labelPaint
+                )
+                yVal += yStep
+            }
+
+            // Data points
+            val points = data.mapIndexed { idx, d ->
+                val x = leftPad + (idx.toFloat() / (data.size - 1).coerceAtLeast(1)) * drawW
+                val y = topPad + drawH - (d.completed.toFloat() / maxYf * drawH)
+                Offset(x, y)
+            }
+
+            if (points.size >= 2) {
+                // Gradient fill under line
+                val fillPath = Path().apply {
+                    moveTo(points.first().x, topPad + drawH)
+                    points.forEach { lineTo(it.x, it.y) }
+                    lineTo(points.last().x, topPad + drawH)
+                    close()
+                }
+                drawPath(
+                    path = fillPath,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(primaryColor.copy(alpha = 0.25f), Color.Transparent),
+                        endY = topPad + drawH
+                    )
+                )
+
+                // Smooth line path (Catmull-Rom to Bezier)
+                val linePath = Path().apply {
+                    moveTo(points[0].x, points[0].y)
+                    for (i in 1 until points.size) {
+                        val prev = points[i - 1]
+                        val curr = points[i]
+                        val prevPrev = if (i >= 2) points[i - 2] else prev
+                        val next = if (i + 1 < points.size) points[i + 1] else curr
+                        val cp1 = Offset(
+                            prev.x + (curr.x - prevPrev.x) / 6f,
+                            prev.y + (curr.y - prevPrev.y) / 6f
+                        )
+                        val cp2 = Offset(
+                            curr.x - (next.x - prev.x) / 6f,
+                            curr.y - (next.y - prev.y) / 6f
+                        )
+                        cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, curr.x, curr.y)
+                    }
+                }
+                drawPath(
+                    path = linePath,
+                    color = primaryColor,
+                    style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+
+                // 7-day trailing average dashed line
+                trailingAvg?.let { avg ->
+                    if (data.size >= 7) {
+                        val avgStartIdx = data.size - 7
+                        val avgXStart = leftPad + (avgStartIdx.toFloat() / (data.size - 1)) * drawW
+                        val avgY = topPad + drawH - (avg.toFloat() / maxYf * drawH)
+                        drawLine(
+                            color = primaryColor.copy(alpha = 0.5f),
+                            start = Offset(avgXStart, avgY),
+                            end = Offset(leftPad + drawW, avgY),
+                            strokeWidth = 1.5.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
+                        )
+                    }
+                }
+            }
+
+            // Data point dots
+            points.forEachIndexed { idx, pt ->
+                val isSel = tooltipIndex == idx
+                val radius = if (isSel) 5.dp.toPx() else 3.dp.toPx()
+                drawCircle(color = primaryColor, radius = radius, center = pt)
+                if (isSel) {
+                    drawCircle(color = Color.White, radius = radius - 1.5.dp.toPx(), center = pt)
+                    drawCircle(color = primaryColor, radius = radius - 1.5.dp.toPx(), center = pt)
+                }
+            }
+
+            // X-axis day labels
+            val labelIndices = data.indices.filter { idx ->
+                val day = data[idx].day
+                idx == 0 || idx == data.size - 1 || day % 5 == 0 || day == 1
+            }
+            labelPaint.textSize = 9.sp.toPx()
+            labelPaint.color = onSurfaceColor.hashCode()
+            labelIndices.forEach { idx ->
+                val x = leftPad + (idx.toFloat() / (data.size - 1).coerceAtLeast(1)) * drawW
+                drawContext.canvas.nativeCanvas.drawText(
+                    data[idx].day.toString(),
+                    x,
+                    size.height - 4.dp.toPx(),
+                    labelPaint
+                )
+            }
+
+            // Tooltip on selected point
+            tooltipIndex?.let { idx ->
+                if (idx in points.indices) {
+                    val pt = points[idx]
+                    val d = data[idx]
+                    val tipText = "${d.dateStr}: ${d.completed}"
+                    labelPaint.textSize = 10.sp.toPx()
+                    labelPaint.color = android.graphics.Color.WHITE
+                    val textW = labelPaint.measureText(tipText)
+                    val tipW = textW + 12.dp.toPx()
+                    val tipH = 22.dp.toPx()
+                    val tipX = (pt.x - tipW / 2f)
+                        .coerceIn(4.dp.toPx(), size.width - tipW - 4.dp.toPx())
+                    val tipY = pt.y - 12.dp.toPx() - tipH
+
+                    drawRoundRect(
+                        color = Color(0xDD333333),
+                        topLeft = Offset(tipX, tipY),
+                        size = Size(tipW, tipH),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx())
+                    )
+                    drawContext.canvas.nativeCanvas.drawText(
+                        tipText,
+                        tipX + tipW / 2f,
+                        tipY + tipH - 5.dp.toPx(),
+                        labelPaint
+                    )
+                }
+            }
+        }
+    }
 }
