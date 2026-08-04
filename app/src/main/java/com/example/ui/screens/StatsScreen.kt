@@ -519,7 +519,7 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 3. Bullet Journal Accomplishment Ratio
+        // 3. Merged: Task Accomplishments + Time Spent by Label + Time of Day Activity
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -529,8 +529,9 @@ fun StatsScreen(viewModel: MainViewModel) {
                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
+                    // ── Task Accomplishments ──
                     Text(
-                        text = "BULLET TASK ACCOMPLISHMENTS",
+                        text = "TASK ACCOMPLISHMENTS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -582,20 +583,12 @@ fun StatsScreen(viewModel: MainViewModel) {
                                 .clip(CircleShape)
                         )
                     }
-                }
-            }
-        }
 
-        // 4. Time Spent by Label (Donut Chart) — from actual timer sessions
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // ── Time Spent by Label ──
                     Text(
                         text = "TIME SPENT BY LABEL",
                         fontSize = 11.sp,
@@ -781,61 +774,12 @@ fun StatsScreen(viewModel: MainViewModel) {
                             )
                         }
                     }
-                }
-            }
-        }
 
-        // 5. Activity Heatmap
-        item {
-            ActivityHeatmapSection(
-                lazyListState = lazyListState,
-                year = heatmapYear,
-                month = heatmapMonth,
-                isPersian = usePersianCalendar,
-                sessions = allTimerSessions,
-                todayDateStr = todayDateStr,
-                onPrevMonth = {
-                    if (usePersianCalendar) {
-                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, -1)
-                        heatmapYear = y; heatmapMonth = m
-                    } else {
-                        if (heatmapMonth == 1) { heatmapYear--; heatmapMonth = 12 }
-                        else heatmapMonth--
-                    }
-                },
-                onNextMonth = {
-                    if (usePersianCalendar) {
-                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, 1)
-                        heatmapYear = y; heatmapMonth = m
-                    } else {
-                        if (heatmapMonth == 12) { heatmapYear++; heatmapMonth = 1 }
-                        else heatmapMonth++
-                    }
-                },
-                onToday = {
-                    if (usePersianCalendar) {
-                        heatmapYear = PersianCalendarHelper.getCurrentPersianYear()
-                        heatmapMonth = PersianCalendarHelper.getCurrentPersianMonth()
-                    } else {
-                        val now = Calendar.getInstance()
-                        heatmapYear = now.get(Calendar.YEAR)
-                        heatmapMonth = now.get(Calendar.MONTH) + 1
-                    }
-                },
-                onToggleCalendar = { viewModel.toggleUsePersianCalendar() }
-            )
-        }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-        // 6. Activity Time of Day (24h Timeline) — from timer sessions
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                    // ── Time of Day Activity ──
                     Text(
                         text = "TIME OF DAY ACTIVITY",
                         fontSize = 11.sp,
@@ -929,6 +873,48 @@ fun StatsScreen(viewModel: MainViewModel) {
                 }
             }
         }
+
+        // 5. Activity Heatmap
+        item {
+            ActivityHeatmapSection(
+                lazyListState = lazyListState,
+                year = heatmapYear,
+                month = heatmapMonth,
+                isPersian = usePersianCalendar,
+                sessions = allTimerSessions,
+                todayDateStr = todayDateStr,
+                onPrevMonth = {
+                    if (usePersianCalendar) {
+                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, -1)
+                        heatmapYear = y; heatmapMonth = m
+                    } else {
+                        if (heatmapMonth == 1) { heatmapYear--; heatmapMonth = 12 }
+                        else heatmapMonth--
+                    }
+                },
+                onNextMonth = {
+                    if (usePersianCalendar) {
+                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, 1)
+                        heatmapYear = y; heatmapMonth = m
+                    } else {
+                        if (heatmapMonth == 12) { heatmapYear++; heatmapMonth = 1 }
+                        else heatmapMonth++
+                    }
+                },
+                onToday = {
+                    if (usePersianCalendar) {
+                        heatmapYear = PersianCalendarHelper.getCurrentPersianYear()
+                        heatmapMonth = PersianCalendarHelper.getCurrentPersianMonth()
+                    } else {
+                        val now = Calendar.getInstance()
+                        heatmapYear = now.get(Calendar.YEAR)
+                        heatmapMonth = now.get(Calendar.MONTH) + 1
+                    }
+                },
+                onToggleCalendar = { viewModel.toggleUsePersianCalendar() }
+            )
+        }
+
 
         // Bottom space
         item {
