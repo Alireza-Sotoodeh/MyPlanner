@@ -34,6 +34,10 @@ import java.util.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import com.example.core.database.entity.TaskEntity
+import com.example.core.database.entity.TodoEntity
+import com.example.core.database.entity.IdeaEntity
+import com.example.core.database.entity.IdeaStageEntity
+import com.example.core.database.entity.IdeaGroupEntity
 
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.layout.layout
@@ -61,16 +65,20 @@ fun TaskManagerDialog(
     taskToEdit: TaskEntity? = null,
     initialSubtasks: List<TaskEntity> = emptyList(),
     initialType: String? = null,
+    todoToEdit: TodoEntity? = null,
+    ideaToEdit: IdeaEntity? = null,
+    initialIdeaStages: List<IdeaStageEntity> = emptyList(),
+    ideaGroups: List<IdeaGroupEntity> = emptyList(),
     onDismiss: () -> Unit
 ) {
     val customLabels by viewModel.customLabels.collectAsState()
 
-    var title by remember { mutableStateOf(taskToEdit?.title ?: "") }
+    var title by remember { mutableStateOf(taskToEdit?.title ?: todoToEdit?.title ?: ideaToEdit?.title ?: "") }
     var titleError by remember { mutableStateOf(false) }
-    var description by remember { mutableStateOf(taskToEdit?.description ?: "") }
-    var showDescription by remember { mutableStateOf(taskToEdit?.description?.isNotEmpty() == true) }
-    var type by remember { mutableStateOf(initialType ?: taskToEdit?.type ?: "TASK") }
-    var priorityLevel by remember { mutableStateOf(taskToEdit?.priorityLevel ?: "Medium") }
+    var description by remember { mutableStateOf(taskToEdit?.description ?: todoToEdit?.description ?: ideaToEdit?.description ?: "") }
+    var showDescription by remember { mutableStateOf(taskToEdit?.description?.isNotEmpty() == true || todoToEdit?.description?.isNotEmpty() == true || ideaToEdit?.description?.isNotEmpty() == true) }
+    var type by remember { mutableStateOf(initialType ?: taskToEdit?.type ?: (if (todoToEdit != null) "TODO" else if (ideaToEdit != null) "IDEA" else "TASK")) }
+    var priorityLevel by remember { mutableStateOf(taskToEdit?.priorityLevel ?: todoToEdit?.priority ?: ideaToEdit?.priority ?: "Medium") }
     
     // Label System
     var selectedLabel by remember { 
@@ -80,6 +88,15 @@ fun TaskManagerDialog(
             }
         ) 
     }
+
+    // Idea-specific state
+    var selectedGroupId by remember { mutableStateOf(ideaToEdit?.groupId) }
+    var stages by remember { mutableStateOf(initialIdeaStages) }
+    var newStageTitle by remember { mutableStateOf("") }
+    var editingStageIndex by remember { mutableStateOf(-1) }
+    var editingStageText by remember { mutableStateOf("") }
+    var showNewGroupDialog by remember { mutableStateOf(false) }
+    val presetColors = listOf(0xFF6750A4, 0xFFB3261E, 0xFF00E676, 0xFF2196F3, 0xFFFF7043, 0xFFFFEB3B, 0xFFE91E63, 0xFF00BCD4)
     var showNewLabelDialog by remember { mutableStateOf(false) }
     var labelToEdit by remember { mutableStateOf<Pair<String, Long>?>(null) }
     var showEditLabelDialog by remember { mutableStateOf(false) }
@@ -368,7 +385,7 @@ fun TaskManagerDialog(
                 // Type
                 Text(text = "Type:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    listOf("TASK", "EVENT", "NOTE").forEach { item ->
+                    listOf("TASK", "EVENT", "NOTE", "TODO", "IDEA").forEach { item ->
                         val selected = type == item
                         val bgColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                         val textColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
@@ -408,10 +425,24 @@ fun TaskManagerDialog(
                                                     .background(textColor, shape = RoundedCornerShape(0.5.dp))
                                             )
                                         }
+                                        "TODO" -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .border(1.5.dp, textColor, shape = RoundedCornerShape(1.dp))
+                                            )
+                                        }
+                                        "IDEA" -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(width = 8.dp, height = 5.dp)
+                                                    .background(textColor, shape = RoundedCornerShape(1.dp))
+                                            )
+                                        }
                                     }
                                 }
                                 Text(
-                                    text = when (item) { "TASK" -> "Task"; "EVENT" -> "Event"; else -> "Note" },
+                                    text = when (item) { "TASK" -> "Task"; "EVENT" -> "Event"; "NOTE" -> "Note"; "TODO" -> "To-Do"; else -> "Idea" },
                                     color = textColor,
                                     fontSize = 11.sp, fontWeight = FontWeight.Bold
                                 )
@@ -420,6 +451,136 @@ fun TaskManagerDialog(
                     }
                 }
 
+                HardwareAcceleratedVisibility(
+                    visible = type == "IDEA"
+                ) {
+                    Column {
+                        // Group selector
+                        Text("Group:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp).height(32.dp)
+                        ) {
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                    modifier = Modifier.clickable { showNewGroupDialog = true }.fillMaxHeight()
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                        Text("+ New", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            item {
+                                val isNone = selectedGroupId == null
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isNone) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = if (isNone) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                    modifier = Modifier.clickable { selectedGroupId = null }.fillMaxHeight()
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                        Text("None", fontSize = 14.sp, color = if (isNone) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            items(ideaGroups) { group ->
+                                val isSelected = selectedGroupId == group.id
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                    modifier = Modifier.fillMaxHeight().combinedClickable(
+                                        onClick = { selectedGroupId = group.id },
+                                        onLongClick = { viewModel.deleteGroup(group) }
+                                    )
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                        Text(group.name, fontSize = 14.sp, color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 8.dp))
+
+                        Text("STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+
+                        stages.forEachIndexed { index, stage ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                if (editingStageIndex == index) {
+                                    OutlinedTextField(
+                                        value = editingStageText,
+                                        onValueChange = { editingStageText = it },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+                                    )
+                                    IconButton(onClick = {
+                                        if (editingStageText.isNotBlank()) {
+                                            stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim()) }
+                                        }
+                                        editingStageIndex = -1
+                                        editingStageText = ""
+                                    }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(16.dp))
+                                    }
+                                } else {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.weight(1f).clickable {
+                                            editingStageIndex = index
+                                            editingStageText = stage.title
+                                        }
+                                    ) {
+                                        Text(stage.title, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                    IconButton(onClick = {
+                                        stages = stages.toMutableList().also { it.removeAt(index) }
+                                        if (editingStageIndex == index) { editingStageIndex = -1; editingStageText = "" }
+                                    }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = newStageTitle,
+                                onValueChange = { newStageTitle = it },
+                                placeholder = { Text("Add stage", fontSize = 13.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            FilledTonalButton(
+                                onClick = {
+                                    if (newStageTitle.isNotBlank()) {
+                                        stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim())
+                                        newStageTitle = ""
+                                    }
+                                },
+                                modifier = Modifier.height(40.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Add", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                HardwareAcceleratedVisibility(
+                    visible = type in listOf("TASK", "EVENT", "NOTE")
+                ) {
+                Column {
                 Text("Date and Repetition:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
                     
@@ -528,6 +689,8 @@ fun TaskManagerDialog(
                             }
                         }
                     }
+                    }
+                }
 
                 HardwareAcceleratedVisibility(
                     visible = type == "EVENT"
@@ -622,7 +785,7 @@ fun TaskManagerDialog(
                                 }
                                 
                                 AnimatedVisibility(
-                                    visible = !showSubtasks,
+                                    visible = !showSubtasks && type in listOf("TASK", "EVENT", "NOTE"),
                                     enter = fadeIn() + expandHorizontally(),
                                     exit = fadeOut() + shrinkHorizontally()
                                 ) {
@@ -650,7 +813,7 @@ fun TaskManagerDialog(
                         }
                         
                         HardwareAcceleratedVisibility(
-                            visible = showSubtasks
+                            visible = showSubtasks && type in listOf("TASK", "EVENT", "NOTE")
                         ) {
                             Column {
                                 Text("Subtasks:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -880,7 +1043,9 @@ fun TaskManagerDialog(
                 }
                 }
                 
-                // Labels
+                HardwareAcceleratedVisibility(
+                    visible = type in listOf("TASK", "EVENT", "NOTE")
+                ) {
                 Column {
                     Text("Labels:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     androidx.compose.foundation.lazy.LazyRow(
@@ -944,6 +1109,7 @@ fun TaskManagerDialog(
                         }
                     }
                 }
+                }
 
             }
         },
@@ -976,25 +1142,49 @@ fun TaskManagerDialog(
                             reminderMinutesBefore = if (type == "EVENT" && enableReminder) reminderMinutesBefore.toIntOrNull() else null,
                             priorityLevel = priorityLevel
                         )
+                    } else if (todoToEdit != null) {
+                        viewModel.updateTodo(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel))
+                    } else if (ideaToEdit != null) {
+                        val mutableStages = stages.toMutableList()
+                        if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
+                            mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
+                        }
+                        if (newStageTitle.isNotBlank()) {
+                            mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
+                        }
+                        viewModel.updateIdea(ideaToEdit.copy(groupId = selectedGroupId, title = title.trim(), description = description.trim(), priority = priorityLevel), mutableStages)
                     } else {
-                        viewModel.addTask(
-                            title = title,
-                            description = description,
-                            date = selectedDate,
-                            type = type,
-                            duration = 25,
-                            label = selectedLabel?.first ?: "",
-                            labelColor = selectedLabel?.second,
-                            subtasks = subtasks.toList(),
-                            recurrenceMode = recurrenceMode,
-                            recurrenceInterval = recurrenceInterval,
-                            recurrenceDaysOfWeek = recurrenceDaysOfWeek,
-                            recurrenceEndDate = recurrenceEndDate,
-                            eventTime = eventTime.takeIf { type == "EVENT" && enableReminder && it.isNotBlank() },
-                            notifyNightBefore = if (type == "EVENT" && enableReminder) notifyNightBefore else false,
-                            reminderMinutesBefore = if (type == "EVENT" && enableReminder) reminderMinutesBefore.toIntOrNull() else null,
-                            priorityLevel = priorityLevel
-                        )
+                        when (type) {
+                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel)
+                            "IDEA" -> {
+                                val mutableStages = stages.toMutableList()
+                                if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
+                                    mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
+                                }
+                                if (newStageTitle.isNotBlank()) {
+                                    mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
+                                }
+                                viewModel.addIdea(selectedGroupId, title.trim(), description.trim(), mutableStages, priorityLevel)
+                            }
+                            else -> viewModel.addTask(
+                                title = title,
+                                description = description,
+                                date = selectedDate,
+                                type = type,
+                                duration = 25,
+                                label = selectedLabel?.first ?: "",
+                                labelColor = selectedLabel?.second,
+                                subtasks = subtasks.toList(),
+                                recurrenceMode = recurrenceMode,
+                                recurrenceInterval = recurrenceInterval,
+                                recurrenceDaysOfWeek = recurrenceDaysOfWeek,
+                                recurrenceEndDate = recurrenceEndDate,
+                                eventTime = eventTime.takeIf { type == "EVENT" && enableReminder && it.isNotBlank() },
+                                notifyNightBefore = if (type == "EVENT" && enableReminder) notifyNightBefore else false,
+                                reminderMinutesBefore = if (type == "EVENT" && enableReminder) reminderMinutesBefore.toIntOrNull() else null,
+                                priorityLevel = priorityLevel
+                            )
+                        }
                     }
                     onDismiss()
                 }
@@ -1004,4 +1194,47 @@ fun TaskManagerDialog(
             TextButton(onClick = onDismiss) { Text("CANCEL") }
         }
     )
+
+    if (showNewGroupDialog) {
+        var newGroupName by remember { mutableStateOf("") }
+        var newGroupColor by remember { mutableStateOf(presetColors[0]) }
+        AlertDialog(
+            onDismissRequest = { showNewGroupDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("New Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newGroupName,
+                        onValueChange = { newGroupName = it },
+                        label = { Text("Group Name") }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(presetColors) { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(color))
+                                    .border(2.dp, if (newGroupColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                    .clickable { newGroupColor = color }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newGroupName.isNotBlank()) {
+                        viewModel.addGroup(newGroupName.trim(), newGroupColor)
+                        showNewGroupDialog = false
+                    }
+                }) { Text("ADD") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewGroupDialog = false }) { Text("CANCEL") }
+            }
+        )
+    }
 }

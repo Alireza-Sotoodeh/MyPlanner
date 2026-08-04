@@ -161,11 +161,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 fun PlannerScreen(viewModel: MainViewModel) {
     val todayDate by viewModel.todayDate.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
-    val groups by viewModel.ideaGroups.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var showCreateMenu by remember { mutableStateOf(false) }
-    var pendingCreateType by remember { mutableStateOf<String?>(null) }
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
 
@@ -259,52 +256,6 @@ fun PlannerScreen(viewModel: MainViewModel) {
                  4 -> IdeasTab(viewModel)
             }
 
-            if (selectedTab == 0 || selectedTab == 3 || selectedTab == 4) {
-                if (showCreateMenu) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.3f))
-                            .clickable { showCreateMenu = false }
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (showCreateMenu) {
-                        CreateMenuItem("Idea", Icons.Default.Lightbulb) {
-                            pendingCreateType = "IDEA"; showCreateMenu = false
-                        }
-                        CreateMenuItem("To-Do", Icons.Default.Checklist) {
-                            pendingCreateType = "TODO"; showCreateMenu = false
-                        }
-                        CreateMenuItem("Note", Icons.Default.Edit) {
-                            pendingCreateType = "NOTE"; showCreateMenu = false
-                        }
-                        CreateMenuItem("Event", Icons.Default.DateRange) {
-                            pendingCreateType = "EVENT"; showCreateMenu = false
-                        }
-                        CreateMenuItem("Task", Icons.Default.Task) {
-                            pendingCreateType = "TASK"; showCreateMenu = false
-                        }
-                    }
-
-                    FloatingActionButton(
-                        onClick = { showCreateMenu = !showCreateMenu },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.background,
-                        shape = CircleShape
-                    ) {
-                        Icon(
-                            imageVector = if (showCreateMenu) Icons.Default.Close else Icons.Default.Add,
-                            contentDescription = "Create"
-                        )
-                    }
-                }
-            }
         }
     }
 
@@ -533,63 +484,6 @@ fun PlannerScreen(viewModel: MainViewModel) {
             },
             shape = RoundedCornerShape(16.dp)
         )
-    }
-
-    pendingCreateType?.let { type ->
-        when (type) {
-            "TASK", "NOTE", "EVENT" -> com.example.ui.components.TaskManagerDialog(
-                viewModel = viewModel,
-                initialDate = selectedDate,
-                initialType = type,
-                onDismiss = { pendingCreateType = null }
-            )
-            "TODO" -> AddTodoDialog(
-                onDismiss = { pendingCreateType = null },
-                onConfirm = { title, description, priority ->
-                    viewModel.addTodo(title, description, priority)
-                    pendingCreateType = null
-                }
-            )
-            "IDEA" -> CreateIdeaDialog(
-                viewModel = viewModel,
-                groups = groups,
-                onDismiss = { pendingCreateType = null },
-                onConfirm = { groupId, title, description, stages, priority ->
-                    viewModel.addIdea(groupId, title, description, stages, priority)
-                    pendingCreateType = null
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun CreateMenuItem(label: String, icon: ImageVector, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 4.dp,
-        modifier = Modifier.size(width = 120.dp, height = 44.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
     }
 }
 
@@ -1532,6 +1426,20 @@ fun BulletTaskItem(
                                         .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(1.dp))
                                 )
                             }
+                            "TODO" -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .border(2.dp, MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(2.dp))
+                                )
+                            }
+                            "IDEA" -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 10.dp, height = 3.dp)
+                                        .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(1.dp))
+                                )
+                            }
                             else -> {
                                 Box(
                                     modifier = Modifier
@@ -2450,6 +2358,18 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                                             Box(
                                                 modifier = Modifier
                                                     .size(width = 6.dp, height = 1.5.dp)
+                                                    .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(0.5.dp))
+                                            )
+                                        } else if (task.type == "TODO") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .border(1.5.dp, MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(1.dp))
+                                            )
+                                        } else if (task.type == "IDEA") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(width = 7.dp, height = 2.dp)
                                                     .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(0.5.dp))
                                             )
                                         } else {
@@ -4118,13 +4038,11 @@ private fun TodoTab(viewModel: MainViewModel) {
     }
 
     editingTodo?.let { todo ->
-        EditTodoDialog(
-            todo = todo,
-            onDismiss = { editingTodo = null },
-            onConfirm = { title, description, priority ->
-                viewModel.updateTodo(todo.copy(title = title, description = description, priority = priority))
-                editingTodo = null
-            }
+        com.example.ui.components.TaskManagerDialog(
+            viewModel = viewModel,
+            initialDate = "",
+            todoToEdit = todo,
+            onDismiss = { editingTodo = null }
         )
     }
     showDeleteConfirm?.let { todo ->
@@ -4365,115 +4283,6 @@ private fun PriorityBadge(priority: String) {
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
-}
-
-@Composable
-private fun AddTodoDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var priority by remember { mutableStateOf("Medium") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("New To-Do", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    maxLines = 3
-                )
-                Text("Priority", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Low", "Medium", "High").forEach { p ->
-                        FilterChip(
-                            selected = priority == p,
-                            onClick = { priority = p },
-                            label = { Text(p, fontSize = 12.sp) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (title.isNotBlank()) onConfirm(title.trim(), description.trim(), priority) },
-                enabled = title.isNotBlank()
-            ) { Text("Add") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-@Composable
-private fun EditTodoDialog(
-    todo: TodoEntity,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String) -> Unit
-) {
-    var title by remember { mutableStateOf(todo.title) }
-    var description by remember { mutableStateOf(todo.description) }
-    var priority by remember { mutableStateOf(todo.priority) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Edit To-Do", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    maxLines = 3
-                )
-                Text("Priority", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Low", "Medium", "High").forEach { p ->
-                        FilterChip(
-                            selected = priority == p,
-                            onClick = { priority = p },
-                            label = { Text(p, fontSize = 12.sp) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (title.isNotBlank()) onConfirm(title.trim(), description.trim(), priority) },
-                enabled = title.isNotBlank()
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -4836,16 +4645,13 @@ private fun IdeasTab(viewModel: MainViewModel) {
     }
     editingIdea?.let { idea ->
         val ideaStages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
-        CreateIdeaDialog(
+        com.example.ui.components.TaskManagerDialog(
             viewModel = viewModel,
-            groups = groups,
-            initialTitle = idea.title,
-            initialDescription = idea.description,
-            initialGroupId = idea.groupId,
-            initialStages = ideaStages,
-            initialPriority = idea.priority,
-            onDismiss = { editingIdea = null },
-            onConfirm = { groupId, title, description, stages, priority -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description, priority = priority), stages); editingIdea = null }
+            initialDate = "",
+            ideaToEdit = idea,
+            initialIdeaStages = ideaStages,
+            ideaGroups = groups,
+            onDismiss = { editingIdea = null }
         )
     }
     showDeleteIdeaConfirm?.let { idea ->
@@ -5206,277 +5012,6 @@ private fun CreateGroupDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun CreateIdeaDialog(
-    viewModel: MainViewModel,
-    groups: List<IdeaGroupEntity>,
-    initialTitle: String = "",
-    initialDescription: String = "",
-    initialGroupId: Long? = null,
-    initialStages: List<IdeaStageEntity> = emptyList(),
-    initialPriority: String = "Medium",
-    onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String, List<IdeaStageEntity>, String) -> Unit
-) {
-    var title by remember { mutableStateOf(initialTitle) }
-    var description by remember { mutableStateOf(initialDescription) }
-    var selectedGroupId by remember { mutableStateOf(initialGroupId) }
-    var stages by remember { mutableStateOf(initialStages) }
-    var priority by remember { mutableStateOf(initialPriority) }
-    var newStageTitle by remember { mutableStateOf("") }
-    var editingStageIndex by remember { mutableStateOf(-1) }
-    var editingStageText by remember { mutableStateOf("") }
-    var showNewGroupDialog by remember { mutableStateOf(false) }
-
-    val presetColors = listOf(0xFF6750A4, 0xFFB3261E, 0xFF00E676, 0xFF2196F3, 0xFFFF7043, 0xFFFFEB3B, 0xFFE91E63, 0xFF00BCD4)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(if (initialTitle.isNotEmpty()) "Edit Idea" else "New Idea", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth().height(100.dp),
-                    maxLines = 4
-                )
-
-                Text("How much important is to you?", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Low", "Medium", "High").forEach { p ->
-                        FilterChip(
-                            selected = priority == p,
-                            onClick = { priority = p },
-                            label = { Text(p, fontSize = 12.sp) }
-                        )
-                    }
-                }
-
-                Text("Group:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 4.dp).height(32.dp)
-                ) {
-                    item {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier.clickable { showNewGroupDialog = true }.fillMaxHeight()
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
-                                Text("+ New", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                    item {
-                        val isNone = selectedGroupId == null
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isNone) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = if (isNone) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier.clickable { selectedGroupId = null }.fillMaxHeight()
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
-                                Text(
-                                    "None",
-                                    fontSize = 14.sp,
-                                    color = if (isNone) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                    items(groups) { group ->
-                        val isSelected = selectedGroupId == group.id
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
-                            border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .combinedClickable(
-                                    onClick = { selectedGroupId = group.id },
-                                    onLongClick = {
-                                        viewModel.deleteGroup(group)
-                                    }
-                                )
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
-                                Text(
-                                    group.name,
-                                    fontSize = 14.sp,
-                                    color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
-                Text("STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
-
-                stages.forEachIndexed { index, stage ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (editingStageIndex == index) {
-                            OutlinedTextField(
-                                value = editingStageText,
-                                onValueChange = { editingStageText = it },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
-                            )
-                            IconButton(onClick = {
-                                if (editingStageText.isNotBlank()) {
-                                    stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim()) }
-                                }
-                                editingStageIndex = -1
-                                editingStageText = ""
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(16.dp))
-                            }
-                        } else {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.weight(1f).clickable {
-                                    editingStageIndex = index
-                                    editingStageText = stage.title
-                                }
-                            ) {
-                                Text(
-                                    stage.title,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            IconButton(onClick = {
-                                stages = stages.toMutableList().also { it.removeAt(index) }
-                                if (editingStageIndex == index) { editingStageIndex = -1; editingStageText = "" }
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = newStageTitle,
-                        onValueChange = { newStageTitle = it },
-                        placeholder = { Text("Add stage", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    FilledTonalButton(
-                        onClick = {
-                            if (newStageTitle.isNotBlank()) {
-                                stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim())
-                                newStageTitle = ""
-                            }
-                        },
-                        modifier = Modifier.height(40.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Add", fontSize = 12.sp)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (title.isNotBlank()) {
-                        val mutableStages = stages.toMutableList()
-                        if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
-                            mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
-                        }
-                        if (newStageTitle.isNotBlank()) {
-                            mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
-                        }
-                        onConfirm(selectedGroupId, title.trim(), description.trim(), mutableStages, priority)
-                    }
-                },
-                enabled = title.isNotBlank()
-            ) { Text(if (initialTitle.isNotEmpty()) "Save" else "Create") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-
-    if (showNewGroupDialog) {
-        var newGroupName by remember { mutableStateOf("") }
-        var selectedColor by remember { mutableStateOf(presetColors[0]) }
-        AlertDialog(
-            onDismissRequest = { showNewGroupDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("New Group") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = newGroupName,
-                        onValueChange = { newGroupName = it },
-                        label = { Text("Group Name") }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(presetColors) { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(color))
-                                    .border(
-                                        2.dp,
-                                        if (selectedColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent,
-                                        CircleShape
-                                    )
-                                    .clickable { selectedColor = color }
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (newGroupName.isNotBlank()) {
-                        viewModel.addGroup(newGroupName.trim(), selectedColor)
-                        showNewGroupDialog = false
-                    }
-                }) { Text("ADD") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNewGroupDialog = false }) { Text("CANCEL") }
-            }
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
