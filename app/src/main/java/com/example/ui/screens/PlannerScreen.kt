@@ -482,8 +482,11 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
             .padding(horizontal = 16.dp)
             .nestedScroll(nestedScrollConnection)
     ) {
+        val postponedCount = rawTasks.count {
+            it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") && it.postponed
+        }
         AnimatedVisibility(
-            visible = showHeaderExtras && labelInfos.isNotEmpty(),
+            visible = showHeaderExtras && (labelInfos.isNotEmpty() || postponedCount > 0),
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
@@ -500,9 +503,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                         onClick = { onLabelsSelected(emptySet()); onPostponedToggle(false) },
                         label = { Text("All", fontSize = 12.sp) }
                     )
-                }
-                val postponedCount = rawTasks.count {
-                    it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") && it.postponed
                 }
                 if (postponedCount > 0) {
                     item {
