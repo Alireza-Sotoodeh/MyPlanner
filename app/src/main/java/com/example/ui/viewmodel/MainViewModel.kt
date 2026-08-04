@@ -921,11 +921,20 @@ class MainViewModel(
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
-            if (task.type == "EVENT") {
-                com.example.core.manager.ReminderManager.cancelReminders(context, task)
+            try {
+                if (task.type == "EVENT") {
+                    com.example.core.manager.ReminderManager.cancelReminders(context, task)
+                }
+                task.linkedTodoId?.let { todoId ->
+                    todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                        todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = null))
+                    }
+                }
+                taskRepository.deleteTaskAndSubtasks(task)
+                taskRepository.deleteSessionsForTask(task.id)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete task", e)
             }
-            taskRepository.deleteTaskAndSubtasks(task)
-            taskRepository.deleteSessionsForTask(task.id)
         }
     }
 
@@ -1698,6 +1707,11 @@ class MainViewModel(
                         status = "PENDING"
                     )
                 )
+                task.linkedTodoId?.let { todoId ->
+                    todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                        todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = null))
+                    }
+                }
                 taskRepository.deleteTaskAndSubtasks(task)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to move task to todo", e)
@@ -1720,6 +1734,11 @@ class MainViewModel(
                             orderIndex = index
                         )
                     )
+                }
+                task.linkedTodoId?.let { todoId ->
+                    todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                        todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = null))
+                    }
                 }
                 taskRepository.deleteTaskAndSubtasks(task)
             } catch (e: Exception) {
