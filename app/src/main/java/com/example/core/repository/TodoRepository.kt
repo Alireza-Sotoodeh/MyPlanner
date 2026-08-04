@@ -9,6 +9,8 @@ class TodoRepository(private val todoDao: TodoDao) {
 
     val pendingTodos: Flow<List<TodoEntity>> = todoDao.getPendingTodos()
 
+    suspend fun getAllTodosSync(): List<TodoEntity> = todoDao.getAllTodosSync()
+
     suspend fun getTodoById(id: Long): TodoEntity? = todoDao.getTodoById(id)
 
     suspend fun getTodoByLinkedTaskId(taskId: Long): TodoEntity? =
@@ -19,4 +21,6 @@ class TodoRepository(private val todoDao: TodoDao) {
     suspend fun updateTodo(todo: TodoEntity) = todoDao.updateTodo(todo)
 
     suspend fun deleteTodo(todo: TodoEntity) = todoDao.deleteTodo(todo)
+
+    suspend fun updateTodoSortOrders(todos: List<TodoEntity>) = todoDao.updateTodoSortOrders(todos)
 }

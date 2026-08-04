@@ -5,17 +5,21 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.core.database.entity.TodoEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TodoDao {
-    @Query("SELECT * FROM todos ORDER BY createdAt DESC")
+    @Query("SELECT * FROM todos ORDER BY sortOrder ASC, id DESC")
     fun getAllTodos(): Flow<List<TodoEntity>>
 
-    @Query("SELECT * FROM todos WHERE status = 'PENDING' ORDER BY createdAt DESC")
+    @Query("SELECT * FROM todos WHERE status = 'PENDING' ORDER BY sortOrder ASC, id DESC")
     fun getPendingTodos(): Flow<List<TodoEntity>>
+
+    @Query("SELECT * FROM todos ORDER BY sortOrder ASC, id DESC")
+    suspend fun getAllTodosSync(): List<TodoEntity>
 
     @Query("SELECT * FROM todos WHERE id = :id")
     suspend fun getTodoById(id: Long): TodoEntity?
@@ -31,4 +35,9 @@ interface TodoDao {
 
     @Delete
     suspend fun deleteTodo(todo: TodoEntity)
+
+    @Transaction
+    suspend fun updateTodoSortOrders(todos: List<TodoEntity>) {
+        todos.forEach { updateTodo(it) }
+    }
 }
