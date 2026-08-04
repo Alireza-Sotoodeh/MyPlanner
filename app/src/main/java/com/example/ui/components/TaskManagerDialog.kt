@@ -679,7 +679,7 @@ fun TaskManagerDialog(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                         OutlinedTextField(
                             value = title,
                             onValueChange = { 
