@@ -52,9 +52,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -78,8 +76,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.nativeCanvas
@@ -1019,8 +1016,6 @@ private fun ActivityHeatmapSection(
             Spacer(Modifier.height(8.dp))
 
             var tappedCell by remember { mutableStateOf<DayCell?>(null) }
-            var tappedCellPos by remember { mutableStateOf(Offset.Zero) }
-            val cellLayouts = remember { mutableMapOf<String, Offset>() }
             val isScrolling by remember { derivedStateOf { lazyListState.isScrollInProgress } }
             LaunchedEffect(isScrolling) { if (isScrolling) tappedCell = null }
 
@@ -1078,17 +1073,9 @@ private fun ActivityHeatmapSection(
                                             if (isToday) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
                                             else Modifier
                                         )
-                                        .onGloballyPositioned { coords ->
-                                            if (cell != null) {
-                                                cellLayouts[cell.dateStr] = coords.positionInWindow()
-                                            }
-                                        }
                                         .then(
                                             if (cell != null && cell.isCurrentMonth) {
-                                                Modifier.clickable {
-                                                    tappedCell = cell
-                                                    tappedCellPos = cellLayouts[cell.dateStr] ?: Offset.Zero
-                                                }
+                                                Modifier.clickable { tappedCell = cell }
                                             } else Modifier
                                         )
                                 )
@@ -1101,27 +1088,30 @@ private fun ActivityHeatmapSection(
             }
 
             if (tappedCell != null) {
-                Popup(
-                    alignment = Alignment.TopStart,
-                    offset = IntOffset(tappedCellPos.x.roundToInt(), tappedCellPos.y.roundToInt() + 20),
-                    onDismissRequest = { tappedCell = null }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        shadowElevation = 4.dp,
-                        color = MaterialTheme.colorScheme.surfaceVariant
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
                                 text = tappedCell!!.dateStr,
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
+                            Spacer(Modifier.width(8.dp))
                             Text(
                                 text = formatDuration(tappedCell!!.seconds),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
