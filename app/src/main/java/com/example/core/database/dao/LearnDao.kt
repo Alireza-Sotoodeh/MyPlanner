@@ -19,6 +19,9 @@ interface LearnDao {
     @Query("SELECT * FROM learn_items ORDER BY sortOrder ASC, id DESC")
     suspend fun getAllItemsSync(): List<LearnItemEntity>
 
+    @Query("SELECT MAX(sortOrder) FROM learn_items")
+    suspend fun getMaxSortOrderSync(): Int?
+
     @Query("SELECT * FROM learn_items WHERE id = :id")
     suspend fun getItemById(id: Long): LearnItemEntity?
 

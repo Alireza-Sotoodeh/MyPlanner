@@ -13,7 +13,12 @@ import androidx.room.PrimaryKey
         childColumns = ["groupId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index(value = ["groupId"])]
+    indices = [
+        Index(value = ["groupId"]),
+        Index(value = ["status"]),
+        Index(value = ["scheduleMode"]),
+        Index(value = ["sortOrder"])
+    ]
 )
 data class LearnItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

@@ -3880,9 +3880,11 @@ class MainViewModel(
 
                 if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isNotBlank()) {
                     val firstDate = nextAllowedDate(startDate, scheduleDaysOfWeek)
+                    val maxDate = if (deadline != null && deadline.isNotBlank()) deadline else null
                     val totalBatches = ceil(sections.size.toFloat() / perDay.toFloat()).toInt()
                     val allowedDates = generateSequence(firstDate) { addDays(it, 1) }
                         .filter { nextAllowedDate(it, scheduleDaysOfWeek) == it }
+                        .takeWhile { maxDate == null || daysBetweenDates(startDate, it) <= daysBetweenDates(startDate, maxDate) }
                         .take(totalBatches)
                         .toList()
 
@@ -3982,20 +3984,25 @@ class MainViewModel(
                 val perDay = item.sectionsPerDay.coerceAtLeast(1)
                 val shortTitle = if (item.title.length > 30) item.title.take(27) + "..." else item.title
 
-                var notStartedIndex = 0
+                // Pre-compute allowed dates for NOT_STARTED sections (handles WEEKLY mode)
+                val notStartedCount = sections.count { it.status == "NOT_STARTED" }
+                val totalBatches = ceil(notStartedCount.toFloat() / perDay.toFloat()).toInt()
+                val notStartedAllowedDates = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank()) {
+                    val firstAllowed = nextAllowedDate(todayStr, item.scheduleDaysOfWeek)
+                    generateSequence(firstAllowed) { addDays(it, 1) }
+                        .filter { nextAllowedDate(it, item.scheduleDaysOfWeek) == it }
+                        .take(totalBatches)
+                        .toList()
+                } else emptyList()
+
+                var notStartedBatchIndex = 0
                 for (section in sections) {
                     when (section.status) {
                         "NOT_STARTED" -> {
                             val taskDate = if (item.scheduleMode == "WEEKLY" && item.scheduleDaysOfWeek.isNotBlank()) {
-                                val firstAllowed = nextAllowedDate(todayStr, item.scheduleDaysOfWeek)
-                                val totalBatches = ceil(sections.count { it.status == "NOT_STARTED" }.toFloat() / perDay.toFloat()).toInt()
-                                val allowedDates = generateSequence(firstAllowed) { addDays(it, 1) }
-                                    .filter { nextAllowedDate(it, item.scheduleDaysOfWeek) == it }
-                                    .take(totalBatches)
-                                    .toList()
-                                allowedDates[notStartedIndex / perDay]
+                                notStartedAllowedDates[notStartedBatchIndex]
                             } else {
-                                addDays(todayStr, notStartedIndex / perDay)
+                                addDays(todayStr, notStartedBatchIndex)
                             }
                             val taskId = taskRepository.insertTask(TaskEntity(
                                 title = "📖 $shortTitle — ${section.title}",
@@ -4008,7 +4015,7 @@ class MainViewModel(
                                 priorityLevel = item.priorityLevel
                             ))
                             learnRepository.updateSection(section.copy(studyTaskId = taskId))
-                            notStartedIndex++
+                            notStartedBatchIndex++
                         }
                         "STUDIED" -> {
                             if (gapDays > LEITNER_INTERVALS[0]) {
@@ -4108,10 +4115,10 @@ class MainViewModel(
                 val task = taskRepository.getTaskById(taskId) ?: return@launch
                 val completionDate = task.date
 
-                val newStage = if (rating == "HARD") {
-                    (section.reviewStage - 1).coerceAtLeast(0)
-                } else {
-                    (section.reviewStage + 1).coerceAtMost(5)
+                val newStage = when (rating) {
+                    "HARD" -> (section.reviewStage - 1).coerceAtLeast(0)
+                    "EASY" -> (section.reviewStage + 2).coerceAtMost(5)
+                    else -> (section.reviewStage + 1).coerceAtMost(5) // MEDIUM
                 }
 
                 if (newStage >= 5) {

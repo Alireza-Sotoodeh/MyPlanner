@@ -59,7 +59,7 @@ import com.example.core.database.entity.TodoEntity
         LearnItemEntity::class,
         LearnSectionEntity::class
     ],
-    version = 27,
+    version = 28,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -113,6 +113,17 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("ALTER TABLE learn_items ADD COLUMN scheduleDaysOfWeek TEXT NOT NULL DEFAULT ''")
         }
 
+        private val MIGRATION_27_28 = Migration(27, 28) { db ->
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_items_status ON learn_items(status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_items_schedule_mode ON learn_items(scheduleMode)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_items_sort_order ON learn_items(sortOrder)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_sections_status ON learn_sections(status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_sections_study_task ON learn_sections(studyTaskId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_sections_review_task ON learn_sections(reviewTaskId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_sections_next_review ON learn_sections(nextReviewDate)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_learn_sections_item_status ON learn_sections(learnItemId, status)")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -120,7 +131,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "bulletcoach_database"
                 )
-                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
+                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

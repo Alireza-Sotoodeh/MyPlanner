@@ -13,7 +13,14 @@ import androidx.room.PrimaryKey
         childColumns = ["learnItemId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index(value = ["learnItemId"])]
+    indices = [
+        Index(value = ["learnItemId"]),
+        Index(value = ["status"]),
+        Index(value = ["studyTaskId"]),
+        Index(value = ["reviewTaskId"]),
+        Index(value = ["nextReviewDate"]),
+        Index(value = ["learnItemId", "status"])
+    ]
 )
 data class LearnSectionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

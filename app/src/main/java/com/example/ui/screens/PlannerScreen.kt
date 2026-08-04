@@ -7474,6 +7474,15 @@ fun StartLearningDialog(
     var scheduleMode by remember { mutableStateOf("CONTINUOUS") }
     var scheduleDaysOfWeek by remember { mutableStateOf("") }
 
+    fun daysBetweenDates(from: String, to: String): Int {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        return try {
+            val fromCal = java.util.Calendar.getInstance().apply { time = fmt.parse(from) ?: return 0 }
+            val toCal = java.util.Calendar.getInstance().apply { time = fmt.parse(to) ?: return 0 }
+            ((toCal.timeInMillis - fromCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+        } catch (_: Exception) { 0 }
+    }
+
     val daysOfWeekList = listOf(
         Pair(java.util.Calendar.SUNDAY, "S"),
         Pair(java.util.Calendar.MONDAY, "M"),
@@ -7611,13 +7620,32 @@ fun StartLearningDialog(
                         onDateSelected = { deadlineDate = it }
                     )
                 } else {
-                    OutlinedTextField(
-                        value = sectionsPerDay,
-                        onValueChange = { sectionsPerDay = it.filter { c -> c.isDigit() } },
-                        label = { Text("Sections per day") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    var sectionsPerDayError by remember { mutableStateOf(false) }
+                    val perDayValue = sectionsPerDay.toIntOrNull() ?: 0
+                    LaunchedEffect(perDayValue) {
+                        sectionsPerDayError = !useDeadline && perDayValue <= 0 && sectionsPerDay.isNotBlank()
+                    }
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = sectionsPerDay,
+                            onValueChange = { 
+                                sectionsPerDay = it.filter { c -> c.isDigit() } 
+                                sectionsPerDayError = false
+                            },
+                            label = { Text("Sections per day") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = sectionsPerDayError
+                        )
+                        if (sectionsPerDayError) {
+                            Text(
+                                text = "Enter at least 1 section per day",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(start = 12.dp, top = 4.dp)
+                            )
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 DatePickerField(
@@ -7660,6 +7688,21 @@ fun StartLearningDialog(
                     val perDay = sectionsPerDay.toIntOrNull() ?: 0
                     if (perDay <= 0 && !useDeadline) return@TextButton
                     if (scheduleMode == "WEEKLY" && scheduleDaysOfWeek.isBlank()) return@TextButton
+                    
+                    // E1: Validate start date >= today for WEEKLY mode
+                    if (scheduleMode == "WEEKLY") {
+                        val today = viewModel.todayDate.value
+                        if (daysBetweenDates(today, startDate) < 0) {
+                            // startDate is before today
+                            return@TextButton
+                        }
+                    }
+                    
+                    // E2: Validate deadline >= start date
+                    if (useDeadline && daysBetweenDates(startDate, deadlineDate) < 0) {
+                        return@TextButton
+                    }
+                    
                     viewModel.applyLearningAlgorithm(
                         learnItem.id, startDate,
                         if (useDeadline) 1 else perDay,

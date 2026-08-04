@@ -27,7 +27,10 @@ class LearnRepository(
 
     suspend fun getItemById(id: Long): LearnItemEntity? = learnDao.getItemById(id)
 
-    suspend fun insertItem(item: LearnItemEntity): Long = learnDao.insertItem(item)
+    suspend fun insertItem(item: LearnItemEntity): Long {
+        val maxSortOrder = learnDao.getMaxSortOrderSync() ?: -1
+        return learnDao.insertItem(item.copy(sortOrder = maxSortOrder + 1))
+    }
 
     suspend fun updateItem(item: LearnItemEntity) = learnDao.updateItem(item)
 
