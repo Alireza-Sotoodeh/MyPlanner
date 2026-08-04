@@ -904,6 +904,16 @@ class MainViewModel(
             }
             val updated = task.copy(status = if (task.status == "COMPLETED") "PENDING" else "COMPLETED")
             taskRepository.updateTask(updated)
+
+        updated.linkedTodoId?.let { todoId ->
+            val linkedTodo = todoRepository.getTodoById(todoId)
+            if (linkedTodo != null) {
+                val newTodoStatus = if (updated.status == "COMPLETED") "DONE" else "PENDING"
+                if (linkedTodo.status != newTodoStatus) {
+                    todoRepository.updateTodo(linkedTodo.copy(status = newTodoStatus))
+                }
+            }
+        }
         }
     }
 
@@ -925,7 +935,14 @@ class MainViewModel(
                 pomodorosCompleted = task.pomodorosCompleted + 1
             )
             taskRepository.updateTask(updated)
-            
+
+            updated.linkedTodoId?.let { todoId ->
+                val linkedTodo = todoRepository.getTodoById(todoId)
+                if (linkedTodo != null && linkedTodo.status != "DONE") {
+                    todoRepository.updateTodo(linkedTodo.copy(status = "DONE"))
+                }
+            }
+
             val session = com.example.core.database.entity.PomodoroSessionEntity(
                 taskId = task.id,
                 durationMinutes = durationMinutes,
@@ -1121,6 +1138,15 @@ class MainViewModel(
                 )
                 taskRepository.updateTask(updated)
                 _activePomodoroTask.value = updated
+
+                if (newStatus == "COMPLETED") {
+                    updated.linkedTodoId?.let { todoId ->
+                        val linkedTodo = todoRepository.getTodoById(todoId)
+                        if (linkedTodo != null && linkedTodo.status != "DONE") {
+                            todoRepository.updateTodo(linkedTodo.copy(status = "DONE"))
+                        }
+                    }
+                }
 
                 val session = com.example.core.database.entity.PomodoroSessionEntity(
                     taskId = task.id,
