@@ -454,8 +454,8 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
     var showAddTaskDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<TaskEntity?>(null) }
     var subtasksToEdit by remember { mutableStateOf<List<TaskEntity>>(emptyList()) }
-    var expandAllItems by remember { mutableStateOf(true) }
-    var expandAllSubtasks by remember { mutableStateOf(true) }
+    val expandAllItems by viewModel.expandAllItems.collectAsState()
+    val expandAllSubtasks by viewModel.expandAllSubtasks.collectAsState()
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(expandAllSubtasks) {
@@ -627,7 +627,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                         IconButton(
-                            onClick = { expandAllItems = !expandAllItems },
+                            onClick = { viewModel.toggleExpandAllItems() },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
@@ -639,7 +639,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
-                            onClick = { expandAllSubtasks = !expandAllSubtasks },
+                            onClick = { viewModel.toggleExpandAllSubtasks() },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
@@ -3709,7 +3709,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     var todoForMovingToPlanner by remember { mutableStateOf<TodoEntity?>(null) }
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
-    var expandAllDescriptions by remember { mutableStateOf(false) }
+    val expandAllDescriptions by viewModel.expandAllDescriptions.collectAsState()
 
     var draggingTodoId by remember { mutableStateOf<Long?>(null) }
     var dragOffsetX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
@@ -3810,7 +3810,7 @@ private fun TodoTab(viewModel: MainViewModel) {
                         }
                         if (allTodos.any { it.description.isNotBlank() }) {
                             IconButton(
-                                onClick = { expandAllDescriptions = !expandAllDescriptions },
+                                onClick = { viewModel.toggleExpandAllDescriptions() },
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
@@ -4709,7 +4709,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
     var showDeleteGroupConfirm by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
-    var expandAllIdeas by remember { mutableStateOf(true) }
+    val expandAllIdeas by viewModel.expandAllIdeas.collectAsState()
     var showIdeaBreakdown by remember { mutableStateOf(false) }
 
     var draggingIdeaId by remember { mutableStateOf<Long?>(null) }
@@ -4792,7 +4792,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
                             )
                         }
                         IconButton(
-                            onClick = { expandAllIdeas = !expandAllIdeas },
+                            onClick = { viewModel.toggleExpandAllIdeas() },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(

@@ -196,6 +196,18 @@ class MainViewModel(
     private val _mottoEnabled = MutableStateFlow(prefs.getBoolean("motto_enabled", true))
     val mottoEnabled: StateFlow<Boolean> = _mottoEnabled.asStateFlow()
 
+    private val _expandAllItems = MutableStateFlow(prefs.getBoolean("daily_expand_all_items", true))
+    val expandAllItems: StateFlow<Boolean> = _expandAllItems.asStateFlow()
+
+    private val _expandAllSubtasks = MutableStateFlow(prefs.getBoolean("daily_expand_all_subtasks", true))
+    val expandAllSubtasks: StateFlow<Boolean> = _expandAllSubtasks.asStateFlow()
+
+    private val _expandAllDescriptions = MutableStateFlow(prefs.getBoolean("todo_expand_all_descriptions", false))
+    val expandAllDescriptions: StateFlow<Boolean> = _expandAllDescriptions.asStateFlow()
+
+    private val _expandAllIdeas = MutableStateFlow(prefs.getBoolean("ideas_expand_all_ideas", true))
+    val expandAllIdeas: StateFlow<Boolean> = _expandAllIdeas.asStateFlow()
+
     private fun loadCustomLabels(): List<Pair<String, Long>> {
         val serialized = prefs.getString("custom_labels", "") ?: ""
         if (serialized.isBlank()) return emptyList()
@@ -244,6 +256,30 @@ class MainViewModel(
     fun updateMottoEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("motto_enabled", enabled).apply()
         _mottoEnabled.value = enabled
+    }
+
+    fun toggleExpandAllItems() {
+        val newValue = !_expandAllItems.value
+        _expandAllItems.value = newValue
+        prefs.edit().putBoolean("daily_expand_all_items", newValue).apply()
+    }
+
+    fun toggleExpandAllSubtasks() {
+        val newValue = !_expandAllSubtasks.value
+        _expandAllSubtasks.value = newValue
+        prefs.edit().putBoolean("daily_expand_all_subtasks", newValue).apply()
+    }
+
+    fun toggleExpandAllDescriptions() {
+        val newValue = !_expandAllDescriptions.value
+        _expandAllDescriptions.value = newValue
+        prefs.edit().putBoolean("todo_expand_all_descriptions", newValue).apply()
+    }
+
+    fun toggleExpandAllIdeas() {
+        val newValue = !_expandAllIdeas.value
+        _expandAllIdeas.value = newValue
+        prefs.edit().putBoolean("ideas_expand_all_ideas", newValue).apply()
     }
 
     fun triggerReorderByPriority() {
