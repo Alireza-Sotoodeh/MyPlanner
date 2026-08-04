@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -314,18 +319,28 @@ private fun TodoItem(
         }
 
             if (todo.description.isNotBlank()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 28.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
-                        .animateContentSize()
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+                        )
+                    ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(250)),
+                    exit = shrinkVertically(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+                        )
+                    ) + fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
                 ) {
                     Text(
-                        todo.description,
+                        text = todo.description,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        maxLines = if (expanded) Int.MAX_VALUE else 2,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 28.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
                     )
                 }
             }
