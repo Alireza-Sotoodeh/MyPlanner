@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -138,7 +139,7 @@ class MainActivity : ComponentActivity() {
                 val undoStack by viewModel.undoStack.collectAsState()
 
                 val context = LocalContext.current
-                var showPermissions by remember { mutableStateOf(
+                var showPermissions by rememberSaveable { mutableStateOf(
                     !viewModel.hasSkippedPermissionsGate() && !viewModel.hasAllRequiredPermissions(context)
                 ) }
 
