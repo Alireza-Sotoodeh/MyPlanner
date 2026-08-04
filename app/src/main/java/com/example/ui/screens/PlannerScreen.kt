@@ -568,6 +568,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
     val todayDate by viewModel.todayDate.collectAsState()
     val rawTasks by viewModel.dailyTasks.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
+    val allTodos by viewModel.allTodos.collectAsState()
     val tasks = if (filterLabel != null) rawTasks.filter { it.label == filterLabel } else rawTasks
 
     val expandedSubtasksMap = remember { androidx.compose.runtime.mutableStateMapOf<Long, Boolean>() }
@@ -961,6 +962,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                     modifier = Modifier.onGloballyPositioned { itemHeights[task.id] = it.size.height },
                                     task = task,
                                     subtasks = taskSubtasks,
+                                    linkedTodoTitle = allTodos.find { it.id == task.linkedTodoId }?.title,
                                     isExpanded = expandAllItems,
                                     isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                     onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
@@ -1122,6 +1124,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                         BulletTaskItem(
                                             task = task,
                                             subtasks = taskSubtasks,
+                                            linkedTodoTitle = allTodos.find { it.id == task.linkedTodoId }?.title,
                                             isExpanded = expandAllItems,
                                             isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                             onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
@@ -1215,6 +1218,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
 fun BulletTaskItem(
     task: TaskEntity,
     subtasks: List<TaskEntity> = emptyList(),
+    linkedTodoTitle: String? = null,
     isExpanded: Boolean = true,
     isSubtasksExpanded: Boolean = true,
     onCheckToggle: () -> Unit,
@@ -1537,6 +1541,23 @@ fun BulletTaskItem(
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             color = subtaskColor,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                
+                if (task.linkedTodoId != null && linkedTodoTitle != null) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = linkedTodoTitle,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -3482,6 +3503,7 @@ private enum class TodoTabFilter { ALL, PENDING, DONE }
 @Composable
 private fun TodoTab(viewModel: MainViewModel) {
     val allTodos by viewModel.allTodos.collectAsState()
+    val allTasks by viewModel.allTasks.collectAsState()
 
     var filter by remember { mutableStateOf(TodoTabFilter.PENDING) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -3560,14 +3582,27 @@ private fun TodoTab(viewModel: MainViewModel) {
                     )
                     val pendingTodos = allTodos.filter { it.status == "PENDING" }
                     val pendingCount = pendingTodos.size
-                    Box {
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { showPendingDetailsDialog = !showPendingDetailsDialog }
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                .padding(horizontal = 10.dp, vertical = 3.dp)
-                        ) {
+                    val linkedCount = allTodos.count { it.linkedTaskId != null && it.status == "PENDING" }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (linkedCount > 0) {
+                            Text(
+                                "$linkedCount linked",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            )
+                        }
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { showPendingDetailsDialog = !showPendingDetailsDialog }
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                    .padding(horizontal = 10.dp, vertical = 3.dp)
+                            ) {
                             Text(
                                 text = "$pendingCount PENDING",
                                 fontSize = 10.sp,
@@ -3580,6 +3615,7 @@ private fun TodoTab(viewModel: MainViewModel) {
                             val highCount = pendingTodos.count { it.priority.equals("High", ignoreCase = true) }
                             val mediumCount = pendingTodos.count { it.priority.equals("Medium", ignoreCase = true) }
                             val lowCount = pendingTodos.count { it.priority.equals("Low", ignoreCase = true) }
+                            val linkedCountPopup = pendingTodos.count { it.linkedTaskId != null }
 
                             val density = LocalDensity.current
                             val offsetY = with(density) { 32.dp.roundToPx() }
@@ -3654,10 +3690,24 @@ private fun TodoTab(viewModel: MainViewModel) {
                                                     Text("$lowCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047))
                                                 }
                                             }
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                                                    .padding(vertical = 6.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text("🔗 Linked", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                    Text("$linkedCountPopup", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                            }
+                        }
+                        }
                         }
                     }
                 }
@@ -3695,6 +3745,7 @@ private fun TodoTab(viewModel: MainViewModel) {
                             TodoItem(
                                 todo = todo,
                                 viewModel = viewModel,
+                                linkedItemTitle = todo.linkedTaskId?.let { id -> allTasks.find { it.id == id }?.title },
                                 onEdit = { editingTodo = it },
                                 onDelete = { showDeleteConfirm = it },
                                 onLink = { todoForLinking = it },
@@ -3775,6 +3826,7 @@ private fun TodoTab(viewModel: MainViewModel) {
 private fun TodoItem(
     todo: TodoEntity,
     viewModel: MainViewModel,
+    linkedItemTitle: String? = null,
     onEdit: (TodoEntity) -> Unit,
     onDelete: (TodoEntity) -> Unit,
     onLink: (TodoEntity) -> Unit,
@@ -3837,9 +3889,11 @@ private fun TodoItem(
                         if (todo.linkedTaskId != null) {
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "Linked to planner",
+                                linkedItemTitle ?: "Linked to planner",
                                 fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
