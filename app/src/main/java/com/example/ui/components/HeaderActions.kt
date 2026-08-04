@@ -27,14 +27,6 @@ fun HeaderActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        IconButton(onClick = onHomeClick) {
-            Icon(
-                imageVector = Icons.Default.Home,
-                contentDescription = "Home",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp)
-            )
-        }
         if (onManageHabits != null) {
             IconButton(onClick = onManageHabits) {
                 Icon(
@@ -44,6 +36,14 @@ fun HeaderActions(
                     modifier = Modifier.size(22.dp)
                 )
             }
+        }
+        IconButton(onClick = onHomeClick) {
+            Icon(
+                imageVector = Icons.Default.Home,
+                contentDescription = "Home",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
         }
         IconButton(onClick = onSettingsClick) {
             Icon(
