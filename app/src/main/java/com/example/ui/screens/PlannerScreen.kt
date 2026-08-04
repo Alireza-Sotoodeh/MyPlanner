@@ -2631,13 +2631,13 @@ private fun GregorianYearOverviewView(
                                                 text = "$completedCount",
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF43A047)
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
                                                 text = "DONE",
                                                 fontSize = 7.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF43A047),
+                                                color = MaterialTheme.colorScheme.primary,
                                                 letterSpacing = 0.5.sp
                                             )
                                         }
@@ -2818,13 +2818,13 @@ private fun PersianYearOverviewView(
                                                 text = "$completedCount",
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF43A047)
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
                                                 text = "DONE",
                                                 fontSize = 7.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF43A047),
+                                                color = MaterialTheme.colorScheme.primary,
                                                 letterSpacing = 0.5.sp
                                             )
                                         }
