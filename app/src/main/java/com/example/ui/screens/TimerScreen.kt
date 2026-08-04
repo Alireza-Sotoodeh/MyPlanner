@@ -297,29 +297,42 @@ private fun PomodoroTab(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Mark complete on finish toggle
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.height(28.dp)
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Switch(
-                            checked = markCompleteOnFinish,
-                            onCheckedChange = onMarkCompleteOnFinishChange,
-                            modifier = Modifier.height(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            Icons.Default.CheckCircleOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = if (markCompleteOnFinish) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Auto-complete",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Surface(
+                            onClick = { onMarkCompleteOnFinishChange(!markCompleteOnFinish) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (markCompleteOnFinish)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.height(24.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            ) {
+                                if (markCompleteOnFinish) {
+                                    Icon(
+                                        Icons.Default.CheckCircleOutline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = "Auto-complete",
+                                    fontSize = 10.sp,
+                                    color = if (markCompleteOnFinish)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     // Custom time controls
