@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,7 +47,7 @@ fun ShopListScreen(
         ShopFilter.PURCHASED -> purchased
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -140,7 +139,7 @@ fun ShopListScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -174,6 +173,7 @@ fun ShopListScreen(
             }
         )
     }
+
     showDeleteConfirm?.let { item ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
@@ -182,13 +182,16 @@ fun ShopListScreen(
             title = { Text("Delete Item", fontWeight = FontWeight.Bold) },
             text = { Text("Delete \"${item.name}\"?", fontSize = 14.sp) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteShopItem(item); showDeleteConfirm = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { viewModel.deleteShopItem(item); showDeleteConfirm = null }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
             }
         )
     }
+
     if (showSettingsDialog) {
         SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
@@ -203,40 +206,51 @@ private fun ShopItemCard(
     onDelete: (ShopItemEntity) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val isPurchased = item.isPurchased
 
     Card(
         modifier = Modifier.fillMaxWidth().combinedClickable(
-            onClick = { if (!item.isPurchased) viewModel.toggleShopItemPurchased(item) },
+            onClick = { if (!isPurchased) viewModel.toggleShopItemPurchased(item) },
             onLongClick = { showMenu = true }
         ),
         colors = CardDefaults.cardColors(
-            containerColor = if (item.isPurchased) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            containerColor = if (isPurchased) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ),
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.ShoppingCart,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = if (item.isPurchased) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        else MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.width(6.dp))
+                    if (item.quantity > 1) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = if (isPurchased) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                            else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            modifier = Modifier.height(20.dp)
+                        ) {
+                            Text(
+                                "${item.quantity}×",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPurchased) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text(
-                        "${item.quantity}× ${item.name}",
+                        item.name,
                         fontSize = 14.sp,
-                        fontWeight = if (item.isPurchased) FontWeight.Normal else FontWeight.Medium,
-                        color = if (item.isPurchased) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        fontWeight = if (isPurchased) FontWeight.Normal else FontWeight.Medium,
+                        color = if (isPurchased) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         else MaterialTheme.colorScheme.onSurface,
-                        textDecoration = if (item.isPurchased) TextDecoration.LineThrough else TextDecoration.None,
+                        textDecoration = if (isPurchased) TextDecoration.LineThrough else TextDecoration.None,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -245,22 +259,24 @@ private fun ShopItemCard(
                     Text(
                         item.notes,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 22.dp, top = 2.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
                     )
                 }
             }
             if (item.price != null) {
                 Text(
                     "$${String.format("%.2f", item.price)}",
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 10.dp)
                 )
             }
             Checkbox(
-                checked = item.isPurchased,
+                checked = isPurchased,
                 onCheckedChange = { viewModel.toggleShopItemPurchased(item) },
                 modifier = Modifier.size(24.dp),
                 colors = CheckboxDefaults.colors(
@@ -270,16 +286,26 @@ private fun ShopItemCard(
             )
             Box {
                 IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit(item) })
                     DropdownMenuItem(
-                        text = { Text(if (item.isPurchased) "Mark to Buy" else "Mark Purchased") },
-                        onClick = { showMenu = false; viewModel.toggleShopItemPurchased(item) }
+                        text = { Text("Edit") },
+                        onClick = { showMenu = false; onEdit(item) },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) }
                     )
-                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                        onClick = { showMenu = false; onDelete(item) })
+                    DropdownMenuItem(
+                        text = { Text(if (isPurchased) "Mark to Buy" else "Mark Purchased") },
+                        onClick = { showMenu = false; viewModel.toggleShopItemPurchased(item) },
+                        leadingIcon = { Icon(if (isPurchased) Icons.Default.Undo else Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMenu = false; onDelete(item) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error) }
+                    )
                 }
             }
         }
@@ -300,26 +326,46 @@ private fun AddEditShopItemDialog(
     var qtyText by remember { mutableStateOf(initialQuantity.toString()) }
     var priceText by remember { mutableStateOf(initialPrice?.let { String.format("%.2f", it) } ?: "") }
     var notes by remember { mutableStateOf(initialNotes) }
+    var isSaving by remember { mutableStateOf(false) }
+
+    val isEdit = initialName.isNotEmpty()
+    val isValid = name.trim().isNotEmpty() && !isSaving
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSaving) onDismiss() },
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(if (initialName.isNotEmpty()) "Edit Item" else "Add Item", fontWeight = FontWeight.Bold) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.ShoppingCart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(if (isEdit) "Edit Item" else "Add Item", fontWeight = FontWeight.Bold)
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = { name = it.take(100) },
                     label = { Text("Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Qty:", fontSize = 14.sp, modifier = Modifier.width(40.dp))
-                    IconButton(onClick = { if (quantity > 1) { quantity--; qtyText = quantity.toString() } }) {
-                        Icon(Icons.Default.Remove, contentDescription = "Decrease")
+                    Text("Qty:", fontSize = 14.sp, modifier = Modifier.width(40.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    FilledTonalIconButton(
+                        onClick = { if (quantity > 1) { quantity--; qtyText = quantity.toString() } },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(16.dp))
                     }
+                    Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = qtyText,
                         onValueChange = { input ->
@@ -331,18 +377,25 @@ private fun AddEditShopItemDialog(
                                 }
                             }
                         },
-                        modifier = Modifier.width(72.dp)
-                            .onFocusChanged { if (!it.isFocused) { val p = qtyText.toIntOrNull() ?: 1; quantity = p.coerceAtLeast(1); qtyText = quantity.toString() } },
+                        modifier = Modifier.width(64.dp),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+                        textStyle = LocalTextStyle.current.copy(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        ),
                         colors = OutlinedTextFieldDefaults.colors(
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                             focusedBorderColor = MaterialTheme.colorScheme.primary
                         )
                     )
-                    IconButton(onClick = { quantity++; qtyText = quantity.toString() }) {
-                        Icon(Icons.Default.Add, contentDescription = "Increase")
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = { quantity++; qtyText = quantity.toString() },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(16.dp))
                     }
                 }
                 OutlinedTextField(
@@ -356,7 +409,7 @@ private fun AddEditShopItemDialog(
                 )
                 OutlinedTextField(
                     value = notes,
-                    onValueChange = { notes = it },
+                    onValueChange = { notes = it.take(200) },
                     label = { Text("Notes (optional)") },
                     modifier = Modifier.fillMaxWidth().height(80.dp),
                     maxLines = 3
@@ -366,14 +419,24 @@ private fun AddEditShopItemDialog(
         confirmButton = {
             TextButton(
                 onClick = {
+                    isSaving = true
                     val price = priceText.toFloatOrNull()?.takeIf { it >= 0f }
                     onConfirm(name.trim(), quantity, price, notes.trim())
                 },
-                enabled = name.isNotBlank()
-            ) { Text("Save") }
+                enabled = isValid
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text("Save")
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
         }
     )
 }
