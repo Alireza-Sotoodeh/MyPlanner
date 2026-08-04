@@ -251,7 +251,7 @@ fun DiaryScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(end = 4.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.Top
         ) {
             IconButton(onClick = { saveNow(); onBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
