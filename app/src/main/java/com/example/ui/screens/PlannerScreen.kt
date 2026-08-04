@@ -4168,7 +4168,10 @@ private fun TodoItem(
     }
     val outlineAlpha = if (isDone) 0.08f else 0.2f
 
-    Box(
+    Card(
+        colors = CardDefaults.cardColors(containerColor = bgColor),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = shadowElevation),
         modifier = modifier
             .fillMaxWidth()
             .zIndex(if (isDragging) 10f else 0f)
@@ -4177,10 +4180,7 @@ private fun TodoItem(
                 scaleY = scale
             }
             .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
-            .shadow(elevation = shadowElevation, shape = RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = outlineAlpha), RoundedCornerShape(12.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = outlineAlpha), RoundedCornerShape(16.dp))
             .combinedClickable(
                 onClick = { viewModel.toggleTodoCompletion(todo) },
                 onLongClick = { showMenu = true }
@@ -4202,7 +4202,7 @@ private fun TodoItem(
             )
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
@@ -4226,7 +4226,7 @@ private fun TodoItem(
                     Text(
                         todo.title,
                         fontSize = 14.sp,
-                        fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
+                        fontWeight = if (isDone) FontWeight.Normal else FontWeight.SemiBold,
                         color = if (isDone) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         else MaterialTheme.colorScheme.onSurface,
                         textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
