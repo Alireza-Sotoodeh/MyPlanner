@@ -4541,49 +4541,113 @@ private fun IdeasTab(viewModel: MainViewModel) {
                             )
                         }
                         Box {
-                            Text(
-                                "${filteredIdeas.size} ideas",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.clickable { showIdeaBreakdown = true }
-                            )
-                            DropdownMenu(
-                                expanded = showIdeaBreakdown,
-                                onDismissRequest = { showIdeaBreakdown = false }
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { showIdeaBreakdown = !showIdeaBreakdown }
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                    .padding(horizontal = 10.dp, vertical = 3.dp)
                             ) {
-                                if (ideas.isEmpty()) {
-                                    DropdownMenuItem(
-                                        text = { Text("No ideas", fontSize = 13.sp) },
-                                        onClick = { showIdeaBreakdown = false }
-                                    )
-                                } else {
-                                    val ideasByGroup = ideas.groupBy { it.groupId }
-                                    val groupsWithIdeas = groups.filter { group ->
-                                        ideasByGroup[group.id]?.isNotEmpty() == true
-                                    }
-                                    val ungroupedCount = ideasByGroup[null]?.size ?: 0
-                                    groupsWithIdeas.forEach { group ->
-                                        val count = ideasByGroup[group.id]?.size ?: 0
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(8.dp)
-                                                            .background(Color(group.color), CircleShape)
-                                                    )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text("${group.name} ($count)", fontSize = 13.sp)
+                                Text(
+                                    text = "${filteredIdeas.size} ideas",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            if (showIdeaBreakdown) {
+                                val localDensity = LocalDensity.current
+                                val offsetY = with(localDensity) { 32.dp.roundToPx() }
+                                Popup(
+                                    alignment = Alignment.TopEnd,
+                                    offset = IntOffset(x = 0, y = offsetY),
+                                    onDismissRequest = { showIdeaBreakdown = false },
+                                    properties = PopupProperties(focusable = true)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        tonalElevation = 8.dp,
+                                        shadowElevation = 8.dp,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                                        modifier = Modifier.width(280.dp).padding(4.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "Ideas by Group",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            if (ideas.isEmpty()) {
+                                                Text(
+                                                    text = "No ideas yet",
+                                                    fontSize = 12.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            } else {
+                                                val ideasByGroup = ideas.groupBy { it.groupId }
+                                                val groupsWithIdeas = groups.filter { group ->
+                                                    ideasByGroup[group.id]?.isNotEmpty() == true
                                                 }
-                                            },
-                                            onClick = { showIdeaBreakdown = false }
-                                        )
-                                    }
-                                    if (ungroupedCount > 0) {
-                                        DropdownMenuItem(
-                                            text = { Text("No group ($ungroupedCount)", fontSize = 13.sp) },
-                                            onClick = { showIdeaBreakdown = false }
-                                        )
+                                                val ungroupedCount = ideasByGroup[null]?.size ?: 0
+                                                groupsWithIdeas.forEach { group ->
+                                                    val count = ideasByGroup[group.id]?.size ?: 0
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(10.dp)
+                                                                    .background(Color(group.color), CircleShape)
+                                                            )
+                                                            Spacer(Modifier.width(8.dp))
+                                                            Text(
+                                                                text = group.name,
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = MaterialTheme.colorScheme.onSurface
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = "${count} idea${if (count != 1) "s" else ""}",
+                                                            fontSize = 12.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                                if (ungroupedCount > 0) {
+                                                    if (groupsWithIdeas.isNotEmpty()) {
+                                                        HorizontalDivider(
+                                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                        )
+                                                    }
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(
+                                                            text = "No group",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        Text(
+                                                            text = "${ungroupedCount} idea${if (ungroupedCount != 1) "s" else ""}",
+                                                            fontSize = 12.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
