@@ -24,6 +24,8 @@ class HabitRepository(private val habitDao: HabitDao) {
 
     fun getLogsForHabit(habitId: Long): Flow<List<HabitLogEntity>> = habitDao.getLogsForHabit(habitId)
 
+    suspend fun getLogsForHabitSync(habitId: Long): List<HabitLogEntity> = habitDao.getLogsForHabitSync(habitId)
+
     suspend fun insertLog(log: HabitLogEntity): Long = habitDao.insertLog(log)
 
     suspend fun deleteLogForDate(habitId: Long, date: String) = habitDao.deleteLogForDate(habitId, date)

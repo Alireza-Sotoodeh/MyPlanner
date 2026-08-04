@@ -73,7 +73,11 @@ fun DiaryScreen(
 
     fun deleteEntry() {
         autoSaveJob?.cancel()
-        viewModel.deleteDiaryEntry(currentDate)
+        if (entry != null) {
+            viewModel.deleteDiaryEntryWithUndo(entry!!)
+        } else {
+            viewModel.deleteDiaryEntry(currentDate)
+        }
         title = ""
         content = ""
     }

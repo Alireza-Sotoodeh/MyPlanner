@@ -147,7 +147,7 @@ fun MottoManagementScreen(
             title = { Text("Delete Motto", fontWeight = FontWeight.Bold) },
             text = { Text("Delete this motto?", fontSize = 14.sp) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteMotto(motto); showDeleteConfirm = null }) {
+                TextButton(onClick = { viewModel.deleteMottoWithUndo(motto); showDeleteConfirm = null }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },

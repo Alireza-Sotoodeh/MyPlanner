@@ -348,7 +348,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
                         logValue = currentLog?.value ?: 0f,
                         onLog = { value -> viewModel.logHabit(habit.id, value) },
                         onEdit = { editingHabit = habit },
-                        onDelete = { viewModel.deleteHabit(habit) }
+                        onDelete = { viewModel.deleteHabitWithUndo(habit) }
                     )
                 }
             }
@@ -374,7 +374,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
                 AllHabitsTab(
                     habits = habits,
                     onEdit = { editingHabit = it },
-                    onDelete = { viewModel.deleteHabit(it) },
+                    onDelete = { viewModel.deleteHabitWithUndo(it) },
                     onAdd = { showCreateHabitDialog = true }
                 )
             }

@@ -420,7 +420,14 @@ fun DayReviewScreen(
             title = { Text("Delete Review", fontWeight = FontWeight.Bold) },
             text = { Text("Delete day review for ${formatDisplayDate(currentDate)}?", fontSize = 14.sp) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteDayReview(currentDate); showDeleteConfirm = false; onBack() }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = {
+                    if (review != null) {
+                        viewModel.deleteDayReviewWithUndo(review!!)
+                    } else {
+                        viewModel.deleteDayReview(currentDate)
+                    }
+                    showDeleteConfirm = false; onBack()
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }

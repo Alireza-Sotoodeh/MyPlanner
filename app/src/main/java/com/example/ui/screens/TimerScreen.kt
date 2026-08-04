@@ -1034,7 +1034,7 @@ private fun HistoryTab(
                                     Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp))
                                 }
                                 IconButton(onClick = {
-                                    viewModel.deleteTimerSession(session.id)
+                                    viewModel.deleteTimerSessionWithUndo(session)
                                 }) {
                                     Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
                                 }
@@ -1582,7 +1582,7 @@ private fun ManageTemplatesDialog(
                                 IconButton(onClick = { editingTemplate = template }) {
                                     Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp))
                                 }
-                                IconButton(onClick = { viewModel.deleteTemplate(template.id) }) {
+                                IconButton(onClick = { viewModel.deleteTemplateWithUndo(template) }) {
                                     Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
                                 }
                             }

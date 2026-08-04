@@ -182,7 +182,7 @@ fun ShopListScreen(
             title = { Text("Delete Item", fontWeight = FontWeight.Bold) },
             text = { Text("Delete \"${item.name}\"?", fontSize = 14.sp) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteShopItem(item); showDeleteConfirm = null }) {
+                TextButton(onClick = { viewModel.deleteShopItemWithUndo(item); showDeleteConfirm = null }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },

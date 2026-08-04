@@ -38,6 +38,9 @@ interface HabitDao {
     @Query("SELECT * FROM habit_logs WHERE habitId = :habitId ORDER BY date DESC")
     fun getLogsForHabit(habitId: Long): Flow<List<HabitLogEntity>>
 
+    @Query("SELECT * FROM habit_logs WHERE habitId = :habitId ORDER BY date DESC")
+    suspend fun getLogsForHabitSync(habitId: Long): List<HabitLogEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: HabitLogEntity): Long
 

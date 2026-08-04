@@ -102,6 +102,16 @@ sealed class UndoSnapshot(val typeLabel: String) {
         val parentTaskId: Long,
         val subtaskIds: List<Long>,
     ) : UndoSnapshot("Idea in Planner")
+    data class HabitSnapshot(
+        val habit: HabitEntity,
+        val logs: List<HabitLogEntity>,
+    ) : UndoSnapshot("Habit")
+    data class DiarySnapshot(val entry: DiaryEntryEntity) : UndoSnapshot("Diary entry")
+    data class DayReviewSnapshot(val review: DayReviewEntity) : UndoSnapshot("Day review")
+    data class TimerTemplateSnapshot(val template: TimerTemplateEntity) : UndoSnapshot("Timer template")
+    data class TimerSessionSnapshot(val session: TimerSessionEntity) : UndoSnapshot("Timer session")
+    data class ShopItemSnapshot(val item: ShopItemEntity) : UndoSnapshot("Shop item")
+    data class MottoSnapshot(val motto: MottoEntity) : UndoSnapshot("Motto")
 }
 
 data class UndoEntry(
@@ -1977,6 +1987,20 @@ class MainViewModel(
         }
     }
 
+    fun deleteHabitWithUndo(habit: HabitEntity) {
+        viewModelScope.launch {
+            try {
+                val logs = habitRepository.getLogsForHabitSync(habit.id)
+                com.example.core.manager.ReminderManager.cancelHabitReminder(context, habit)
+                habitRepository.deleteLogsForHabit(habit.id)
+                habitRepository.deleteHabit(habit)
+                pushUndo(UndoSnapshot.HabitSnapshot(habit, logs), habit.name)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete habit with undo", e)
+            }
+        }
+    }
+
     fun logHabit(habitId: Long, value: Float, notes: String = "", date: String? = null) {
         viewModelScope.launch {
             val targetDate = date ?: _selectedDate.value
@@ -2483,6 +2507,17 @@ class MainViewModel(
         }
     }
 
+    fun deleteTemplateWithUndo(template: TimerTemplateEntity) {
+        viewModelScope.launch {
+            try {
+                timerRepository.deleteTemplate(template.id)
+                pushUndo(UndoSnapshot.TimerTemplateSnapshot(template), template.name)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete template with undo", e)
+            }
+        }
+    }
+
     // --- Timer Session History ---
     fun updateTimerSession(id: Long, durationSeconds: Int, note: String, date: String) {
         viewModelScope.launch {
@@ -2493,6 +2528,18 @@ class MainViewModel(
     fun deleteTimerSession(id: Long) {
         viewModelScope.launch {
             timerRepository.deleteSession(id)
+        }
+    }
+
+    fun deleteTimerSessionWithUndo(session: TimerSessionEntity) {
+        viewModelScope.launch {
+            try {
+                timerRepository.deleteSession(session.id)
+                val label = if (session.label.isNotBlank()) session.label else session.type.lowercase()
+                pushUndo(UndoSnapshot.TimerSessionSnapshot(session), "$label · ${session.date}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete timer session with undo", e)
+            }
         }
     }
 
@@ -3463,6 +3510,18 @@ class MainViewModel(
         viewModelScope.launch { diaryRepository.deleteEntryByDate(date) }
     }
 
+    fun deleteDiaryEntryWithUndo(entry: DiaryEntryEntity) {
+        viewModelScope.launch {
+            try {
+                diaryRepository.deleteEntryByDate(entry.date)
+                val title = entry.title.ifBlank { entry.date }
+                pushUndo(UndoSnapshot.DiarySnapshot(entry), title)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete diary entry with undo", e)
+            }
+        }
+    }
+
     // === Shop List CRUD ===
     fun addShopItem(name: String, quantity: Int = 1, price: Float? = null, notes: String = "") {
         viewModelScope.launch {
@@ -3476,6 +3535,17 @@ class MainViewModel(
 
     fun deleteShopItem(item: ShopItemEntity) {
         viewModelScope.launch { shopItemRepository.deleteItem(item) }
+    }
+
+    fun deleteShopItemWithUndo(item: ShopItemEntity) {
+        viewModelScope.launch {
+            try {
+                shopItemRepository.deleteItem(item)
+                pushUndo(UndoSnapshot.ShopItemSnapshot(item), item.name)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete shop item with undo", e)
+            }
+        }
     }
 
     fun toggleShopItemPurchased(item: ShopItemEntity) {
@@ -3500,6 +3570,21 @@ class MainViewModel(
         }
     }
 
+    fun deleteMottoWithUndo(motto: MottoEntity) {
+        viewModelScope.launch {
+            try {
+                mottoRepository.deleteMotto(motto)
+                if (_todayMotto.value?.id == motto.id) {
+                    refreshTodayMotto()
+                }
+                val shortText = motto.text.take(40)
+                pushUndo(UndoSnapshot.MottoSnapshot(motto), shortText)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete motto with undo", e)
+            }
+        }
+    }
+
     // === Day Review CRUD ===
     fun reviewForDate(date: String) = dayReviewRepository.getReviewForDate(date)
 
@@ -3518,6 +3603,17 @@ class MainViewModel(
 
     fun deleteDayReview(date: String) {
         viewModelScope.launch { dayReviewRepository.deleteReviewByDate(date) }
+    }
+
+    fun deleteDayReviewWithUndo(review: DayReviewEntity) {
+        viewModelScope.launch {
+            try {
+                dayReviewRepository.deleteReviewByDate(review.date)
+                pushUndo(UndoSnapshot.DayReviewSnapshot(review), review.date)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete day review with undo", e)
+            }
+        }
     }
 
     fun updateReviewReminderTime(time: String) {
@@ -3736,6 +3832,40 @@ class MainViewModel(
                         for (stage in snap.stages) {
                             ideaRepository.insertStage(stage.copy(id = 0, ideaId = newIdeaId))
                         }
+                    }
+                    is UndoSnapshot.HabitSnapshot -> {
+                        val newHabitId = habitRepository.insertHabit(snap.habit.copy(id = 0))
+                        for (log in snap.logs) {
+                            habitRepository.insertLog(log.copy(id = 0, habitId = newHabitId))
+                        }
+                        if (snap.habit.reminderEnabled && !snap.habit.habitTime.isNullOrBlank()) {
+                            com.example.core.manager.ReminderManager.scheduleHabitReminder(
+                                context = context,
+                                habit = snap.habit.copy(id = newHabitId),
+                                vibrate = true,
+                                sound = true
+                            )
+                        }
+                    }
+                    is UndoSnapshot.DiarySnapshot -> {
+                        diaryRepository.insertEntry(snap.entry.copy(id = 0))
+                    }
+                    is UndoSnapshot.DayReviewSnapshot -> {
+                        dayReviewRepository.insertReview(snap.review.copy(id = 0))
+                        prefs.edit().remove("reviewed_today").apply()
+                    }
+                    is UndoSnapshot.TimerTemplateSnapshot -> {
+                        timerRepository.insertTemplate(snap.template.copy(id = 0))
+                    }
+                    is UndoSnapshot.TimerSessionSnapshot -> {
+                        timerRepository.insertSession(snap.session.copy(id = 0))
+                    }
+                    is UndoSnapshot.ShopItemSnapshot -> {
+                        shopItemRepository.insertItem(snap.item.copy(id = 0))
+                    }
+                    is UndoSnapshot.MottoSnapshot -> {
+                        mottoRepository.insertMotto(snap.motto.copy(id = 0))
+                        refreshTodayMotto()
                     }
                 }
             } catch (e: Exception) {
