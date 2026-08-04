@@ -269,21 +269,18 @@ class TimerForegroundService : Service() {
         }
     }
 
-    private fun handlePomodoroCompletion() {
+    private suspend fun handlePomodoroCompletion() {
         val current = _state.value
         val isFg = isAppInForeground
 
         if (!isFg) {
             launchPomodoroFinishActivity(current)
-            serviceScope.launch { saveTimerSessionFromCompletion(current) }
-        }
-
-        stopForeground(STOP_FOREGROUND_REMOVE)
-
-        if (!isFg) {
-            _state.value = current.copy(running = false, completed = false)
+            saveTimerSessionFromCompletion(current)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            _state.value = TimerServiceState()
             fireFallbackNotification(current)
         } else {
+            stopForeground(STOP_FOREGROUND_REMOVE)
             _state.value = current.copy(running = false, completed = true)
         }
 

@@ -1957,6 +1957,13 @@ class MainViewModel(
             putExtra(TimerForegroundService.EXTRA_TASK_TITLE, _activePomodoroTask.value?.title ?: "")
             putExtra(TimerForegroundService.EXTRA_TASK_ID, _activePomodoroTask.value?.id ?: -1L)
             putExtra(TimerForegroundService.EXTRA_SESSION_NUMBER, _pomodoroCurrentSession.value)
+            val sb = _pomodoroShortBreakMinutes.value
+            if (sb != null) putExtra(TimerForegroundService.EXTRA_SHORT_BREAK, sb)
+            val lb = _pomodoroLongBreakMinutes.value
+            if (lb != null) putExtra(TimerForegroundService.EXTRA_LONG_BREAK, lb)
+            val ts = _pomodoroTargetSessions.value
+            if (ts != null) putExtra(TimerForegroundService.EXTRA_TARGET_SESSIONS, ts)
+            putExtra(TimerForegroundService.EXTRA_MARK_COMPLETE, _pomodoroMarkCompleteOnFinish.value)
         }
         context.startService(intent)
     }
