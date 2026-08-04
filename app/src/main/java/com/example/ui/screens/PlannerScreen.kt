@@ -3512,6 +3512,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
+    var expandAllDescriptions by remember { mutableStateOf(false) }
 
     var showFilterChips by remember { mutableStateOf(true) }
     val filterChipScrollConnection = remember {
@@ -3595,6 +3596,20 @@ private fun TodoTab(viewModel: MainViewModel) {
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                             )
                         }
+                        if (allTodos.any { it.description.isNotBlank() }) {
+                            IconButton(
+                                onClick = { expandAllDescriptions = !expandAllDescriptions },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (expandAllDescriptions) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (expandAllDescriptions) "Collapse All Descriptions" else "Expand All Descriptions",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         Box {
                             Box(
                                 modifier = Modifier
@@ -3744,6 +3759,7 @@ private fun TodoTab(viewModel: MainViewModel) {
                         items(displayTodos, key = { it.id }) { todo ->
                             TodoItem(
                                 todo = todo,
+                                expanded = expandAllDescriptions,
                                 viewModel = viewModel,
                                 linkedItemTitle = todo.linkedTaskId?.let { id -> allTasks.find { it.id == id }?.title },
                                 onEdit = { editingTodo = it },
@@ -3825,6 +3841,7 @@ private fun TodoTab(viewModel: MainViewModel) {
 @Composable
 private fun TodoItem(
     todo: TodoEntity,
+    expanded: Boolean = false,
     viewModel: MainViewModel,
     linkedItemTitle: String? = null,
     onEdit: (TodoEntity) -> Unit,
@@ -3833,7 +3850,6 @@ private fun TodoItem(
     onUnlink: (TodoEntity) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    var descExpanded by remember { mutableStateOf(false) }
     val isDone = todo.status == "DONE"
 
     val bgColor = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
@@ -3898,19 +3914,6 @@ private fun TodoItem(
                         }
                     }
                 }
-                if (todo.description.isNotBlank()) {
-                    IconButton(
-                        onClick = { descExpanded = !descExpanded },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (descExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (descExpanded) "Collapse" else "Expand",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                        )
-                    }
-                }
                 if (todo.linkedTaskId != null) {
                     IconButton(onClick = { onUnlink(todo) }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.LinkOff, contentDescription = "Unlink", modifier = Modifier.size(16.dp),
@@ -3950,7 +3953,7 @@ private fun TodoItem(
                         todo.description,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        maxLines = if (descExpanded) Int.MAX_VALUE else 2,
+                        maxLines = if (expanded) Int.MAX_VALUE else 2,
                         overflow = TextOverflow.Ellipsis
                     )
 

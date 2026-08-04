@@ -39,6 +39,7 @@ fun TodoScreen(
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
+    var expandAllDescriptions by remember { mutableStateOf(false) }
 
     val displayTodos = when (filter) {
         TodoFilter.ALL -> allTodos
@@ -84,6 +85,19 @@ fun TodoScreen(
                     label = { Text(f.name, fontSize = 12.sp) }
                 )
             }
+            if (allTodos.any { it.description.isNotBlank() }) {
+                IconButton(
+                    onClick = { expandAllDescriptions = !expandAllDescriptions },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (expandAllDescriptions) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expandAllDescriptions) "Collapse All Descriptions" else "Expand All Descriptions",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
             Spacer(Modifier.weight(1f))
             val linkedCount = displayTodos.count { it.linkedTaskId != null }
             if (linkedCount > 0) {
@@ -128,6 +142,7 @@ fun TodoScreen(
                     items(displayTodos, key = { it.id }) { todo ->
                         TodoItem(
                             todo = todo,
+                            expanded = expandAllDescriptions,
                             viewModel = viewModel,
                             onEdit = { editingTodo = it },
                             onDelete = { showDeleteConfirm = it },
@@ -206,6 +221,7 @@ fun TodoScreen(
 @Composable
 private fun TodoItem(
     todo: TodoEntity,
+    expanded: Boolean = false,
     viewModel: MainViewModel,
     onEdit: (TodoEntity) -> Unit,
     onDelete: (TodoEntity) -> Unit,
@@ -213,7 +229,6 @@ private fun TodoItem(
     onUnlink: (TodoEntity) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    var descExpanded by remember { mutableStateOf(false) }
     val isDone = todo.status == "DONE"
 
     Card(
@@ -309,21 +324,9 @@ private fun TodoItem(
                         todo.description,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        maxLines = if (descExpanded) Int.MAX_VALUE else 2,
+                        maxLines = if (expanded) Int.MAX_VALUE else 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.height(2.dp))
-                    IconButton(
-                        onClick = { descExpanded = !descExpanded },
-                        modifier = Modifier.size(20.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (descExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (descExpanded) "Collapse" else "Expand",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
                 }
             }
     }
