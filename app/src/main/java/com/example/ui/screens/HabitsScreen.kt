@@ -130,8 +130,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
             }
             HeaderActions(
                 onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
-                onSettingsClick = { showSettingsDialog = true },
-                onManageHabits = { tabIndex = 1 }
+                onSettingsClick = { showSettingsDialog = true }
             )
         }
 
