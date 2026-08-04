@@ -1122,6 +1122,9 @@ class MainViewModel(
     private val _pomodoroRunning = MutableStateFlow(false)
     val pomodoroRunning: StateFlow<Boolean> = _pomodoroRunning.asStateFlow()
 
+    private val _pomodoroPaused = MutableStateFlow(false)
+    val pomodoroPaused: StateFlow<Boolean> = _pomodoroPaused.asStateFlow()
+
     private val _pomodoroPhase = MutableStateFlow("FOCUS") // "FOCUS" or "BREAK"
     val pomodoroPhase: StateFlow<String> = _pomodoroPhase.asStateFlow()
 
@@ -2736,6 +2739,7 @@ class MainViewModel(
         _pomodoroPhase.value = "FOCUS"
         _pomodoroSecondsLeft.value = focusMinutes * 60
         _pomodoroRunning.value = true
+        _pomodoroPaused.value = false
         _pomodoroWaitingForService = true
 
         if (task != null) {
@@ -2801,6 +2805,7 @@ class MainViewModel(
 
     private fun resetPomodoroState(context: Context) {
         _pomodoroRunning.value = false
+        _pomodoroPaused.value = false
         _activePomodoroTask.value = null
         _pomodoroSecondsLeft.value = 0
         _pomodoroWaitingForService = false
@@ -2813,6 +2818,7 @@ class MainViewModel(
         _pomodoroSecondsLeft.value = _pomodoroFocusMinutes.value * 60
         _pomodoroCurrentSession.value = 1
         _pomodoroPhase.value = "FOCUS"
+        _pomodoroPaused.value = false
     }
 
     fun adjustPomodoroPlusOne() {
@@ -2833,6 +2839,7 @@ class MainViewModel(
                         _pomodoroWaitingForService = false
                         _pomodoroSecondsLeft.value = s.secondsLeft
                         _pomodoroRunning.value = s.running && !s.paused
+                        _pomodoroPaused.value = s.paused
                         _pomodoroPhase.value = s.phase
                         _pomodoroCurrentSession.value = s.sessionNumber
 
@@ -2873,6 +2880,7 @@ class MainViewModel(
                                 if (!_pomodoroProcessedCompletion) {
                                     _activePomodoroTask.value = null
                                     _pomodoroRunning.value = false
+                                    _pomodoroPaused.value = false
                                     _pomodoroSecondsLeft.value = 0
                                 }
                             }
@@ -3006,6 +3014,7 @@ class MainViewModel(
         }
         _pomodoroCompletionState.value = null
         _pomodoroRunning.value = true
+        _pomodoroPaused.value = false
         _pomodoroWaitingForService = true
         cancelPomodoroNotification(context)
 

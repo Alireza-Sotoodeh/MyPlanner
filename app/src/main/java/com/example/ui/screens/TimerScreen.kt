@@ -51,6 +51,7 @@ fun TimerScreen(viewModel: MainViewModel) {
     val activeTask by viewModel.activePomodoroTask.collectAsState()
     val secondsLeft by viewModel.pomodoroSecondsLeft.collectAsState()
     val isRunning by viewModel.pomodoroRunning.collectAsState()
+    val pomodoroPaused by viewModel.pomodoroPaused.collectAsState()
     val pomodoroPhase by viewModel.pomodoroPhase.collectAsState()
     val pomodoroCurrentSession by viewModel.pomodoroCurrentSession.collectAsState()
     val pomodoroTargetSessions by viewModel.pomodoroTargetSessions.collectAsState()
@@ -187,6 +188,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                 activeTask = activeTask,
                 secondsLeft = secondsLeft,
                 isRunning = isRunning,
+                isPaused = pomodoroPaused,
                 pomodoroPhase = pomodoroPhase,
                 pomodoroCurrentSession = pomodoroCurrentSession,
                 pomodoroTargetSessions = pomodoroTargetSessions,
@@ -286,6 +288,7 @@ private fun PomodoroTab(
     activeTask: TaskEntity?,
     secondsLeft: Int,
     isRunning: Boolean,
+    isPaused: Boolean,
     pomodoroPhase: String,
     pomodoroCurrentSession: Int,
     pomodoroTargetSessions: Int?,
@@ -315,7 +318,7 @@ private fun PomodoroTab(
     selectedCategory: String,
     onCategoryChange: (String) -> Unit
 ) {
-    val isTimerActive = activeTask != null || isRunning
+    val isTimerActive = activeTask != null || isRunning || isPaused || secondsLeft > 0
     val minutes = secondsLeft / 60
     val seconds = secondsLeft % 60
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
@@ -519,7 +522,7 @@ private fun PomodoroTab(
                         // Controls
                         TimerControls(
                             isRunning = isRunning,
-                            isPaused = false,
+                            isPaused = isPaused,
                             onDiscard = { onShowStopConfirmChange(true) },
                             onStartPause = {
                                 if (isRunning) viewModel.pausePomodoro()
@@ -757,10 +760,10 @@ private fun CronometerTab(
                     isPaused = chronoPaused,
                     onDiscard = { viewModel.discardChronometer() },
                     onStartPause = {
-                        if (!chronoRunning) {
-                            viewModel.startChronometer(selectedTaskId)
-                        } else {
-                            viewModel.pauseChronometer()
+                        when {
+                            chronoPaused -> viewModel.pauseChronometer()
+                            !chronoRunning -> viewModel.startChronometer(selectedTaskId)
+                            else -> viewModel.pauseChronometer()
                         }
                     },
                     onStop = {

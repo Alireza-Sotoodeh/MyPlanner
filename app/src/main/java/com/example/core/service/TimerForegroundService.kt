@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -180,17 +181,18 @@ class TimerForegroundService : Service() {
     }
 
     private fun handleTogglePause() {
-        val current = _state.value
-        if (!current.running) return
-        _state.value = current.copy(paused = !current.paused)
+        _state.update { current ->
+            if (!current.running) current
+            else current.copy(paused = !current.paused)
+        }
         updateNotification()
     }
 
     private fun handleAdjustPomodoro(cmd: ServiceCommand.AdjustPomodoro) {
-        val current = _state.value
-        if (current.mode != TimerMode.POMODORO || !current.running) return
-        val newLeft = (current.secondsLeft + cmd.seconds).coerceAtMost(7200)
-        _state.value = current.copy(secondsLeft = newLeft)
+        _state.update { current ->
+            if (current.mode != TimerMode.POMODORO || !current.running) current
+            else current.copy(secondsLeft = (current.secondsLeft + cmd.seconds).coerceAtMost(7200))
+        }
         updateNotification()
     }
 
@@ -247,19 +249,18 @@ class TimerForegroundService : Service() {
         tickJob = serviceScope.launch {
             while (true) {
                 delay(1000)
-                val current = _state.value
-                if (!current.running || current.mode == null) break
-                if (current.paused) continue
+                val s = _state.value
+                if (!s.running || s.mode == null) break
+                if (s.paused) continue
 
-                if (current.mode == TimerMode.POMODORO) {
-                    val newLeft = current.secondsLeft - 1
-                    _state.value = current.copy(secondsLeft = newLeft)
-                    if (newLeft <= 0) {
+                if (s.mode == TimerMode.POMODORO) {
+                    _state.update { it.copy(secondsLeft = it.secondsLeft - 1) }
+                    if (_state.value.secondsLeft <= 0) {
                         handlePomodoroCompletion()
                         break
                     }
                 } else {
-                    _state.value = current.copy(elapsedSeconds = current.elapsedSeconds + 1)
+                    _state.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
                 }
 
                 val now = System.currentTimeMillis()
@@ -282,7 +283,11 @@ class TimerForegroundService : Service() {
         }
 
         stopForeground(STOP_FOREGROUND_REMOVE)
-        _state.value = if (isFg) current.copy(running = false, completed = true) else TimerServiceState()
+        if (isFg) {
+            _state.update { it.copy(running = false, completed = true) }
+        } else {
+            _state.value = TimerServiceState()
+        }
         fireCompletionNotification(current)
         stopSelf()
     }
