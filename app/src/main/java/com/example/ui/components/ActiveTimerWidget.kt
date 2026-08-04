@@ -56,6 +56,7 @@ fun ActiveTimerWidget(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val chronoElapsed by viewModel.chronoElapsed.collectAsState()
     val isChronoRunning by viewModel.chronoRunning.collectAsState()
     val isChronoPaused by viewModel.chronoPaused.collectAsState()
+    val chronoSelectedTaskId by viewModel.chronoSelectedTaskId.collectAsState()
 
     val isPomodoroActive = activePomodoroTask != null
     val isChronoActive = isChronoRunning || (!isChronoRunning && chronoElapsed > 0L)
@@ -201,6 +202,10 @@ fun ActiveTimerWidget(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     onClick = {
                         if (stopTarget == "pomodoro") {
                             viewModel.stopPomodoroEarly(context)
+                        } else if (stopTarget == "chrono") {
+                            val elapsed = chronoElapsed.toInt()
+                            viewModel.stopChronometer()
+                            viewModel.saveChronometerSession(elapsed, chronoSelectedTaskId, "")
                         }
                         showStopConfirmation = false
                     }
