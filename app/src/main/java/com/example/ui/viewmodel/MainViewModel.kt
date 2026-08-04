@@ -156,7 +156,9 @@ data class BulletCoachBackup(
     val dayReviews: List<DayReviewEntity> = emptyList(),
     val learnGroups: List<LearnGroupEntity> = emptyList(),
     val learnItems: List<LearnItemEntity> = emptyList(),
-    val learnSections: List<LearnSectionEntity> = emptyList()
+    val learnSections: List<LearnSectionEntity> = emptyList(),
+    val timerSessions: List<TimerSessionEntity> = emptyList(),
+    val timerTemplates: List<TimerTemplateEntity> = emptyList()
 )
 
 data class PendingTaskCompletion(
@@ -206,6 +208,7 @@ class MainViewModel(
 
     private val TAG = "MainViewModel"
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+    private val moshiStrict = moshi.adapter(BulletCoachBackup::class.java).failOnUnknown().lenient()
     private val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
 
     private val _isSyncing = MutableStateFlow(false)
@@ -263,10 +266,37 @@ class MainViewModel(
     private fun parseDaysOfWeek(daysOfWeek: String): Set<Int> =
         daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
 
+    private fun parseWeeklyDate(dateStr: String): java.util.Calendar? {
+        // Handle weekly format: "yyyy-Www" (e.g., "2026-W29")
+        val weeklyRegex = "^\\d{4}-W\\d{2}$".toRegex()
+        if (!weeklyRegex.matches(dateStr)) return null
+        
+        val parts = dateStr.split("-W")
+        val year = parts[0].toIntOrNull() ?: return null
+        val week = parts[1].toIntOrNull() ?: return null
+        
+        val cal = java.util.Calendar.getInstance()
+        cal.clear()
+        cal.set(java.util.Calendar.YEAR, year)
+        cal.set(java.util.Calendar.WEEK_OF_YEAR, week)
+        cal.set(java.util.Calendar.DAY_OF_WEEK, cal.getFirstDayOfWeek())
+        return cal
+    }
+
     private fun isAllowedDay(dateStr: String, daysOfWeek: String): Boolean {
         if (daysOfWeek.isBlank()) return true
         val allowed = parseDaysOfWeek(daysOfWeek)
         if (allowed.isEmpty()) return true
+        
+        // Handle weekly format "yyyy-Www"
+        val weeklyCal = parseWeeklyDate(dateStr)
+        if (weeklyCal != null) {
+            // For weekly dates, the dateStr represents a week.
+            // Check if today's day of week is in allowed days.
+            val todayCal = java.util.Calendar.getInstance()
+            return todayCal.get(java.util.Calendar.DAY_OF_WEEK) in allowed
+        }
+        
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
         val cal = java.util.Calendar.getInstance()
         cal.time = fmt.parse(dateStr) ?: return true
@@ -277,6 +307,27 @@ class MainViewModel(
         if (daysOfWeek.isBlank()) return dateStr
         val allowed = parseDaysOfWeek(daysOfWeek)
         if (allowed.isEmpty()) return dateStr
+        
+        // Handle weekly format "yyyy-Www"
+        val weeklyCal = parseWeeklyDate(dateStr)
+        if (weeklyCal != null) {
+            // Find the next allowed day of week from today
+            val todayCal = java.util.Calendar.getInstance()
+            val todayDOW = todayCal.get(java.util.Calendar.DAY_OF_WEEK)
+            
+            // Find the next allowed day
+            for (i in 0..6) {
+                val checkDOW = if (todayDOW + i > 7) todayDOW + i - 7 else todayDOW + i
+                if (checkDOW in allowed) {
+                    val resultCal = java.util.Calendar.getInstance()
+                    resultCal.time = todayCal.time
+                    resultCal.add(java.util.Calendar.DAY_OF_YEAR, i)
+                    return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(resultCal.time)
+                }
+            }
+            return dateStr
+        }
+        
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
         val cal = java.util.Calendar.getInstance()
         cal.time = fmt.parse(dateStr) ?: return dateStr
@@ -553,6 +604,8 @@ class MainViewModel(
                 val shopItemsList = shopItemRepository.allItems.first()
                 val mottosList = mottoRepository.allMottos.first()
                 val dayReviewsList = dayReviewRepository.getAllReviews().first()
+                val timerSessionsList = timerRepository.getAllSessions().first()
+                val timerTemplatesList = timerRepository.getAllTemplates().first()
                 val ideaStagesList = allIdeas.value.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
                 val backupObj = BulletCoachBackup(
                     tasks = tasksList,
@@ -569,7 +622,9 @@ class MainViewModel(
                     dayReviews = dayReviewsList,
                     learnGroups = learnRepository.getAllGroupsSync(),
                     learnItems = learnItems.value,
-                    learnSections = learnItems.value.flatMap { learnRepository.getSectionsForItemSync(it.id) }
+                    learnSections = learnItems.value.flatMap { learnRepository.getSectionsForItemSync(it.id) },
+                    timerSessions = timerSessionsList,
+                    timerTemplates = timerTemplatesList
                 )
 
                 val adapter = moshi.adapter(BulletCoachBackup::class.java)
@@ -642,11 +697,10 @@ class MainViewModel(
                         onResult(false, "Backup file too large (${backupFile.length() / 1024 / 1024} MB). Max supported: 50 MB.")
                         return@launch
                     }
-                    jsonString = backupFile.readText()
-                }
+jsonString = backupFile.readText()
+            }
 
-                val adapter = moshi.adapter(BulletCoachBackup::class.java)
-                val backupObj = adapter.fromJson(jsonString)
+            val backupObj = moshiStrict.fromJson(jsonString)
 
                 if (backupObj == null) {
                     onResult(false, "Failed to parse backup data.")
@@ -691,6 +745,8 @@ class MainViewModel(
                 backupObj.habits.forEach { habitRepository.insertHabit(it) }
                 backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
                 backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
+                backupObj.timerSessions.forEach { timerRepository.insertSession(it) }
+                backupObj.timerTemplates.forEach { timerRepository.insertTemplate(it) }
                 backupObj.todos.forEach { todoRepository.insertTodo(it) }
                 backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
                 backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
