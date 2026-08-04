@@ -140,6 +140,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -3964,6 +3965,26 @@ fun SettingsDialog(
                         color = if (isSuccessStatus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                 }
+            }
+
+            // Creator credit
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Created by",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "Alireza Sotoodeh",
+                    fontSize = 16.sp,
+                    fontStyle = FontStyle.Italic,
+                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Light,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
