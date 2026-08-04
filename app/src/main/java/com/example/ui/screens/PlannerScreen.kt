@@ -539,7 +539,7 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             IconButton(onClick = onHomeClick) {
                 Icon(
