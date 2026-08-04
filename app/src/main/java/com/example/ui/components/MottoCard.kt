@@ -36,7 +36,7 @@ fun MottoCard(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "\"${it.text}\"",
+                    it.text,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Normal,
                     fontStyle = FontStyle.Italic,
@@ -49,7 +49,7 @@ fun MottoCard(
                 if (it.author.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "— ${it.author}",
+                        it.author,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         textAlign = TextAlign.End,
@@ -79,7 +79,7 @@ fun MottoListItem(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "\"${motto.text}\"",
+                    motto.text,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -88,7 +88,7 @@ fun MottoListItem(
                 )
                 if (motto.author.isNotBlank()) {
                     Text(
-                        "— ${motto.author}",
+                        motto.author,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
