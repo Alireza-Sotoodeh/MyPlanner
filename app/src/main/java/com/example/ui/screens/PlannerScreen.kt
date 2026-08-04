@@ -1834,20 +1834,11 @@ fun BulletTaskItem(
                                     )
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                    Icon(
-                                        imageVector = Icons.Default.SubdirectoryArrowRight,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp).padding(end = 4.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                    )
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically, 
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                             .clickable { onSubtaskToggle(subtask) }
-                                            .padding(horizontal = 6.dp, vertical = 4.dp)
                                     ) {
                                         Icon(
                                             imageVector = if (subCompleted) Icons.Default.Check else Icons.Default.PlayArrow,
@@ -1855,7 +1846,7 @@ fun BulletTaskItem(
                                             modifier = Modifier.size(12.dp),
                                             tint = if (subCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         val importanceStr = when (subtask.subtaskImportance) {
                                             "IMPORTANT" -> "⭐ "
                                             "OPTIONAL" -> "☕ "
