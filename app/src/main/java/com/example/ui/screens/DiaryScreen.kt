@@ -2,34 +2,181 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+
+private enum class Field { TITLE, CONTENT }
+
+private class HistoryStack(private val maxSize: Int = 50) {
+    private val items = mutableListOf<String>()
+    private var index = -1
+
+    fun push(item: String) {
+        if (index < items.size - 1) {
+            items.subList(index + 1, items.size).clear()
+        }
+        items.add(item)
+        if (items.size > maxSize) {
+            items.removeAt(0)
+        }
+        index = items.size - 1
+    }
+
+    fun undo(): String? {
+        if (index > 0) {
+            index--
+            return items[index]
+        }
+        return null
+    }
+
+    fun redo(): String? {
+        if (index < items.size - 1) {
+            index++
+            return items[index]
+        }
+        return null
+    }
+
+    val canUndo: Boolean get() = index > 0
+    val canRedo: Boolean get() = index < items.size - 1
+}
+
+private class MarkdownVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val styled = buildAnnotatedString {
+            val lines = text.text.split("\n")
+            for ((i, line) in lines.withIndex()) {
+                if (i > 0) append("\n")
+                when {
+                    line.startsWith("### ") -> {
+                        withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold)) {
+                            append(line)
+                        }
+                    }
+                    line.startsWith("## ") -> {
+                        withStyle(SpanStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)) {
+                            append(line)
+                        }
+                    }
+                    line.startsWith("# ") -> {
+                        withStyle(SpanStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold)) {
+                            append(line)
+                        }
+                    }
+                    line.startsWith("- ") || line.startsWith("\u2022 ") -> {
+                        append("\u2022 ")
+                        append(styleInline(line.removePrefix("- ").removePrefix("\u2022 ")))
+                    }
+                    Regex("""^\d+\.\s""").containsMatchIn(line) -> {
+                        val num = line.substringBefore(".").trim()
+                        val rest = line.substringAfter(".").trim()
+                        withStyle(SpanStyle(color = Color(0xFF6750A4))) { append("$num. ") }
+                        append(styleInline(rest))
+                    }
+                    line.trim() == "---" || line.trim() == "___" || line.trim() == "***" -> {
+                        withStyle(SpanStyle(color = Color.Gray.copy(alpha = 0.4f))) { append(line) }
+                    }
+                    else -> append(styleInline(line))
+                }
+            }
+        }
+        return TransformedText(styled, OffsetMapping.Identity)
+    }
+}
+
+private fun styleInline(text: String): AnnotatedString {
+    return buildAnnotatedString {
+        var remaining = text
+        while (remaining.isNotEmpty()) {
+            val boldIdx = remaining.indexOf("**")
+            val italicIdx = remaining.indexOf("*")
+            val codeIdx = remaining.indexOf("`")
+            val strikeIdx = remaining.indexOf("~~")
+
+            val candidates = mutableListOf<Pair<Int, String>>()
+            if (boldIdx != -1) candidates.add(boldIdx to "bold")
+            if (italicIdx != -1 && italicIdx != boldIdx) candidates.add(italicIdx to "italic")
+            if (codeIdx != -1) candidates.add(codeIdx to "code")
+            if (strikeIdx != -1) candidates.add(strikeIdx to "strike")
+
+            if (candidates.isEmpty()) {
+                append(remaining)
+                break
+            }
+
+            val (start, type) = candidates.minBy { it.first }
+            append(remaining.substring(0, start))
+
+            val tokenLen = if (type == "bold" || type == "strike") 2 else 1
+            val search = remaining.substring(start + tokenLen)
+            val endIdx = when (type) {
+                "bold" -> search.indexOf("**")
+                "italic" -> search.indexOf("*")
+                "code" -> search.indexOf("`")
+                else -> search.indexOf("~~")
+            }
+
+            if (endIdx != -1) {
+                val inner = search.substring(0, endIdx)
+                when (type) {
+                    "bold" -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(inner) }
+                    "italic" -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(inner) }
+                    "code" -> {
+                        val fullMatch = remaining.substring(start, start + tokenLen + endIdx + 1)
+                        withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color(0xFFE8E8E8))) {
+                            append(fullMatch)
+                        }
+                    }
+                    "strike" -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(inner) }
+                }
+                remaining = search.substring(endIdx + tokenLen)
+            } else {
+                append(remaining.substring(start))
+                remaining = ""
+            }
+        }
+    }
+}
+
+private fun formatDisplayDate(dateStr: String): String {
+    return try {
+        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date = fmt.parse(dateStr) ?: return dateStr
+        val outFmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        outFmt.format(date)
+    } catch (_: Exception) { dateStr }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,45 +192,43 @@ fun DiaryScreen(
 
     var title by remember { mutableStateOf(entry?.title ?: "") }
     var content by remember { mutableStateOf(entry?.content ?: "") }
-    var isEditing by remember { mutableStateOf(true) }
-    var saveState by remember { mutableStateOf("") }
 
     val dateSet = diaryDates.toSet()
+    val scope = rememberCoroutineScope()
+
+    val titleHistory = remember { HistoryStack() }
+    val contentHistory = remember { HistoryStack() }
+    var lastModifiedField by remember { mutableStateOf(Field.CONTENT) }
 
     LaunchedEffect(entry) {
-        if (entry != null) {
-            title = entry!!.title
-            content = entry!!.content
-        } else {
-            title = ""
-            content = ""
-        }
+        val savedTitle = entry?.title ?: ""
+        val savedContent = entry?.content ?: ""
+        title = savedTitle
+        content = savedContent
+        titleHistory.push(savedTitle)
+        contentHistory.push(savedContent)
     }
 
-    var saveJob by remember { mutableStateOf<Job?>(null) }
+    var autoSaveJob by remember { mutableStateOf<Job?>(null) }
 
     fun triggerAutoSave() {
-        saveJob?.cancel()
-        saveJob = MainScope().launch {
-            saveState = "Saving..."
-            delay(2000)
+        autoSaveJob?.cancel()
+        autoSaveJob = scope.launch {
+            delay(300)
             viewModel.saveDiaryEntry(currentDate, title.trim(), content.trim())
-            saveState = "Saved"
         }
     }
 
     fun saveNow() {
-        saveJob?.cancel()
+        autoSaveJob?.cancel()
         viewModel.saveDiaryEntry(currentDate, title.trim(), content.trim())
-        saveState = "Saved"
     }
 
     fun deleteEntry() {
-        saveJob?.cancel()
+        autoSaveJob?.cancel()
         viewModel.deleteDiaryEntry(currentDate)
         title = ""
         content = ""
-        saveState = ""
     }
 
     fun navigateDate(offset: Int) {
@@ -98,9 +243,7 @@ fun DiaryScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     DisposableEffect(currentDate) {
-        onDispose {
-            saveNow()
-        }
+        onDispose { saveNow() }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -128,13 +271,56 @@ fun DiaryScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                         if (currentDate in dateSet) {
-                            Text("●", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary)
+                            Text("\u25CF", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     IconButton(onClick = { navigateDate(1) }) {
                         Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
                     }
                 }
+            }
+            // Undo/Redo buttons
+            val canUndo = when (lastModifiedField) {
+                Field.TITLE -> titleHistory.canUndo
+                Field.CONTENT -> contentHistory.canUndo
+            }
+            val canRedo = when (lastModifiedField) {
+                Field.TITLE -> titleHistory.canRedo
+                Field.CONTENT -> contentHistory.canRedo
+            }
+            IconButton(
+                onClick = {
+                    val result = when (lastModifiedField) {
+                        Field.TITLE -> titleHistory.undo()
+                        Field.CONTENT -> contentHistory.undo()
+                    }
+                    result?.let {
+                        when (lastModifiedField) {
+                            Field.TITLE -> title = it
+                            Field.CONTENT -> content = it
+                        }
+                    }
+                },
+                enabled = canUndo
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
+            }
+            IconButton(
+                onClick = {
+                    val result = when (lastModifiedField) {
+                        Field.TITLE -> titleHistory.redo()
+                        Field.CONTENT -> contentHistory.redo()
+                    }
+                    result?.let {
+                        when (lastModifiedField) {
+                            Field.TITLE -> title = it
+                            Field.CONTENT -> content = it
+                        }
+                    }
+                },
+                enabled = canRedo
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
             }
             if (entry != null || content.isNotBlank() || title.isNotBlank()) {
                 IconButton(onClick = { showDeleteConfirm = true }) {
@@ -143,74 +329,48 @@ fun DiaryScreen(
             }
         }
 
-        Row(
+        OutlinedTextField(
+            value = title,
+            onValueChange = {
+                title = it
+                titleHistory.push(it)
+                lastModifiedField = Field.TITLE
+                triggerAutoSave()
+            },
+            placeholder = { Text("Title", fontSize = 16.sp) },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                when {
-                    saveState == "Saving..." -> "Saving..."
-                    saveState == "Saved" -> "Saved ✓"
-                    else -> ""
-                },
-                fontSize = 11.sp,
-                color = when (saveState) {
-                    "Saving..." -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    "Saved" -> MaterialTheme.colorScheme.primary
-                    else -> Color.Transparent
-                }
+            textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = Color.Transparent,
+                focusedBorderColor = Color.Transparent
             )
-            Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FilterChip(
-                    selected = isEditing,
-                    onClick = { if (!isEditing) { saveNow(); isEditing = true } },
-                    label = { Text("Edit", fontSize = 11.sp) },
-                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                )
-                FilterChip(
-                    selected = !isEditing,
-                    onClick = { if (isEditing) { saveNow(); isEditing = false } },
-                    label = { Text("Preview", fontSize = 11.sp) },
-                    leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                )
-            }
-        }
+        )
 
-        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-        if (isEditing) {
-            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it; triggerAutoSave() },
-                    placeholder = { Text("Title", fontSize = 16.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedBorderColor = Color.Transparent
-                    )
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it; triggerAutoSave() },
-                    placeholder = { Text("Write in markdown...", fontSize = 14.sp) },
-                    modifier = Modifier.fillMaxSize(),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 22.sp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedBorderColor = Color.Transparent
-                    )
-                )
-            }
-        } else {
-            MarkdownPreview(
-                content = content,
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp)) {
+            BasicTextField(
+                value = content,
+                onValueChange = {
+                    content = it
+                    contentHistory.push(it)
+                    lastModifiedField = Field.CONTENT
+                    triggerAutoSave()
+                },
+                modifier = Modifier.fillMaxSize(),
+                textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 22.sp),
+                visualTransformation = MarkdownVisualTransformation(),
+                decorationBox = { innerTextField ->
+                    if (content.isEmpty()) {
+                        Text(
+                            "Write in markdown...",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                    }
+                    innerTextField()
+                }
             )
         }
     }
@@ -223,170 +383,13 @@ fun DiaryScreen(
             title = { Text("Delete Entry", fontWeight = FontWeight.Bold) },
             text = { Text("Delete diary entry for ${formatDisplayDate(currentDate)}?", fontSize = 14.sp) },
             confirmButton = {
-                TextButton(onClick = { deleteEntry(); showDeleteConfirm = false }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { deleteEntry(); showDeleteConfirm = false }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             }
         )
     }
-}
-
-@Composable
-private fun MarkdownPreview(content: String, modifier: Modifier = Modifier) {
-    if (content.isBlank()) {
-        Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-            Text("Start writing...", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                fontSize = 14.sp, modifier = Modifier.padding(top = 24.dp))
-        }
-        return
-    }
-
-    val lines = remember(content) { content.split("\n") }
-
-    LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        items(lines) { line ->
-            when {
-                line.startsWith("### ") -> Heading3Line(line.removePrefix("### "))
-                line.startsWith("## ") -> Heading2Line(line.removePrefix("## "))
-                line.startsWith("# ") -> Heading1Line(line.removePrefix("# "))
-                line.startsWith("- ") || line.startsWith("• ") -> BulletLine(line.removePrefix("- ").removePrefix("• "))
-                Regex("""^\d+\.\s""").containsMatchIn(line) -> {
-                    val num = line.substringBefore(".").trim()
-                    val text = line.substringAfter(".").trim()
-                    NumberedLine(num, text)
-                }
-                line.trim() == "---" || line.trim() == "___" || line.trim() == "***" -> DividerLine()
-                line.isBlank() -> Spacer(Modifier.height(8.dp))
-                else -> ParagraphLine(line)
-            }
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-    }
-}
-
-@Composable
-private fun Heading1Line(text: String) {
-    Text(
-        buildAnnotatedString {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp)) { append(text.trim()) }
-        },
-        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-        color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-private fun Heading2Line(text: String) {
-    Text(
-        buildAnnotatedString {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp)) { append(text.trim()) }
-        },
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-        color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-private fun Heading3Line(text: String) {
-    Text(
-        buildAnnotatedString {
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp)) { append(text.trim()) }
-        },
-        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
-        color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-private fun BulletLine(text: String) {
-    val formatted = parseInlineMarkdown(text)
-    Row(modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 2.dp)) {
-        Text("•  ", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-        Text(formatted, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun NumberedLine(number: String, text: String) {
-    val formatted = parseInlineMarkdown(text)
-    Row(modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 2.dp)) {
-        Text("$number.  ", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-        Text(formatted, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun ParagraphLine(text: String) {
-    val formatted = parseInlineMarkdown(text)
-    if (text.isBlank()) {
-        Spacer(Modifier.height(8.dp))
-    } else {
-        Text(
-            formatted,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            modifier = Modifier.padding(vertical = 1.dp),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
-private fun DividerLine() {
-    HorizontalDivider(
-        modifier = Modifier.padding(vertical = 8.dp),
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-    )
-}
-
-@Composable
-private fun parseInlineMarkdown(text: String): androidx.compose.ui.text.AnnotatedString {
-    return buildAnnotatedString {
-        var remaining = text
-        while (remaining.isNotEmpty()) {
-            val boldStart = remaining.indexOf("**")
-            val italicStart = remaining.indexOf("*")
-            val effectiveItalic = if (italicStart != -1 && boldStart != -1) {
-                if (italicStart < boldStart) italicStart else Int.MAX_VALUE
-            } else if (italicStart != -1) italicStart else Int.MAX_VALUE
-            val effectiveBold = boldStart
-
-            if (effectiveBold != -1 && (effectiveBold < effectiveItalic || effectiveItalic == Int.MAX_VALUE)) {
-                append(remaining.substring(0, effectiveBold))
-                val rest = remaining.substring(effectiveBold + 2)
-                val end = rest.indexOf("**")
-                if (end != -1) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(rest.substring(0, end)) }
-                    remaining = rest.substring(end + 2)
-                } else {
-                    append("**$rest")
-                    remaining = ""
-                }
-            } else if (effectiveItalic != Int.MAX_VALUE) {
-                append(remaining.substring(0, effectiveItalic))
-                val rest = remaining.substring(effectiveItalic + 1)
-                val end = rest.indexOf("*")
-                if (end != -1) {
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(rest.substring(0, end)) }
-                    remaining = rest.substring(end + 1)
-                } else {
-                    append("*$rest")
-                    remaining = ""
-                }
-            } else {
-                append(remaining)
-                remaining = ""
-            }
-        }
-    }
-}
-
-private fun formatDisplayDate(dateStr: String): String {
-    return try {
-        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val date = fmt.parse(dateStr) ?: return dateStr
-        val outFmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-        outFmt.format(date)
-    } catch (_: Exception) { dateStr }
 }

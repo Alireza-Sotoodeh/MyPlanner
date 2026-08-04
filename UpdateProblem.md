@@ -913,3 +913,87 @@ The existing TopAppBar title is already two-line ("Day Review" + date), styled d
 
 ### Build Verification
 `.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
+
+---
+
+## Diary Screen Enhancement: Live Markdown, Auto-Save, Undo/Redo
+
+### Changes
+- Replace Edit/Preview toggle with live in-place markdown transformation via `BasicTextField` + `VisualTransformation`
+- Replace 2-second debounce auto-save with 300ms debounce — no "Saved" status text
+- Add separate undo/redo stacks for title and content (50 steps each) with icon buttons in header
+- Remove `MarkdownPreview` composable and all its sub-composables (replaced by inline `VisualTransformation`)
+
+### Implementation
+
+**File:** `app/src/main/java/com/example/ui/screens/DiaryScreen.kt`
+
+### New Classes/Functions
+
+#### `MarkdownVisualTransformation` (replaces `MarkdownPreview` + `parseInlineMarkdown`)
+```kotlin
+class MarkdownVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        // Per-line processing:
+        // - "# " lines → 24.sp Bold
+        // - "## " lines → 20.sp Bold
+        // - "### " lines → 18.sp SemiBold
+        // - "- "/"• "/"1. " lines → primary color prefix
+        // - "---" lines → dimmed color
+        // - All lines → parse inline tokens: **bold**, *italic*, `code`, ~~strike~~
+        return TransformedText(styled, OffsetMapping.Identity)
+    }
+}
+```
+
+#### `HistoryStack`
+```kotlin
+class HistoryStack(private val maxSize: Int = 50) {
+    private val items = mutableListOf<String>()
+    private var index = -1
+    fun push(item: String) { /* trim redo, add, enforce max */ }
+    fun undo(): String? { /* decrement index, return previous */ }
+    fun redo(): String? { /* increment index, return next */ }
+    val canUndo: Boolean get() = index > 0
+    val canRedo: Boolean get() = index < items.size - 1
+}
+```
+
+### Modified Composables
+
+| Before | After |
+|--------|-------|
+| `isEditing` state toggling Edit/Preview | Removed — single unified editing view |
+| `saveState` + "Saving..."/"Saved ✓" display | Removed — no save status indicator |
+| `saveJob` with 2000ms delay | `autoSaveJob` with 300ms delay via `rememberCoroutineScope()` |
+| `MainScope().launch` for saves | `scope.launch` (lifecycle-safe) |
+| Edit/Preview `FilterChip` row | Removed |
+| `OutlinedTextField(content)` with plain text | `BasicTextField(content)` with `MarkdownVisualTransformation` |
+| Header with back + date nav + delete | Header with back + date nav + **undo/redo icons** + delete |
+
+### New Imports
+- `androidx.compose.ui.text.input.VisualTransformation`
+- `androidx.compose.ui.text.input.TransformedText`
+- `androidx.compose.ui.text.input.OffsetMapping`
+- `androidx.compose.ui.text.font.FontFamily`
+- `androidx.compose.ui.text.style.TextDecoration`
+
+### Removed Imports
+- `androidx.compose.foundation.lazy.LazyColumn`
+- `androidx.compose.foundation.lazy.items`
+- `kotlinx.coroutines.MainScope`
+
+### Edge Cases
+
+| Edge Case | Handling |
+|-----------|----------|
+| Entry loaded from DB | Initial snapshot pushed to both history stacks → can undo back to saved state |
+| User types after undoing | Redo branch trimmed, new state pushed |
+| History exceeds 50 steps | Oldest entries dropped from front |
+| Date navigation | `saveNow()` fires before loading new date; history stacks scoped to `remember` are naturally discarded |
+| Back button | `saveNow()` called for final save |
+| Empty content / new entry | Empty string pushed as initial history state |
+| App backgrounded | `DisposableEffect` triggers save on dispose (same as before) |
+| Rapid typing | 300ms debounce prevents redundant DB writes |
+| `*` vs `**` at same position | `**` (bold) takes priority over `*` (italic) at same index |
+| Unmatched `**` or `*` | Left as plain text — same as current `parseInlineMarkdown` behavior |
