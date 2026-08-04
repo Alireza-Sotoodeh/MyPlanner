@@ -1299,6 +1299,10 @@ private fun HistoryCalendarGrid(
                             .padding(2.dp)
                             .clip(CircleShape)
                             .then(
+                                if (isToday && !isSelected) Modifier.background(primaryColor.copy(alpha = 0.15f))
+                                else Modifier
+                            )
+                            .then(
                                 if (isSelected) Modifier.background(primaryColor)
                                 else Modifier
                             )
@@ -1314,6 +1318,15 @@ private fun HistoryCalendarGrid(
                     ) {
                         if (cellDay != null) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (isSelected && isToday) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(4.dp)
+                                            .clip(CircleShape)
+                                            .background(onPrimaryColor.copy(alpha = 0.7f))
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                }
                                 Text(
                                     text = cellDay.toString(),
                                     fontSize = 14.sp,
