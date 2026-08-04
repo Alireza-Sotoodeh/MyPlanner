@@ -298,6 +298,34 @@ fun PlannerScreen(viewModel: MainViewModel) {
         )
     }
 
+    val pendingCompletion by viewModel.pendingTaskCompletion.collectAsState()
+    pendingCompletion?.let { pending ->
+        val incompleteCount = pending.subtasks.count { it.status != "COMPLETED" }
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingTaskCompletion() },
+            title = { Text("Complete with Subtasks?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("'${pending.task.title}' has $incompleteCount incomplete subtask(s). Would you like to complete all $incompleteCount subtask(s) as well?")
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmCompleteTask(true) }) {
+                    Text("Complete Subtasks")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { viewModel.confirmCompleteTask(false) }) {
+                        Text("Only This Task")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = { viewModel.cancelPendingTaskCompletion() }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
     if (showTaskManager) {
         com.example.ui.components.TaskManagerDialog(
             viewModel = viewModel,
@@ -1996,8 +2024,8 @@ fun BulletTaskItem(
                 }
             )
         }
+        }
     }
-}
 }
 
 @Composable

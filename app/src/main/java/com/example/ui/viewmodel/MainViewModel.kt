@@ -116,6 +116,13 @@ data class BulletCoachBackup(
     val dayReviews: List<DayReviewEntity> = emptyList()
 )
 
+data class PendingTaskCompletion(
+    val task: TaskEntity,
+    val subtasks: List<TaskEntity>,
+    val durationMinutes: Int = 0,
+    val todoId: Long? = null
+)
+
 class MainViewModel(
     private val taskRepository: TaskRepository,
     private val timerRepository: TimerRepository,
@@ -588,6 +595,65 @@ class MainViewModel(
         val tab = _preferredTimerTab.value
         _preferredTimerTab.value = null
         return tab
+    }
+
+    // Pending task completion with subtask confirmation
+    private val _pendingTaskCompletion = MutableStateFlow<PendingTaskCompletion?>(null)
+    val pendingTaskCompletion: StateFlow<PendingTaskCompletion?> = _pendingTaskCompletion.asStateFlow()
+
+    fun confirmCompleteTask(completeChildren: Boolean) {
+        val pending = _pendingTaskCompletion.value ?: return
+        _pendingTaskCompletion.value = null
+        viewModelScope.launch {
+            val (task, subtasks, durationMinutes, todoId) = pending
+
+            if (completeChildren) {
+                subtasks.filter { it.status != "COMPLETED" }.forEach {
+                    taskRepository.updateTask(it.copy(status = "COMPLETED"))
+                }
+            }
+
+            val updated = if (durationMinutes > 0) {
+                task.copy(
+                    status = "COMPLETED",
+                    durationMinutes = durationMinutes,
+                    pomodorosCompleted = task.pomodorosCompleted + 1
+                )
+            } else {
+                task.copy(status = "COMPLETED")
+            }
+            taskRepository.updateTask(updated)
+
+            updated.linkedTodoId?.let { linkedId ->
+                val linkedTodo = todoRepository.getTodoById(linkedId)
+                if (linkedTodo != null && linkedTodo.status != "DONE") {
+                    todoRepository.updateTodo(linkedTodo.copy(status = "DONE"))
+                }
+            }
+
+            if (durationMinutes > 0) {
+                timerRepository.insertSession(
+                    TimerSessionEntity(
+                        type = "POMODORO",
+                        taskId = task.id,
+                        label = task.label,
+                        durationSeconds = durationMinutes * 60,
+                        date = getTodayDateString()
+                    )
+                )
+            }
+
+            todoId?.let { tid ->
+                val todo = todoRepository.getTodoById(tid)
+                if (todo != null) {
+                    todoRepository.updateTodo(todo.copy(status = "DONE"))
+                }
+            }
+        }
+    }
+
+    fun cancelPendingTaskCompletion() {
+        _pendingTaskCompletion.value = null
     }
 
     private var pomodoroJob: Job? = null
@@ -1097,24 +1163,26 @@ class MainViewModel(
     fun toggleTaskCompletion(task: TaskEntity, subtasks: List<TaskEntity> = emptyList()) {
         viewModelScope.launch {
             if (task.status != "COMPLETED") {
-                val hasIncompleteImportantSubtasks = subtasks.any { it.status == "PENDING" && it.subtaskImportance == "IMPORTANT" }
-                if (hasIncompleteImportantSubtasks) {
-                    // Cannot complete main task if important subtasks are pending
+                val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
+                if (incompleteSubtasks.isNotEmpty()) {
+                    _pendingTaskCompletion.value = PendingTaskCompletion(
+                        task = task, subtasks = subtasks
+                    )
                     return@launch
                 }
             }
             val updated = task.copy(status = if (task.status == "COMPLETED") "PENDING" else "COMPLETED")
             taskRepository.updateTask(updated)
 
-        updated.linkedTodoId?.let { todoId ->
-            val linkedTodo = todoRepository.getTodoById(todoId)
-            if (linkedTodo != null) {
-                val newTodoStatus = if (updated.status == "COMPLETED") "DONE" else "PENDING"
-                if (linkedTodo.status != newTodoStatus) {
-                    todoRepository.updateTodo(linkedTodo.copy(status = newTodoStatus))
+            updated.linkedTodoId?.let { todoId ->
+                val linkedTodo = todoRepository.getTodoById(todoId)
+                if (linkedTodo != null) {
+                    val newTodoStatus = if (updated.status == "COMPLETED") "DONE" else "PENDING"
+                    if (linkedTodo.status != newTodoStatus) {
+                        todoRepository.updateTodo(linkedTodo.copy(status = newTodoStatus))
+                    }
                 }
             }
-        }
         }
     }
 
@@ -1154,6 +1222,14 @@ class MainViewModel(
 
     fun completeTaskWithManualDuration(task: TaskEntity, durationMinutes: Int) {
         viewModelScope.launch {
+            val subtasks = taskRepository.getSubtasks(task.id)
+            val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
+            if (incompleteSubtasks.isNotEmpty()) {
+                _pendingTaskCompletion.value = PendingTaskCompletion(
+                    task = task, subtasks = subtasks, durationMinutes = durationMinutes
+                )
+                return@launch
+            }
             val updated = task.copy(
                 durationMinutes = durationMinutes,
                 status = "COMPLETED",
@@ -1425,15 +1501,14 @@ class MainViewModel(
 
                 if (_pomodoroMarkCompleteOnFinish.value) {
                     val subtasks = allTasks.value.filter { it.parentTaskId == task.id }
-                    val hasIncompleteImportant = subtasks.any { it.status == "PENDING" && it.subtaskImportance == "IMPORTANT" }
-                    val newStatus = if (!hasIncompleteImportant) "COMPLETED" else task.status
+                    val hasIncompleteSubtasks = subtasks.any { it.status != "COMPLETED" }
                     val updated = task.copy(
                         pomodorosCompleted = task.pomodorosCompleted + 1,
-                        status = newStatus
+                        status = if (hasIncompleteSubtasks) task.status else "COMPLETED"
                     )
                     taskRepository.updateTask(updated)
                     _activePomodoroTask.value = updated
-                    if (newStatus == "COMPLETED") {
+                    if (updated.status == "COMPLETED") {
                         updated.linkedTodoId?.let { todoId ->
                             val linkedTodo = todoRepository.getTodoById(todoId)
                             if (linkedTodo != null && linkedTodo.status != "DONE") {
@@ -1627,6 +1702,14 @@ class MainViewModel(
     fun markTaskCompleteFromTimer(taskId: Long) {
         viewModelScope.launch {
             val task = taskRepository.getTaskById(taskId) ?: return@launch
+            val subtasks = taskRepository.getSubtasks(task.id)
+            val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
+            if (incompleteSubtasks.isNotEmpty()) {
+                _pendingTaskCompletion.value = PendingTaskCompletion(
+                    task = task, subtasks = subtasks
+                )
+                return@launch
+            }
             val updated = task.copy(status = "COMPLETED")
             taskRepository.updateTask(updated)
             updated.linkedTodoId?.let { todoId ->
@@ -2199,14 +2282,23 @@ class MainViewModel(
         viewModelScope.launch {
             try {
                 val newStatus = if (todo.status == "DONE") "PENDING" else "DONE"
-                todoRepository.updateTodo(todo.copy(status = newStatus))
 
                 if (todo.linkedTaskId != null && newStatus == "DONE") {
                     val linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
                     if (linkedTask != null && linkedTask.status != "COMPLETED") {
+                        val subtasks = taskRepository.getSubtasks(linkedTask.id)
+                        val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
+                        if (incompleteSubtasks.isNotEmpty()) {
+                            _pendingTaskCompletion.value = PendingTaskCompletion(
+                                task = linkedTask, subtasks = subtasks, todoId = todo.id
+                            )
+                            return@launch
+                        }
                         taskRepository.updateTask(linkedTask.copy(status = "COMPLETED"))
                     }
                 }
+
+                todoRepository.updateTodo(todo.copy(status = newStatus))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to toggle todo completion", e)
             }
