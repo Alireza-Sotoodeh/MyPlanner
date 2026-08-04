@@ -535,9 +535,30 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Timer Sessions (history)
-    fun timerSessionsForDateRange(startDate: String, endDate: String): StateFlow<List<TimerSessionEntity>> =
-        timerRepository.getSessionsForDateRange(startDate, endDate)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _historyDateRange = MutableStateFlow("today")
+
+    val timerHistorySessions: StateFlow<List<TimerSessionEntity>> = _historyDateRange.flatMapLatest { range ->
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val startDate = when (range) {
+            "today" -> todayStr
+            "week" -> {
+                val cal = Calendar.getInstance()
+                cal.add(Calendar.DAY_OF_YEAR, -7)
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+            }
+            "month" -> {
+                val cal = Calendar.getInstance()
+                cal.add(Calendar.MONTH, -1)
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+            }
+            else -> todayStr
+        }
+        timerRepository.getSessionsForDateRange(startDate, todayStr)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setHistoryDateRange(range: String) {
+        _historyDateRange.value = range
+    }
 
     // Pre-selected task for Timer (from Planner)
     private val _preSelectedTaskForTimer = MutableStateFlow<Long?>(null)

@@ -71,9 +71,6 @@ fun TimerScreen(viewModel: MainViewModel) {
     var showStopConfirm by remember { mutableStateOf(false) }
 
     var historyDateRange by remember { mutableStateOf("today") }
-    val todayStr = remember {
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    }
 
     // Consume pre-selected task from Planner
     LaunchedEffect(Unit) {
@@ -84,24 +81,7 @@ fun TimerScreen(viewModel: MainViewModel) {
         }
     }
 
-    // History sessions
-    val sessions by viewModel.timerSessionsForDateRange(
-        when (historyDateRange) {
-            "today" -> todayStr
-            "week" -> {
-                val cal = Calendar.getInstance()
-                cal.add(Calendar.DAY_OF_YEAR, -7)
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
-            }
-            "month" -> {
-                val cal = Calendar.getInstance()
-                cal.add(Calendar.MONTH, -1)
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
-            }
-            else -> todayStr
-        },
-        todayStr
-    ).collectAsState()
+    val sessions by viewModel.timerHistorySessions.collectAsState()
 
     Column(
         modifier = Modifier
@@ -207,7 +187,10 @@ fun TimerScreen(viewModel: MainViewModel) {
                 sessions = sessions,
                 viewModel = viewModel,
                 dateRange = historyDateRange,
-                onDateRangeChange = { historyDateRange = it },
+                onDateRangeChange = {
+                    historyDateRange = it
+                    viewModel.setHistoryDateRange(it)
+                },
                 tasks = tasks
             )
         }
