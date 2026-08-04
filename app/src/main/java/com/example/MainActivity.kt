@@ -68,6 +68,7 @@ import com.example.core.repository.ShopItemRepository
 import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
 import com.example.core.repository.TodoRepository
+import com.example.ui.components.UndoBar
 import com.example.ui.screens.HabitsScreen
 import com.example.ui.screens.MoreScreen
 import com.example.ui.screens.PlannerScreen
@@ -77,6 +78,8 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.MainViewModelFactory
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableLongStateOf
+import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.Timer
 
 class MainActivity : ComponentActivity() {
@@ -125,6 +128,20 @@ class MainActivity : ComponentActivity() {
                 val todayDate by viewModel.todayDate.collectAsState()
                 val snackbarHostState = remember { SnackbarHostState() }
                 var showDayReviewOverlay by remember { mutableStateOf(false) }
+                val undoStack by viewModel.undoStack.collectAsState()
+                var tick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+                LaunchedEffect(undoStack) {
+                    while (undoStack.isNotEmpty()) {
+                        delay(1000)
+                        tick = System.currentTimeMillis()
+                    }
+                }
+
+                val currentUndoEntry = undoStack.lastOrNull()
+                val remaining = currentUndoEntry?.let {
+                    ((it.expiryTime - tick) / 1000).toInt().coerceAtLeast(0)
+                } ?: 0
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     Scaffold(
@@ -150,6 +167,15 @@ class MainActivity : ComponentActivity() {
                                 4 -> MoreScreen(
                                     viewModel = viewModel,
                                     onNavigateToPlanner = { viewModel.selectTab(0) }
+                                )
+                            }
+                            currentUndoEntry?.let { entry ->
+                                UndoBar(
+                                    message = entry.message,
+                                    countdownSeconds = remaining,
+                                    onRestore = { viewModel.restoreFromUndo(entry.id) },
+                                    onDismiss = { viewModel.dismissUndo(entry.id) },
+                                    modifier = Modifier.align(Alignment.BottomCenter)
                                 )
                             }
                         }

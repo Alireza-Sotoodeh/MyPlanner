@@ -68,6 +68,36 @@ data class AppUsageItem(
     val durationMinutes: Long
 )
 
+sealed class UndoSnapshot(val typeLabel: String) {
+    data class TaskSnapshot(
+        val task: TaskEntity,
+        val subtasks: List<TaskEntity>,
+        val linkedTodoId: Long?,
+    ) : UndoSnapshot(
+        when (task.type) {
+            "EVENT" -> "Event"
+            "NOTE" -> "Note"
+            else -> "Task"
+        }
+    )
+    data class TodoSnapshot(
+        val todo: TodoEntity,
+        val linkedTask: TaskEntity?,
+        val linkedSubtasks: List<TaskEntity>,
+    ) : UndoSnapshot("To-Do")
+    data class IdeaSnapshot(
+        val idea: IdeaEntity,
+        val stages: List<IdeaStageEntity>,
+    ) : UndoSnapshot("Idea")
+}
+
+data class UndoEntry(
+    val id: Long,
+    val snapshot: UndoSnapshot,
+    val message: String,
+    val expiryTime: Long,
+)
+
 data class BulletCoachBackup(
     val tasks: List<TaskEntity> = emptyList(),
     val habits: List<HabitEntity> = emptyList(),
@@ -99,6 +129,10 @@ class MainViewModel(
     private val TAG = "MainViewModel"
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     private val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+
+    // Undo stack for deleted items
+    private val _undoStack = MutableStateFlow<List<UndoEntry>>(emptyList())
+    val undoStack: StateFlow<List<UndoEntry>> = _undoStack.asStateFlow()
 
     // Current Nav Tab index
     private val _currentTab = MutableStateFlow(0)
@@ -1009,6 +1043,22 @@ class MainViewModel(
         }
     }
 
+    fun deleteTaskWithUndo(task: TaskEntity) {
+        viewModelScope.launch {
+            try {
+                val subtasks = taskRepository.getSubtasks(task.id)
+                val linkedTodoId = task.linkedTodoId
+                deleteTask(task)
+                pushUndo(
+                    UndoSnapshot.TaskSnapshot(task, subtasks, linkedTodoId),
+                    task.title
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete task with undo", e)
+            }
+        }
+    }
+
     fun completeTaskWithManualDuration(task: TaskEntity, durationMinutes: Int) {
         viewModelScope.launch {
             val updated = task.copy(
@@ -1670,6 +1720,18 @@ class MainViewModel(
         }
     }
 
+    fun deleteIdeaWithUndo(idea: IdeaEntity) {
+        viewModelScope.launch {
+            try {
+                val stages = ideaRepository.getStagesForIdeaSync(idea.id)
+                deleteIdea(idea)
+                pushUndo(UndoSnapshot.IdeaSnapshot(idea, stages), idea.title)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete idea with undo", e)
+            }
+        }
+    }
+
     fun moveIdeaToGroup(ideaId: Long, newGroupId: Long?) {
         viewModelScope.launch {
             try { ideaRepository.moveIdeaToGroup(ideaId, newGroupId) } catch (e: Exception) { Log.e(TAG, "Failed to move idea", e) }
@@ -1825,6 +1887,51 @@ class MainViewModel(
                 todoRepository.deleteTodo(todo)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete todo", e)
+            }
+        }
+    }
+
+    fun deleteTodoWithUndo(todo: TodoEntity) {
+        viewModelScope.launch {
+            try {
+                var linkedTask: TaskEntity? = null
+                var linkedSubtasks: List<TaskEntity> = emptyList()
+                if (todo.linkedTaskId != null) {
+                    linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
+                    if (linkedTask != null) {
+                        linkedSubtasks = taskRepository.getSubtasks(linkedTask.id)
+                    }
+                }
+                deleteTodo(todo)
+                pushUndo(
+                    UndoSnapshot.TodoSnapshot(todo, linkedTask, linkedSubtasks),
+                    todo.title
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete todo with undo", e)
+            }
+        }
+    }
+
+    fun unlinkAndDeleteTodoWithUndo(todo: TodoEntity) {
+        viewModelScope.launch {
+            try {
+                var linkedTask: TaskEntity? = null
+                var linkedSubtasks: List<TaskEntity> = emptyList()
+                if (todo.linkedTaskId != null) {
+                    linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
+                    if (linkedTask != null) {
+                        linkedSubtasks = taskRepository.getSubtasks(linkedTask.id)
+                    }
+                }
+                unlinkTodoFromTask(todo)
+                todoRepository.deleteTodo(todo)
+                pushUndo(
+                    UndoSnapshot.TodoSnapshot(todo, linkedTask, linkedSubtasks),
+                    todo.title
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to unlink and delete todo with undo", e)
             }
         }
     }
@@ -2056,6 +2163,79 @@ class MainViewModel(
 
     private fun getTodayYearString(): String {
         return java.text.SimpleDateFormat("yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+    }
+
+    fun dismissUndo(entryId: Long) {
+        _undoStack.value = _undoStack.value.filter { it.id != entryId }
+    }
+
+    fun restoreFromUndo(entryId: Long) {
+        viewModelScope.launch {
+            val entry = _undoStack.value.find { it.id == entryId } ?: return@launch
+            dismissUndo(entryId)
+            try {
+                when (val snap = entry.snapshot) {
+                    is UndoSnapshot.TaskSnapshot -> {
+                        val newTaskId = taskRepository.insertTask(snap.task.copy(id = 0))
+                        for (subtask in snap.subtasks) {
+                            taskRepository.insertTask(subtask.copy(id = 0, parentTaskId = newTaskId))
+                        }
+                        snap.linkedTodoId?.let { linkedTodoId ->
+                            todoRepository.getTodoById(linkedTodoId)?.let { linkedTodo ->
+                                todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = newTaskId))
+                            }
+                        }
+                        if (snap.task.type == "EVENT") {
+                            com.example.core.manager.ReminderManager.scheduleReminders(
+                                context = context,
+                                task = snap.task.copy(id = newTaskId),
+                                vibrate = _eventReminderVibrate.value,
+                                sound = _eventReminderSound.value
+                            )
+                        }
+                    }
+                    is UndoSnapshot.TodoSnapshot -> {
+                        val newTodoId: Long
+                        if (snap.linkedTask != null) {
+                            val newTaskId = taskRepository.insertTask(snap.linkedTask.copy(id = 0, linkedTodoId = null))
+                            for (subtask in snap.linkedSubtasks) {
+                                taskRepository.insertTask(subtask.copy(id = 0, parentTaskId = newTaskId))
+                            }
+                            newTodoId = todoRepository.insertTodo(snap.todo.copy(id = 0, linkedTaskId = newTaskId))
+                            taskRepository.getTaskById(newTaskId)?.let { insertedTask ->
+                                taskRepository.updateTask(insertedTask.copy(linkedTodoId = newTodoId))
+                            }
+                        } else {
+                            newTodoId = todoRepository.insertTodo(snap.todo.copy(id = 0))
+                        }
+                    }
+                    is UndoSnapshot.IdeaSnapshot -> {
+                        val newIdeaId = ideaRepository.insertIdea(snap.idea.copy(id = 0))
+                        for (stage in snap.stages) {
+                            ideaRepository.insertStage(stage.copy(id = 0, ideaId = newIdeaId))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restore from undo", e)
+            }
+        }
+    }
+
+    private fun pushUndo(snapshot: UndoSnapshot, title: String) {
+        val label = snapshot.typeLabel
+        val shortTitle = if (title.length > 40) title.take(37) + "..." else title
+        val entry = UndoEntry(
+            id = System.nanoTime(),
+            snapshot = snapshot,
+            message = "$label \"$shortTitle\" deleted",
+            expiryTime = System.currentTimeMillis() + 5000
+        )
+        _undoStack.value = _undoStack.value + entry
+        viewModelScope.launch {
+            delay(5000)
+            _undoStack.value = _undoStack.value.filter { it.id != entry.id }
+        }
     }
 
     override fun onCleared() {

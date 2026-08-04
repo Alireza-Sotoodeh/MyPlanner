@@ -1001,7 +1001,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                     isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                     onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
                                     onMigrate = { targetDate -> viewModel.migrateTask(task, targetDate) },
-                                    onDelete = { viewModel.deleteTask(task) },
+                                    onDelete = { viewModel.deleteTaskWithUndo(task) },
                                     onStartPomodoro = { 
                                         viewModel.setTaskForPomodoroSetup(task)
                                     },
@@ -1017,7 +1017,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                     onSubtaskToggle = { subtask -> viewModel.toggleTaskCompletion(subtask, emptyList()) },
                                     onMigrateSubtask = { subtask, date -> viewModel.migrateTask(subtask, date) },
                                     onMakeMainTask = { subtask -> viewModel.updateTask(subtask.copy(parentTaskId = null)) },
-                                    onDeleteSubtask = { subtask -> viewModel.deleteTask(subtask) },
+                                    onDeleteSubtask = { subtask -> viewModel.deleteTaskWithUndo(subtask) },
                                     onReorderSubtask = { subtask, subtaskList, delta -> viewModel.reorderTask(subtask, subtaskList, delta, false) },
                                     isDragging = (draggingTaskId == task.id),
                                     dragOffsetX = if (draggingTaskId == task.id) dragOffsetX else 0f,
@@ -1163,7 +1163,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                             isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                             onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
                                             onMigrate = { targetDate -> viewModel.migrateTask(task, targetDate) },
-                                            onDelete = { viewModel.deleteTask(task) },
+                                            onDelete = { viewModel.deleteTaskWithUndo(task) },
                                             onStartPomodoro = { 
                                                 viewModel.setTaskForPomodoroSetup(task)
                                             },
@@ -1179,7 +1179,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                             onSubtaskToggle = { subtask -> viewModel.toggleTaskCompletion(subtask, emptyList()) },
                                             onMigrateSubtask = { subtask, date -> viewModel.migrateTask(subtask, date) },
                                             onMakeMainTask = { subtask -> viewModel.updateTask(subtask.copy(parentTaskId = null)) },
-                                            onDeleteSubtask = { subtask -> viewModel.deleteTask(subtask) },
+                                            onDeleteSubtask = { subtask -> viewModel.deleteTaskWithUndo(subtask) },
                                             onReorderSubtask = { subtask, subtaskList, delta -> viewModel.reorderTask(subtask, subtaskList, delta, false) },
                                             onToggleSubtasksExpanded = { expanded ->
                                                 expandedSubtasksMap[task.id] = expanded
@@ -4081,15 +4081,15 @@ private fun TodoTab(viewModel: MainViewModel) {
         if (todo.linkedTaskId != null) {
             LinkedDeleteConfirmDialog(
                 onDismiss = { showDeleteConfirm = null },
-                onDeleteBoth = { viewModel.deleteTodo(todo); showDeleteConfirm = null },
-                onKeepTodo = { viewModel.unlinkTodoFromTask(todo); viewModel.deleteTodo(todo); showDeleteConfirm = null }
+                onDeleteBoth = { viewModel.deleteTodoWithUndo(todo); showDeleteConfirm = null },
+                onKeepTodo = { viewModel.unlinkAndDeleteTodoWithUndo(todo); showDeleteConfirm = null }
             )
         } else {
             DeleteConfirmDialog(
                 title = "Delete To-Do",
                 message = "Delete \"${todo.title}\"?",
                 onDismiss = { showDeleteConfirm = null },
-                onConfirm = { viewModel.deleteTodo(todo); showDeleteConfirm = null }
+                onConfirm = { viewModel.deleteTodoWithUndo(todo); showDeleteConfirm = null }
             )
         }
     }
@@ -4691,7 +4691,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
             title = "Delete Idea",
             message = "Delete \"${idea.title}\" and all its stages?",
             onDismiss = { showDeleteIdeaConfirm = null },
-            onConfirm = { viewModel.deleteIdea(idea); showDeleteIdeaConfirm = null }
+            onConfirm = { viewModel.deleteIdeaWithUndo(idea); showDeleteIdeaConfirm = null }
         )
     }
     showDeleteGroupConfirm?.let { group ->
