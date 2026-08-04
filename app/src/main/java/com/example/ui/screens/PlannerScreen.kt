@@ -3745,7 +3745,7 @@ private fun TodoTab(viewModel: MainViewModel) {
             .nestedScroll(filterChipScrollConnection)
     ) {
         AnimatedVisibility(
-            visible = showFilterChips,
+            visible = showFilterChips && allTodos.isNotEmpty(),
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
