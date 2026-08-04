@@ -15,6 +15,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -44,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -64,15 +77,48 @@ import java.util.Locale
 @Composable
 fun CalendarDatePickerDialog(
     highlightedDates: Set<String> = emptySet(),
+    initialSelectedDate: String? = null,
+    initialUsePersian: Boolean = false,
+    minDate: String? = null,
+    maxDate: String? = null,
     onDismiss: () -> Unit,
     onDateSelected: (String) -> Unit
 ) {
-    var usePersian by remember { mutableStateOf(false) }
+    var usePersian by remember { mutableStateOf(initialUsePersian) }
 
     val today = Calendar.getInstance()
-    var currentYear by remember { mutableIntStateOf(today.get(Calendar.YEAR)) }
-    var currentMonth by remember { mutableIntStateOf(today.get(Calendar.MONTH) + 1) }
-    var selectedDay by remember { mutableStateOf<Int?>(null) }
+
+    val initialData = remember(initialSelectedDate, initialUsePersian) {
+        if (initialSelectedDate != null) {
+            try {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val date = sdf.parse(initialSelectedDate)
+                if (date != null) {
+                    if (initialUsePersian) {
+                        val parts = PersianCalendarHelper.getPersianDateParts(initialSelectedDate)
+                        Triple(parts.first, parts.second, parts.third)
+                    } else {
+                        val c = Calendar.getInstance().apply { time = date }
+                        Triple(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+                    }
+                } else null
+            } catch (_: Exception) { null }
+        } else null
+    }
+
+    var currentYear by remember {
+        mutableIntStateOf(
+            initialData?.first ?: if (initialUsePersian) PersianCalendarHelper.getCurrentPersianYear()
+            else today.get(Calendar.YEAR)
+        )
+    }
+    var currentMonth by remember {
+        mutableIntStateOf(
+            initialData?.second ?: if (initialUsePersian) PersianCalendarHelper.getCurrentPersianMonth()
+            else today.get(Calendar.MONTH) + 1
+        )
+    }
+    var selectedDay by remember { mutableStateOf(initialData?.third) }
     var editingYear by remember { mutableStateOf(false) }
     var yearInput by remember { mutableStateOf("") }
     var showMonthPicker by remember { mutableStateOf(false) }
@@ -126,6 +172,29 @@ fun CalendarDatePickerDialog(
         editingYear = false
     }
 
+    fun computeGregorian(day: Int): String {
+        return if (usePersian) {
+            PersianCalendarHelper.getGregorianDateString(currentYear, currentMonth, day)
+        } else {
+            val c = Calendar.getInstance()
+            c.set(currentYear, currentMonth - 1, 1)
+            val maxDay = c.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val clampedDay = day.coerceAtMost(maxDay)
+            c.set(Calendar.DAY_OF_MONTH, clampedDay)
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(c.time)
+        }
+    }
+
+    val isOkEnabled = remember(selectedDay, currentYear, currentMonth, usePersian, minDate, maxDate) {
+        if (selectedDay == null) false
+        else {
+            val g = computeGregorian(selectedDay!!)
+            g.isNotEmpty() &&
+                (minDate == null || g >= minDate) &&
+                (maxDate == null || g <= maxDate)
+        }
+    }
+
     if (showMonthPicker) {
         MonthPickerDialog(
             currentMonth = currentMonth,
@@ -144,21 +213,16 @@ fun CalendarDatePickerDialog(
         confirmButton = {
             TextButton(onClick = {
                 selectedDay?.let { day ->
-                    val gregorian = if (usePersian) {
-                        PersianCalendarHelper.getGregorianDateString(currentYear, currentMonth, day)
-                    } else {
-                        val c = Calendar.getInstance()
-                        c.set(currentYear, currentMonth - 1, day)
-                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(c.time)
-                    }
+                    val gregorian = computeGregorian(day)
                     if (gregorian.isNotEmpty()) onDateSelected(gregorian)
                 }
-            }, enabled = selectedDay != null) { Text("OK") }
+            }, enabled = isOkEnabled) { Text("OK") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     ) {
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
@@ -207,10 +271,12 @@ fun CalendarDatePickerDialog(
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center
                         ),
-                        cursorBrush = SolidColor(Color.Transparent),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .focusRequester(focusRequester)
                             .widthIn(min = 80.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 } else {
                     Text(
@@ -244,15 +310,49 @@ fun CalendarDatePickerDialog(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        CalendarGrid(
-            year = currentYear,
-            month = currentMonth,
-            usePersian = usePersian,
-            selectedDay = selectedDay,
-            highlightedDates = highlightedDates,
-            onDaySelected = { day -> selectedDay = day }
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            Color.Transparent
+                        )
+                    )
+                )
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        val calendarKey = "${currentYear}-${currentMonth}"
+        AnimatedContent(
+            targetState = calendarKey,
+            transitionSpec = {
+                val oldParts = initialState.split("-")
+                val newParts = targetState.split("-")
+                val oldTotal = oldParts[0].toInt() * 12 + oldParts[1].toInt()
+                val newTotal = newParts[0].toInt() * 12 + newParts[1].toInt()
+                if (newTotal > oldTotal) {
+                    (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut())
+                } else {
+                    (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
+                }
+            }
+        ) {
+            CalendarGrid(
+                year = currentYear,
+                month = currentMonth,
+                usePersian = usePersian,
+                selectedDay = selectedDay,
+                highlightedDates = highlightedDates,
+                onDaySelected = { day -> selectedDay = day }
+            )
+        }
+    }
     }
 }
 
@@ -261,7 +361,8 @@ fun MonthPickerDialog(
     currentMonth: Int,
     usePersian: Boolean,
     onConfirm: (Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var selectedMonth by remember { mutableStateOf(currentMonth) }
 
@@ -282,37 +383,52 @@ fun MonthPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (usePersian) "Select Persian Month" else "Select Month", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (row in 0..3) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        for (col in 0..2) {
-                            val monthIndex = row * 3 + col
-                            val monthNumber = monthIndex + 1
-                            val isSelected = monthNumber == selectedMonth
+            AnimatedVisibility(
+                visible = true,
+                enter = scaleIn(initialScale = 0.85f) + fadeIn()
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = modifier
+                ) {
+                    for (row in 0..3) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            for (col in 0..2) {
+                                val monthIndex = row * 3 + col
+                                val monthNumber = monthIndex + 1
+                                val isSelected = monthNumber == selectedMonth
+                                val isCurrentMonth = monthNumber == currentMonth
 
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
+                                val bg = when {
+                                    isSelected -> MaterialTheme.colorScheme.primary
+                                    isCurrentMonth -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                }
+                                val textColor = when {
+                                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(bg)
+                                        .clickable { selectedMonth = monthNumber }
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = months[monthIndex],
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = textColor,
+                                        textAlign = TextAlign.Center
                                     )
-                                    .clickable { selectedMonth = monthNumber }
-                                    .padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = months[monthIndex],
-                                    fontSize = 13.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center
-                                )
+                                }
                             }
                         }
                     }
@@ -335,7 +451,8 @@ fun CalendarGrid(
     month: Int,
     usePersian: Boolean,
     selectedDay: Int?,
-    onDaySelected: (Int) -> Unit
+    onDaySelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val daysInMonth: Int
     val firstDayOffset: Int
@@ -366,25 +483,34 @@ fun CalendarGrid(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = 68.dp)
+        modifier = modifier
     ) {
         val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
 
-        Row(modifier = Modifier.fillMaxWidth()) {
-            dayHeaders.forEach { header ->
-                Text(
-                    text = header,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = onSurfaceVariantColor,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                dayHeaders.forEach { header ->
+                    Text(
+                        text = header,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.5.dp)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
+            )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         var day = 1
         val rowCount = (daysInMonth + firstDayOffset + 6) / 7
