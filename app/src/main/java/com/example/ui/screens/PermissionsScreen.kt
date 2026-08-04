@@ -41,8 +41,9 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     var hasExactAlarm by remember { mutableStateOf(viewModel.hasExactAlarmPermission(context)) }
     var hasUsageStats by remember { mutableStateOf(viewModel.hasUsageStatsPermission(context)) }
     var hasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
+    var hasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
 
-    val allGranted = hasNotification && hasExactAlarm && hasUsageStats && hasDndAccess
+    val allGranted = hasNotification && hasExactAlarm && hasUsageStats && hasDndAccess && hasFullScreenIntent
     
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -51,8 +52,9 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 hasExactAlarm = viewModel.hasExactAlarmPermission(context)
                 hasUsageStats = viewModel.hasUsageStatsPermission(context)
                 hasDndAccess = viewModel.checkNotificationPolicyPermission(context)
-                
-                if (hasNotification && hasExactAlarm && hasUsageStats && hasDndAccess) {
+                hasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
+
+                if (hasNotification && hasExactAlarm && hasUsageStats && hasDndAccess && hasFullScreenIntent) {
                     onAllPermissionsGranted()
                 }
             }
@@ -142,6 +144,18 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                     viewModel.requestNotificationPolicyPermission(context)
                 }
             )
+
+            if (Build.VERSION.SDK_INT >= 34) {
+                PermissionItem(
+                    title = "Full-Screen Alerts",
+                    description = "Shows the pomodoro completion screen automatically.",
+                    icon = Icons.Default.Alarm,
+                    isGranted = hasFullScreenIntent,
+                    onClick = {
+                        viewModel.requestFullScreenIntentSettings(context)
+                    }
+                )
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
             

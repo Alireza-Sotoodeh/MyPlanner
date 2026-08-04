@@ -2414,6 +2414,27 @@ class MainViewModel(
         }
     }
 
+    // --- Full-Screen Intent Permission ---
+    fun hasFullScreenIntentPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= 34) {
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.USE_FULL_SCREEN_INTENT
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    fun requestFullScreenIntentSettings(context: Context) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                data = android.net.Uri.parse("package:${context.packageName}")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+    }
+
     private fun getDndState(context: Context): Boolean {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
