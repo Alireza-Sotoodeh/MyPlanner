@@ -2329,7 +2329,6 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                         color = if (isSelectedDay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                         shape = RoundedCornerShape(16.dp)
                     )
-                    .clickable { onNavigateToDaily(dayDate) }
             ) {
                 Column(
                     modifier = Modifier
@@ -2348,16 +2347,32 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                                 color = if (isPast) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                 letterSpacing = 1.sp
                             )
-                            Text(
-                                text = dateLabel,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = when {
-                                    isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                                    isPast -> MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                                    else -> MaterialTheme.colorScheme.onBackground
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = dateLabel,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = when {
+                                        isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                        isPast -> MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                        else -> MaterialTheme.colorScheme.onBackground
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                IconButton(
+                                    onClick = { onNavigateToDaily(dayDate) },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForwardIos,
+                                        contentDescription = "View in daily",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
                                 }
-                            )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
