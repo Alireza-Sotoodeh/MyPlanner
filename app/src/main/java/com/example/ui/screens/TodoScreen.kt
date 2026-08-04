@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,7 +33,7 @@ fun TodoScreen(
     val pendingTodos by viewModel.pendingTodos.collectAsState()
 
     var filter by remember { mutableStateOf(TodoFilter.ALL) }
-    var quickAddText by remember { mutableStateOf("") }
+    var showAddDialog by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
@@ -72,48 +73,6 @@ fun TodoScreen(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = quickAddText,
-                onValueChange = { quickAddText = it },
-                placeholder = { Text("What needs to be done?") },
-                modifier = Modifier.weight(1f).height(52.dp),
-                textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onDone = {
-                        if (quickAddText.isNotBlank()) {
-                            viewModel.addTodo(quickAddText.trim())
-                            quickAddText = ""
-                        }
-                    }
-                ),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Done
-                )
-            )
-            Spacer(Modifier.width(8.dp))
-            FilledTonalButton(
-                onClick = {
-                    if (quickAddText.isNotBlank()) {
-                        viewModel.addTodo(quickAddText.trim())
-                        quickAddText = ""
-                    }
-                },
-                modifier = Modifier.height(52.dp),
-                shape = RoundedCornerShape(8.dp),
-                enabled = quickAddText.isNotBlank()
-            ) {
-                Text("Add", fontSize = 13.sp)
-            }
-        }
-
-        Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -126,48 +85,69 @@ fun TodoScreen(
             }
         }
 
-        if (displayTodos.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Checklist,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "No to-dos yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                    Text(
-                        "Add one above",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                    )
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (displayTodos.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Checklist,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "No to-dos yet",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            "Tap + to create your first to-do",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(displayTodos, key = { it.id }) { todo ->
+                        TodoItem(
+                            todo = todo,
+                            viewModel = viewModel,
+                            onEdit = { editingTodo = it },
+                            onDelete = { showDeleteConfirm = it },
+                            onLink = { todoForLinking = it },
+                            onUnlink = { showUnlinkConfirm = it }
+                        )
+                    }
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.background,
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) {
-                items(displayTodos, key = { it.id }) { todo ->
-                    TodoItem(
-                        todo = todo,
-                        viewModel = viewModel,
-                        onEdit = { editingTodo = it },
-                        onDelete = { showDeleteConfirm = it },
-                        onLink = { todoForLinking = it },
-                        onUnlink = { showUnlinkConfirm = it }
-                    )
-                }
+                Icon(Icons.Default.Add, contentDescription = "Add To-Do")
             }
         }
     }
 
+    if (showAddDialog) {
+        AddTodoDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { title, description, priority ->
+                viewModel.addTodo(title, description, priority)
+                showAddDialog = false
+            }
+        )
+    }
     editingTodo?.let { todo ->
         EditTodoDialog(
             todo = todo,
@@ -304,6 +284,60 @@ private fun TodoItem(
 }
 
 @Composable
+private fun AddTodoDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var priority by remember { mutableStateOf("Medium") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("New To-Do", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    maxLines = 3
+                )
+                Text("Priority", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Low", "Medium", "High").forEach { p ->
+                        FilterChip(
+                            selected = priority == p,
+                            onClick = { priority = p },
+                            label = { Text(p, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (title.isNotBlank()) onConfirm(title.trim(), description.trim(), priority) },
+                enabled = title.isNotBlank()
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
 private fun PriorityBadge(priority: String) {
     val color = when (priority) {
         "High" -> Color(0xFFB3261E)
@@ -312,8 +346,7 @@ private fun PriorityBadge(priority: String) {
     }
     Surface(
         shape = RoundedCornerShape(4.dp),
-        color = color.copy(alpha = 0.15f),
-        modifier = Modifier.height(18.dp)
+        color = color.copy(alpha = 0.15f)
     ) {
         Text(
             priority,

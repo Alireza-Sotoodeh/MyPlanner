@@ -1114,4 +1114,85 @@ fun turnNoteIntoIdea(task: TaskEntity, subtasks: List<TaskEntity>) {
 | Completed tasks | ~1105 | Same wiring (allows converting completed items too) |
 
 ### Build Verification
+`.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
+
+---
+
+## TodoScreen: Fix PriorityBadge Centering + Replace Quick-Add with FAB + Dialog
+
+### Issue 1: PriorityBadge text not centered
+The `Surface` has a fixed `Modifier.height(18.dp)` but the `Text` inside (9sp + 4dp padding ≈ 13dp) sits at the top of the 18dp box, creating uneven vertical spacing.
+
+**Fix:** Remove `Modifier.height(18.dp)` from `Surface` so it wraps the content naturally — text is vertically centered by default.
+
+```kotlin
+// BEFORE
+Surface(
+    shape = RoundedCornerShape(4.dp),
+    color = color.copy(alpha = 0.15f),
+    modifier = Modifier.height(18.dp)  // ← fixed height forces text off-center
+) { Text(...) }
+
+// AFTER
+Surface(
+    shape = RoundedCornerShape(4.dp),
+    color = color.copy(alpha = 0.15f)
+    // no fixed height — wraps content, text centers naturally
+) { Text(...) }
+```
+
+### Issue 2: Quick-add is too basic (title only, no description/priority)
+The existing `OutlinedTextField` + "Add" button captures only a title. Users cannot set description or priority during creation — they must edit afterward.
+
+**Fix:** Replace the quick-add row with a `FloatingActionButton` (matching PlannerScreen's pattern) that opens an `AddTodoDialog` with three fields:
+- **Title** (required)
+- **Description** (optional, multi-line)
+- **Priority** — three `FilterChip`s: Low, Medium, High (default: Medium)
+
+**Files modified:**
+- `app/src/main/java/com/example/ui/screens/TodoScreen.kt`
+
+### Layout Before/After
+
+```
+[BEFORE]                              [AFTER]
+┌──────────────────────────┐          ┌──────────────────────────┐
+│ TO-DO                    │          │ TO-DO                    │
+│ To-Do List               │          │ To-Do List               │
+│                          │          │                          │
+│ ┌─────────────────┐ [Add]│          │ [ALL] [PENDING] [DONE]   │
+│ │ What needs...    │      │          │                          │
+│ └─────────────────┘      │          │  ┌──────────────────┐    │
+│ [ALL] [PENDING] [DONE]   │          │  │ ☐ Buy groceries  │    │
+│                          │          │  │    Medium        │    │
+│  ┌──────────────────┐    │          │  └──────────────────┘    │
+│  │ ☐ Buy groceries  │    │          │                          │
+│  │    Medium        │    │          │                    [ + ] │
+│  └──────────────────┘    │          └──────────────────────────┘
+│                    [ + ] │
+└──────────────────────────┘
+```
+
+### AddTodoDialog Contents
+```
+┌──────────────────────────────────┐
+│  New To-Do                       │
+│  ┌──────────────────────────┐    │
+│  │ Title              [____] │    │
+│  └──────────────────────────┘    │
+│  ┌──────────────────────────┐    │
+│  │ Description (optional)   │    │
+│  │ [______________________] │    │
+│  └──────────────────────────┘    │
+│  Priority                        │
+│  [Low] [Medium] [High]           │
+│                                  │
+│         [Cancel]    [Add]        │
+└──────────────────────────────────┘
+```
+
+### Empty State Text Updated
+"Add one above" → "Tap + to create your first to-do" (consistent with IdeasScreen's hint text)
+
+### Build Verification
 `.\gradlew.bat assembleDebug` — expects BUILD SUCCESSFUL
