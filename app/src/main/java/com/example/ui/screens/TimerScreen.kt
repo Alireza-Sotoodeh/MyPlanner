@@ -125,7 +125,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                     letterSpacing = 1.5.sp
                 )
                 Text(
-                    text = "Timer",
+                    text = "Track the time",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Light,
                     color = MaterialTheme.colorScheme.onBackground
