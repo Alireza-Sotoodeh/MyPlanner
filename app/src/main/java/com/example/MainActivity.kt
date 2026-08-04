@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
                                     countdownSeconds = remaining,
                                     onRestore = { viewModel.restoreFromUndo(entry.id) },
                                     onDismiss = { viewModel.dismissUndo(entry.id) },
-                                    modifier = Modifier.align(Alignment.BottomStart)
+                                    modifier = Modifier.align(Alignment.BottomCenter)
                                 )
                             }
                         }
