@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -156,45 +159,83 @@ fun DayReviewScreen(
                 ReviewField("Gratitude", gratitude, { gratitude = it })
             }
 
-            SectionCard(
-                title = "Mood & Score",
-                icon = Icons.Default.Star
-            ) {
-                Text("Mood", fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                Spacer(Modifier.height(6.dp))
+            // Mood section — no card wrapper
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(start = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Mood",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    for (i in 1..5) {
-                        IconButton(
-                            onClick = { moodRating = i },
-                            modifier = Modifier.size(42.dp)
+                    val moodEmojis = listOf("😢", "😞", "😐", "🙂", "😁")
+                    val moodLabels = listOf("Awful", "Bad", "Okay", "Good", "Great")
+                    for (i in 0..4) {
+                        val level = i + 1
+                        val selected = moodRating == level
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .let { m ->
+                                    if (selected) m.background(
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                        RoundedCornerShape(12.dp)
+                                    ) else m
+                                }
+                                .clickable(enabled = !selected) { moodRating = level }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
                         ) {
-                            Icon(
-                                if (i <= moodRating) Icons.Default.Star else Icons.Default.StarBorder,
-                                contentDescription = "Star $i",
-                                tint = if (i <= moodRating) Color(0xFFFFB300) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-                                modifier = Modifier.size(30.dp)
+                            Text(
+                                text = moodEmojis[i],
+                                fontSize = if (selected) 32.sp else 24.sp
                             )
-                        }
-                        if (i < 5) {
-                            Spacer(Modifier.weight(1f))
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = moodLabels[i],
+                                fontSize = 10.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurface.copy(
+                                    alpha = if (selected) 0.8f else 0.45f
+                                )
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                Spacer(Modifier.height(12.dp))
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // Score section — no card wrapper
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Overall:", fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Text(
+                        text = "Overall Score",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Text(
                         when {
                             score <= 3 -> "Rough day"
@@ -209,11 +250,11 @@ fun DayReviewScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Slider(
-                    value = score.toFloat(),
-                    onValueChange = { score = it.toInt() },
+                    value = score.toFloat().coerceIn(1f, 10f),
+                    onValueChange = { score = it.toInt().coerceIn(1, 10) },
                     valueRange = 1f..10f,
                     steps = 8,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -294,14 +335,41 @@ private fun SectionCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            content = content
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 14.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                content = content
+            )
+        }
     }
 }
 
