@@ -428,15 +428,6 @@ private fun PomodoroTab(
                         color = MaterialTheme.colorScheme.onBackground
                     )
 
-                    // Task name
-                    Text(
-                        text = activeTask!!.title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Controls
