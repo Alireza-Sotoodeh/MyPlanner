@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,30 +75,16 @@ fun MottoListItem(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Box(
-                modifier = Modifier.padding(start = 8.dp, top = 8.dp),
-                contentAlignment = Alignment.TopStart
-            ) {
-                Icon(
-                    Icons.Default.FormatQuote,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     motto.text,
                     fontSize = 14.sp,
@@ -110,33 +95,33 @@ fun MottoListItem(
                     lineHeight = 20.sp
                 )
                 if (motto.author.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        "\u2014 ${motto.author}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        motto.author,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontStyle = FontStyle.Italic,
-                        modifier = Modifier.padding(top = 6.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 4.dp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                modifier = Modifier.padding(start = 8.dp)
             ) {
                 IconButton(onClick = { onEdit(motto) }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Edit, contentDescription = "Edit",
                         modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
                 IconButton(onClick = { onDelete(motto) }, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Delete, contentDescription = "Delete",
                         modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                     )
                 }
             }
