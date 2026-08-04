@@ -20,5 +20,6 @@ data class IdeaStageEntity(
     val ideaId: Long,
     val title: String,
     val isCompleted: Boolean = false,
-    val orderIndex: Int = 0
+    val orderIndex: Int = 0,
+    val importance: String = "OPTIONAL"
 )

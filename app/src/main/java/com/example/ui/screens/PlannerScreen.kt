@@ -5313,8 +5313,13 @@ private fun StageRow(
                 tint = if (stage.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Spacer(modifier = Modifier.width(6.dp))
+            val stageImportanceIcon = when (stage.importance) {
+                "IMPORTANT" -> "⭐"
+                "OPTIONAL" -> "☕"
+                else -> ""
+            }
             Text(
-                stage.title,
+                text = if (stageImportanceIcon.isNotEmpty()) "$stageImportanceIcon ${stage.title}" else stage.title,
                 fontSize = 11.sp,
                 color = if (stage.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
                 textDecoration = if (stage.isCompleted) TextDecoration.LineThrough else null,

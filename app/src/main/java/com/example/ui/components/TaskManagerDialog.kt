@@ -93,8 +93,10 @@ fun TaskManagerDialog(
     var selectedGroupId by remember { mutableStateOf(ideaToEdit?.groupId) }
     var stages by remember { mutableStateOf(initialIdeaStages) }
     var newStageTitle by remember { mutableStateOf("") }
-    var editingStageIndex by remember { mutableStateOf(-1) }
+    var newStageImportance by remember { mutableStateOf("OPTIONAL") }
+    var editingStageIndex by remember { mutableStateOf<Int?>(null) }
     var editingStageText by remember { mutableStateOf("") }
+    var editingStageImportance by remember { mutableStateOf("OPTIONAL") }
     var showNewGroupDialog by remember { mutableStateOf(false) }
     val presetColors = listOf(0xFF6750A4, 0xFFB3261E, 0xFF00E676, 0xFF2196F3, 0xFFFF7043, 0xFFFFEB3B, 0xFFE91E63, 0xFF00BCD4)
     var showNewLabelDialog by remember { mutableStateOf(false) }
@@ -507,71 +509,195 @@ fun TaskManagerDialog(
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), modifier = Modifier.padding(vertical = 8.dp))
 
-                        Text("STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
-
-                        stages.forEachIndexed { index, stage ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("STAGES", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            stages.forEachIndexed { index, stage ->
                                 if (editingStageIndex == index) {
-                                    OutlinedTextField(
-                                        value = editingStageText,
-                                        onValueChange = { editingStageText = it },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f).height(48.dp),
-                                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
-                                    )
-                                    IconButton(onClick = {
-                                        if (editingStageText.isNotBlank()) {
-                                            stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim()) }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        IconButton(
+                                            onClick = { editingStageIndex = null },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Cancel Edit",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                         }
-                                        editingStageIndex = -1
-                                        editingStageText = ""
-                                    }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(16.dp))
+
+                                        OutlinedTextField(
+                                            value = editingStageText,
+                                            onValueChange = { editingStageText = it },
+                                            placeholder = { Text("Edit stage...") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true,
+                                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                                onDone = {
+                                                    if (editingStageText.isNotBlank()) {
+                                                        stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim(), importance = editingStageImportance) }
+                                                        editingStageIndex = null
+                                                    }
+                                                }
+                                            )
+                                        )
+
+                                        var expandImportance by remember { mutableStateOf(false) }
+                                        Box {
+                                            OutlinedButton(
+                                                onClick = { expandImportance = true },
+                                                modifier = Modifier.size(36.dp),
+                                                contentPadding = PaddingValues(0.dp)
+                                             ) {
+                                                Text(
+                                                    when (editingStageImportance) {
+                                                        "IMPORTANT" -> "⭐"
+                                                        "OPTIONAL" -> "☕"
+                                                        else -> "—"
+                                                    }, fontSize = 14.sp
+                                                )
+                                            }
+                                            DropdownMenu(expanded = expandImportance, onDismissRequest = { expandImportance = false }) {
+                                                DropdownMenuItem(text = { Text("☕ Optional") }, onClick = { editingStageImportance = "OPTIONAL"; expandImportance = false })
+                                                DropdownMenuItem(text = { Text("⭐ Important") }, onClick = { editingStageImportance = "IMPORTANT"; expandImportance = false })
+                                            }
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                if (editingStageText.isNotBlank()) {
+                                                    stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim(), importance = editingStageImportance) }
+                                                    editingStageIndex = null
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Save Edit",
+                                                tint = Color(0xFF4CAF50),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 } else {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        modifier = Modifier.weight(1f).clickable {
-                                            editingStageIndex = index
-                                            editingStageText = stage.title
-                                        }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text(stage.title, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface)
-                                    }
-                                    IconButton(onClick = {
-                                        stages = stages.toMutableList().also { it.removeAt(index) }
-                                        if (editingStageIndex == index) { editingStageIndex = -1; editingStageText = "" }
-                                    }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                        IconButton(
+                                            onClick = {
+                                                stages = stages.toMutableList().also { it.removeAt(index) }
+                                                val ei = editingStageIndex
+                                                if (ei != null) {
+                                                    editingStageIndex = when {
+                                                        ei == index -> null
+                                                        ei > index -> ei - 1
+                                                        else -> ei
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Text("-", color = Color(0xFF4CAF50), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+
+                                        IconButton(
+                                            onClick = {
+                                                editingStageIndex = index
+                                                editingStageText = stage.title
+                                                editingStageImportance = stage.importance
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit Stage",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        val importanceIcon = when (stage.importance) {
+                                            "IMPORTANT" -> "⭐ "
+                                            "OPTIONAL" -> "☕ "
+                                            else -> ""
+                                        }
+                                        Text(
+                                            text = "$importanceIcon${stage.title}",
+                                            fontSize = 14.sp,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable {
+                                                    editingStageIndex = index
+                                                    editingStageText = stage.title
+                                                    editingStageImportance = stage.importance
+                                                }
+                                        )
                                     }
                                 }
                             }
-                        }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = {
+                                        if (newStageTitle.isNotBlank()) {
+                                            stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim(), importance = newStageImportance)
+                                            newStageTitle = ""
+                                            newStageImportance = "OPTIONAL"
+                                        }
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Text("+", color = Color(0xFF4CAF50), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                OutlinedTextField(
+                                    value = newStageTitle,
+                                    onValueChange = { newStageTitle = it },
+                                    placeholder = { Text("Add stage...") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                        onDone = {
+                                            if (newStageTitle.isNotBlank()) {
+                                                stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim(), importance = newStageImportance)
+                                                newStageTitle = ""
+                                                newStageImportance = "OPTIONAL"
+                                            }
+                                        }
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = newStageTitle,
-                                onValueChange = { newStageTitle = it },
-                                placeholder = { Text("Add stage", fontSize = 13.sp) },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            FilledTonalButton(
-                                onClick = {
-                                    if (newStageTitle.isNotBlank()) {
-                                        stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim())
-                                        newStageTitle = ""
+                                var expandImportance by remember { mutableStateOf(false) }
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { expandImportance = true },
+                                        modifier = Modifier.size(36.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text(
+                                            when (newStageImportance) {
+                                                "IMPORTANT" -> "⭐"
+                                                "OPTIONAL" -> "☕"
+                                                else -> "—"
+                                            }, fontSize = 14.sp
+                                        )
                                     }
-                                },
-                                modifier = Modifier.height(40.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Add", fontSize = 12.sp)
+                                    DropdownMenu(expanded = expandImportance, onDismissRequest = { expandImportance = false }) {
+                                        DropdownMenuItem(text = { Text("☕ Optional") }, onClick = { newStageImportance = "OPTIONAL"; expandImportance = false })
+                                        DropdownMenuItem(text = { Text("⭐ Important") }, onClick = { newStageImportance = "IMPORTANT"; expandImportance = false })
+                                    }
+                                }
                             }
                         }
                     }
@@ -1123,6 +1249,11 @@ fun TaskManagerDialog(
                         newSubtask = ""
                         newSubtaskImportance = "OPTIONAL"
                     }
+                    if (newStageTitle.isNotBlank()) {
+                        stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim(), importance = newStageImportance)
+                        newStageTitle = ""
+                        newStageImportance = "OPTIONAL"
+                    }
                     if (taskToEdit != null) {
                         viewModel.updateTaskWithSubtasks(
                             task = taskToEdit,
@@ -1146,11 +1277,9 @@ fun TaskManagerDialog(
                         viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel), subtasks.toList())
                     } else if (ideaToEdit != null) {
                         val mutableStages = stages.toMutableList()
-                        if (editingStageIndex != -1 && editingStageIndex < mutableStages.size && editingStageText.isNotBlank()) {
-                            mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
-                        }
-                        if (newStageTitle.isNotBlank()) {
-                            mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
+                        val editIdx = editingStageIndex
+                        if (editIdx != null && editIdx < mutableStages.size && editingStageText.isNotBlank()) {
+                            mutableStages[editIdx] = mutableStages[editIdx].copy(title = editingStageText.trim(), importance = editingStageImportance)
                         }
                         viewModel.updateIdea(ideaToEdit.copy(groupId = selectedGroupId, title = title.trim(), description = description.trim(), priority = priorityLevel), mutableStages)
                     } else {
@@ -1158,11 +1287,9 @@ fun TaskManagerDialog(
                             "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList())
                             "IDEA" -> {
                                 val mutableStages = stages.toMutableList()
-                                if (editingStageIndex != -1 && editingStageIndex < mutableStages.size && editingStageText.isNotBlank()) {
-                                    mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
-                                }
-                                if (newStageTitle.isNotBlank()) {
-                                    mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
+                                val editIdx = editingStageIndex
+                                if (editIdx != null && editIdx < mutableStages.size && editingStageText.isNotBlank()) {
+                                    mutableStages[editIdx] = mutableStages[editIdx].copy(title = editingStageText.trim(), importance = editingStageImportance)
                                 }
                                 viewModel.addIdea(selectedGroupId, title.trim(), description.trim(), mutableStages, priorityLevel)
                             }

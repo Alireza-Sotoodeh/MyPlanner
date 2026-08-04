@@ -2239,12 +2239,12 @@ class MainViewModel(
         }
     }
 
-    fun addStage(ideaId: Long, title: String) {
+    fun addStage(ideaId: Long, title: String, importance: String = "OPTIONAL") {
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
                 val stages = ideaRepository.getStagesForIdeaSync(ideaId)
-                ideaRepository.insertStage(IdeaStageEntity(ideaId = ideaId, title = title.trim(), orderIndex = stages.size))
+                ideaRepository.insertStage(IdeaStageEntity(ideaId = ideaId, title = title.trim(), orderIndex = stages.size, importance = importance))
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add stage", e)
             }
@@ -2289,7 +2289,7 @@ class MainViewModel(
                             date = date,
                             type = type,
                             parentTaskId = parentId,
-                            subtaskImportance = "OPTIONAL",
+                            subtaskImportance = stage.importance,
                             label = "IDEA",
                             linkedIdeaId = idea.id,
                             priority = stage.orderIndex
@@ -2690,7 +2690,8 @@ class MainViewModel(
                             ideaId = ideaId,
                             title = subtask.title,
                             isCompleted = false,
-                            orderIndex = index
+                            orderIndex = index,
+                            importance = subtask.subtaskImportance
                         )
                     )
                 }

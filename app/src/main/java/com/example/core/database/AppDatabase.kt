@@ -51,7 +51,7 @@ import com.example.core.database.entity.TodoEntity
         MottoEntity::class,
         DayReviewEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
