@@ -57,9 +57,9 @@ fun TimerScreen(viewModel: MainViewModel) {
     var selectedTaskId by remember { mutableStateOf<Long?>(null) }
     var markCompleteOnFinish by remember { mutableStateOf(false) }
     var focusMinutes by remember { mutableIntStateOf(25) }
-    var shortBreakMinutes by remember { mutableStateOf<Int?>(5) }
+    var shortBreakMinutes by remember { mutableStateOf<Int?>(null) }
     var longBreakMinutes by remember { mutableStateOf<Int?>(null) }
-    var targetSessions by remember { mutableStateOf<Int?>(1) }
+    var targetSessions by remember { mutableStateOf<Int?>(null) }
     var selectedTemplateId by remember { mutableStateOf<Long?>(null) }
 
     var showManageTemplates by remember { mutableStateOf(false) }
@@ -294,7 +294,7 @@ private fun PomodoroTab(
             TimeControlRow("Focus", focusMinutes, 5, 120, onFocusMinutesChange)
             TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
             TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
-            TargetSessionsControl(targetSessions, onTargetSessionsChange)
+            TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
         }
 
         // Task selector section (below controls, above start button)
@@ -924,7 +924,7 @@ private fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValu
 }
 
 @Composable
-private fun TimeControlRowNullable(label: String, value: Int?, min: Int, max: Int, onValueChange: (Int?) -> Unit) {
+private fun TimeControlRowNullable(label: String, value: Int?, min: Int, max: Int, onValueChange: (Int?) -> Unit, step: Int = 5, valueSuffix: String = "min") {
     val currentValue = value ?: 0
     Row(
         modifier = Modifier.fillMaxWidth().height(32.dp),
@@ -936,7 +936,7 @@ private fun TimeControlRowNullable(label: String, value: Int?, min: Int, max: In
             if (value != null && value > 0) {
                 Box(
                     modifier = Modifier.size(32.dp).clip(CircleShape).clickable {
-                        val newVal = if (currentValue - 5 <= 0) 0 else currentValue - 5
+                        val newVal = if (currentValue - step <= 0) 0 else currentValue - step
                         onValueChange(if (newVal == 0) null else newVal)
                     },
                     contentAlignment = Alignment.Center
@@ -945,68 +945,25 @@ private fun TimeControlRowNullable(label: String, value: Int?, min: Int, max: In
                 }
             }
             Text(
-                text = if (value != null && value > 0) "$value min" else "Off",
+                text = if (value != null && value > 0) "$value $valueSuffix${if (valueSuffix.isNotEmpty() && value > 1) "s" else ""}" else "Off",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (value != null && value > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (value == null || value == 0) {
                 Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(5) },
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(step) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Enable", modifier = Modifier.size(18.dp))
                 }
             } else if (currentValue < max) {
                 Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(currentValue + 5) },
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(currentValue + step) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TargetSessionsControl(value: Int?, onValueChange: (Int?) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(32.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = "Target Sessions", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (value != null) {
-                Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable(enabled = value > 1) { onValueChange(value - 1) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(18.dp),
-                        tint = if (value > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
-                }
-            }
-            Text(
-                text = if (value != null) "$value session${if (value > 1) "s" else ""}" else "∞",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            if (value != null) {
-                Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(value + 1) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
-                }
-            }
-            TextButton(
-                onClick = { onValueChange(if (value == null) 1 else null) },
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                modifier = Modifier.height(28.dp)
-            ) {
-                Text(if (value == null) "Set" else "∞", fontSize = 11.sp)
             }
         }
     }
@@ -1207,9 +1164,9 @@ private fun TemplateForm(
             modifier = Modifier.fillMaxWidth()
         )
         TimeControlRow("Focus", focus, 5, 120) { focus = it }
-        TimeControlRowNullable("Short Break", shortBreak, 0, 30) { shortBreak = it }
-        TimeControlRowNullable("Long Break", longBreak, 0, 30) { longBreak = it }
-        TargetSessionsControl(targets) { targets = it }
+        TimeControlRowNullable("Short Break", shortBreak, 0, 30, onValueChange = { shortBreak = it })
+        TimeControlRowNullable("Long Break", longBreak, 0, 30, onValueChange = { longBreak = it })
+        TimeControlRowNullable("Target Sessions", targets, 0, 99, onValueChange = { targets = it }, step = 1, valueSuffix = "session")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
