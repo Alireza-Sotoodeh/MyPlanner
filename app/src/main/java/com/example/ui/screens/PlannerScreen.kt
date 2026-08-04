@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Settings
@@ -6591,6 +6592,11 @@ fun LearnItemCard(
     val inReviewCount = sections.count { it.status == "IN_REVIEW" }
     val studiedCount = sections.count { it.status == "STUDIED" }
     val notStartedCount = sections.count { it.status == "NOT_STARTED" }
+    val pausedDaysAgo = remember(item.pausedAt) {
+        if (item.pausedAt > 0) {
+            ((System.currentTimeMillis() - item.pausedAt) / (1000 * 60 * 60 * 24)).toInt()
+        } else 0
+    }
 
     Card(
         modifier = Modifier
@@ -6600,7 +6606,10 @@ fun LearnItemCard(
                 onLongClick = { showMenu = true }
             ),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (item.status == "PAUSED") MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.surface
+        ),
         border = groupColor?.let { BorderStroke(2.dp, it) }
             ?: BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     ) {
@@ -6670,6 +6679,7 @@ fun LearnItemCard(
                     text = when (item.status) {
                         "NOT_STARTED" -> "Not Started"
                         "ACTIVE" -> "Active"
+                        "PAUSED" -> "Paused — ${pausedDaysAgo}d ago"
                         "COMPLETED" -> "Completed"
                         else -> item.status
                     },
@@ -6677,6 +6687,7 @@ fun LearnItemCard(
                     color = when (item.status) {
                         "NOT_STARTED" -> MaterialTheme.colorScheme.onSurfaceVariant
                         "ACTIVE" -> Color(0xFFFFB300)
+                        "PAUSED" -> MaterialTheme.colorScheme.onSurfaceVariant
                         "COMPLETED" -> Color(0xFF4CAF50)
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
@@ -6703,8 +6714,9 @@ fun LearnItemCard(
                         trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                     )
                 }
-                // === SECTION BREAKDOWN (ACTIVE only) ===
-                if (item.status == "ACTIVE") {
+                // === SECTION BREAKDOWN (ACTIVE/PAUSED) ===
+                if (item.status == "ACTIVE" || item.status == "PAUSED") {
+                    val muted = item.status == "PAUSED"
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -6714,39 +6726,52 @@ fun LearnItemCard(
                             Text(
                                 text = "$notStartedCount to study",
                                 fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                color = if (muted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         }
                         if (studiedCount > 0) {
                             Text(
                                 text = "$studiedCount reviewing",
                                 fontSize = 10.sp,
-                                color = Color(0xFFFFB300).copy(alpha = 0.6f)
+                                color = if (muted) Color(0xFFFFB300).copy(alpha = 0.3f)
+                                else Color(0xFFFFB300).copy(alpha = 0.6f)
                             )
                         }
                         if (inReviewCount > 0) {
                             Text(
                                 text = "$inReviewCount to review",
                                 fontSize = 10.sp,
-                                color = Color(0xFFFFB300)
+                                color = if (muted) Color(0xFFFFB300).copy(alpha = 0.3f)
+                                else Color(0xFFFFB300)
                             )
                         }
                         if (masteredCount > 0) {
                             Text(
                                 text = "$masteredCount mastered",
                                 fontSize = 10.sp,
-                                color = Color(0xFF4CAF50)
+                                color = if (muted) Color(0xFF4CAF50).copy(alpha = 0.5f)
+                                else Color(0xFF4CAF50)
                             )
                         }
                     }
-                    val remaining = totalSections - masteredCount
-                    val daysEstimate = kotlin.math.ceil(remaining.toFloat() / item.sectionsPerDay.coerceAtLeast(1)).toInt()
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "~${daysEstimate}d remaining",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                    if (item.status == "ACTIVE") {
+                        val remaining = totalSections - masteredCount
+                        val daysEstimate = kotlin.math.ceil(remaining.toFloat() / item.sectionsPerDay.coerceAtLeast(1)).toInt()
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "~${daysEstimate}d remaining",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Paused — ${pausedDaysAgo}d ago",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                        )
+                    }
                 }
                 // === TODAY'S PENDING TASKS (ACTIVE only) ===
                 if (item.status == "ACTIVE") {
@@ -6804,15 +6829,39 @@ fun LearnItemCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                if (item.status != "ACTIVE" && item.status != "COMPLETED") {
-                    TextButton(onClick = onStart) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Start", fontSize = 12.sp)
+                when (item.status) {
+                    "NOT_STARTED", "ARCHIVED" -> {
+                        TextButton(onClick = onStart) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Start", fontSize = 12.sp)
+                        }
+                    }
+                    "ACTIVE" -> {
+                        TextButton(onClick = { viewModel.pauseLearnItem(item) }) {
+                            Icon(
+                                imageVector = Icons.Default.Pause,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Pause", fontSize = 12.sp)
+                        }
+                    }
+                    "PAUSED" -> {
+                        TextButton(onClick = { viewModel.resumeLearnItem(item) }) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Resume", fontSize = 12.sp)
+                        }
                     }
                 }
                 IconButton(onClick = onEdit) {
@@ -6848,8 +6897,24 @@ fun LearnItemCard(
             onClick = { showMenu = false; onDelete() },
             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp)) }
         )
-        if (item.status != "COMPLETED") {
-            DropdownMenuItem(
+        when (item.status) {
+            "ACTIVE" -> DropdownMenuItem(
+                text = { Text("Pause") },
+                onClick = {
+                    showMenu = false
+                    viewModel.pauseLearnItem(item)
+                },
+                leadingIcon = { Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+            "PAUSED" -> DropdownMenuItem(
+                text = { Text("Resume") },
+                onClick = {
+                    showMenu = false
+                    viewModel.resumeLearnItem(item)
+                },
+                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+            "NOT_STARTED", "ARCHIVED" -> DropdownMenuItem(
                 text = { Text("Archive") },
                 onClick = {
                     showMenu = false

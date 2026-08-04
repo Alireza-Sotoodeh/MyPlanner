@@ -3824,6 +3824,158 @@ class MainViewModel(
         }
     }
 
+    fun pauseLearnItem(item: LearnItemEntity) {
+        viewModelScope.launch {
+            try {
+                val sections = learnRepository.getSectionsForItemSync(item.id)
+                for (section in sections) {
+                    var updated = section
+                    if (section.studyTaskId != null) {
+                        val task = taskRepository.getTaskById(section.studyTaskId)
+                        if (task != null && task.status != "COMPLETED") {
+                            taskRepository.deleteTaskById(section.studyTaskId)
+                        }
+                        updated = updated.copy(studyTaskId = null)
+                    }
+                    if (section.reviewTaskId != null) {
+                        val task = taskRepository.getTaskById(section.reviewTaskId)
+                        if (task != null && task.status != "COMPLETED") {
+                            taskRepository.deleteTaskById(section.reviewTaskId)
+                        }
+                        updated = updated.copy(reviewTaskId = null, nextReviewDate = null)
+                    }
+                    if (updated != section) {
+                        learnRepository.updateSection(updated)
+                    }
+                }
+                if (_pendingReviewLearnItem.value?.id == item.id) {
+                    _pendingReviewTask.value = null
+                    _pendingReviewSection.value = null
+                    _pendingReviewLearnItem.value = null
+                }
+                learnRepository.updateItem(item.copy(status = "PAUSED", pausedAt = System.currentTimeMillis()))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to pause learn item", e)
+            }
+        }
+    }
+
+    fun resumeLearnItem(item: LearnItemEntity) {
+        viewModelScope.launch {
+            try {
+                val sections = learnRepository.getSectionsForItemSync(item.id)
+                if (sections.isEmpty()) return@launch
+
+                val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                val todayStr = fmt.format(java.util.Calendar.getInstance().time)
+
+                val cal = java.util.Calendar.getInstance().apply { timeInMillis = item.pausedAt }
+                val pausedAtDateStr = fmt.format(cal.time)
+                val gapDays = daysBetweenDates(pausedAtDateStr, todayStr)
+
+                val perDay = item.sectionsPerDay.coerceAtLeast(1)
+                val shortTitle = if (item.title.length > 30) item.title.take(27) + "..." else item.title
+
+                var notStartedIndex = 0
+                for (section in sections) {
+                    when (section.status) {
+                        "NOT_STARTED" -> {
+                            val dayOffset = notStartedIndex / perDay
+                            val taskDate = addDays(todayStr, dayOffset)
+                            val taskId = taskRepository.insertTask(TaskEntity(
+                                title = "📖 $shortTitle — ${section.title}",
+                                date = taskDate,
+                                type = "TASK",
+                                status = "PENDING",
+                                label = "Study",
+                                labelColor = 0xFFFFB300,
+                                linkedLearnSectionId = section.id,
+                                priorityLevel = item.priorityLevel
+                            ))
+                            learnRepository.updateSection(section.copy(studyTaskId = taskId))
+                            notStartedIndex++
+                        }
+                        "STUDIED" -> {
+                            if (gapDays > LEITNER_INTERVALS[0]) {
+                                val taskId = taskRepository.insertTask(TaskEntity(
+                                    title = "🔄 $shortTitle — ${section.title}",
+                                    date = todayStr,
+                                    type = "TASK",
+                                    status = "PENDING",
+                                    label = "Review",
+                                    labelColor = 0xFFFFB300,
+                                    linkedLearnSectionId = section.id,
+                                    priorityLevel = item.priorityLevel
+                                ))
+                                learnRepository.updateSection(section.copy(
+                                    status = "IN_REVIEW",
+                                    reviewStage = 0,
+                                    lastReviewDate = null,
+                                    nextReviewDate = addDays(todayStr, LEITNER_INTERVALS[0]),
+                                    reviewTaskId = taskId
+                                ))
+                            } else {
+                                val nextDate = addDays(todayStr, LEITNER_INTERVALS[0])
+                                val taskId = taskRepository.insertTask(TaskEntity(
+                                    title = "🔄 $shortTitle — ${section.title}",
+                                    date = nextDate,
+                                    type = "TASK",
+                                    status = "PENDING",
+                                    label = "Review",
+                                    labelColor = 0xFFFFB300,
+                                    linkedLearnSectionId = section.id,
+                                    priorityLevel = item.priorityLevel
+                                ))
+                                learnRepository.updateSection(section.copy(
+                                    status = "IN_REVIEW",
+                                    reviewStage = 0,
+                                    lastReviewDate = null,
+                                    nextReviewDate = nextDate,
+                                    reviewTaskId = taskId
+                                ))
+                            }
+                        }
+                        "IN_REVIEW" -> {
+                            val stage = section.reviewStage.coerceIn(0, 5)
+                            if (gapDays > LEITNER_INTERVALS[stage]) {
+                                val taskId = taskRepository.insertTask(TaskEntity(
+                                    title = "🔄 $shortTitle — ${section.title}",
+                                    date = todayStr,
+                                    type = "TASK",
+                                    status = "PENDING",
+                                    label = "Review",
+                                    labelColor = 0xFFFFB300,
+                                    linkedLearnSectionId = section.id,
+                                    priorityLevel = item.priorityLevel
+                                ))
+                                learnRepository.updateSection(section.copy(
+                                    lastReviewDate = null,
+                                    nextReviewDate = addDays(todayStr, LEITNER_INTERVALS[stage]),
+                                    reviewTaskId = taskId
+                                ))
+                            } else if (section.nextReviewDate != null) {
+                                val taskId = taskRepository.insertTask(TaskEntity(
+                                    title = "🔄 $shortTitle — ${section.title}",
+                                    date = section.nextReviewDate,
+                                    type = "TASK",
+                                    status = "PENDING",
+                                    label = "Review",
+                                    labelColor = 0xFFFFB300,
+                                    linkedLearnSectionId = section.id,
+                                    priorityLevel = item.priorityLevel
+                                ))
+                                learnRepository.updateSection(section.copy(reviewTaskId = taskId))
+                            }
+                        }
+                    }
+                }
+                learnRepository.updateItem(item.copy(status = "ACTIVE", pausedAt = 0))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to resume learn item", e)
+            }
+        }
+    }
+
     fun completeReviewWithRating(taskId: Long, sectionId: Long, rating: String) {
         viewModelScope.launch {
             try {

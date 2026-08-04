@@ -22,7 +22,8 @@ data class LearnItemEntity(
     val totalSections: Int,
     val sectionsPerDay: Int = 1,
     val groupId: Long? = null,
-    val status: String = "NOT_STARTED", // NOT_STARTED, ACTIVE, COMPLETED, ARCHIVED
+    val status: String = "NOT_STARTED", // NOT_STARTED, ACTIVE, PAUSED, COMPLETED, ARCHIVED
+    val pausedAt: Long = 0,
     val priorityLevel: String = "Medium", // Low, Medium, High
     val createdAt: Long = System.currentTimeMillis()
 )
