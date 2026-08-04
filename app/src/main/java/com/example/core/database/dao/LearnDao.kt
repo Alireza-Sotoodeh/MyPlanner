@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.core.database.entity.LearnItemEntity
 import com.example.core.database.entity.LearnSectionEntity
@@ -12,10 +13,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LearnDao {
-    @Query("SELECT * FROM learn_items ORDER BY createdAt DESC")
+    @Query("SELECT * FROM learn_items ORDER BY sortOrder ASC, id DESC")
     fun getAllItems(): Flow<List<LearnItemEntity>>
 
-    @Query("SELECT * FROM learn_items ORDER BY createdAt DESC")
+    @Query("SELECT * FROM learn_items ORDER BY sortOrder ASC, id DESC")
     suspend fun getAllItemsSync(): List<LearnItemEntity>
 
     @Query("SELECT * FROM learn_items WHERE id = :id")
@@ -33,10 +34,15 @@ interface LearnDao {
     @Query("DELETE FROM learn_items WHERE id = :id")
     suspend fun deleteItemById(id: Long)
 
-    @Query("SELECT * FROM learn_items WHERE groupId = :groupId ORDER BY createdAt DESC")
+    @Transaction
+    suspend fun updateLearnItemSortOrders(items: List<LearnItemEntity>) {
+        items.forEach { updateItem(it) }
+    }
+
+    @Query("SELECT * FROM learn_items WHERE groupId = :groupId ORDER BY sortOrder ASC, id DESC")
     fun getItemsForGroup(groupId: Long): Flow<List<LearnItemEntity>>
 
-    @Query("SELECT * FROM learn_items WHERE groupId IS NULL ORDER BY createdAt DESC")
+    @Query("SELECT * FROM learn_items WHERE groupId IS NULL ORDER BY sortOrder ASC, id DESC")
     fun getUngroupedItems(): Flow<List<LearnItemEntity>>
 
     @Query("UPDATE learn_items SET groupId = :newGroupId WHERE id = :itemId")

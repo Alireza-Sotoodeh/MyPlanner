@@ -3099,6 +3099,23 @@ class MainViewModel(
         }
     }
 
+    fun reorderLearnItem(item: LearnItemEntity, activeItems: List<LearnItemEntity>, deltaIndex: Int) {
+        viewModelScope.launch {
+            val currentIndex = activeItems.indexOf(item)
+            if (currentIndex == -1) return@launch
+            val newIndex = (currentIndex + deltaIndex).coerceIn(0, activeItems.size - 1)
+            if (deltaIndex != 0) {
+                val mutableItems = activeItems.toMutableList()
+                mutableItems.removeAt(currentIndex)
+                mutableItems.add(newIndex, item)
+                val updatedItems = mutableItems.mapIndexed { index, t ->
+                    t.copy(sortOrder = index)
+                }
+                learnRepository.updateLearnItemSortOrders(updatedItems)
+            }
+        }
+    }
+
     fun updateIdea(idea: IdeaEntity, stages: List<IdeaStageEntity> = emptyList()) {
         viewModelScope.launch {
             try {

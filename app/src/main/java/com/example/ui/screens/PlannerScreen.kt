@@ -6348,6 +6348,13 @@ fun LearnTab(viewModel: MainViewModel) {
     var statusFilter by remember { mutableStateOf("planned") }
     val expandAllLearnItems by viewModel.expandAllLearnItems.collectAsState()
 
+    var draggingLearnItemId by remember { mutableStateOf<Long?>(null) }
+    var dragOffsetX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var draggedLearnItems by remember { mutableStateOf<List<LearnItemEntity>?>(null) }
+    val learnItemHeights = remember { androidx.compose.runtime.mutableStateMapOf<Long, Int>() }
+    val densityL = LocalDensity.current
+
     val groupChipScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
@@ -6369,6 +6376,7 @@ fun LearnTab(viewModel: MainViewModel) {
     }
     val filteredItems = if (selectedGroupId == null) statusFiltered
     else statusFiltered.filter { it.groupId == selectedGroupId }
+    val displayItems = draggedLearnItems ?: filteredItems
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -6561,17 +6569,94 @@ fun LearnTab(viewModel: MainViewModel) {
                                 contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(filteredItems, key = { it.id }) { item ->
-                                    LearnItemCard(
-                                        item = item,
-                                        expanded = expandAllLearnItems,
-                                        viewModel = viewModel,
-                                        allTasks = allTasks,
-                                        todayDate = todayDate,
-                                        onEdit = { itemToEdit = item },
-                                        onStart = { itemToStart = item },
-                                        onDelete = { viewModel.deleteLearnItemWithUndo(item) }
-                                    )
+                                items(displayItems, key = { it.id }) { item ->
+                                    val isDragging = draggingLearnItemId == item.id
+                                    val isCompleted = item.status == "COMPLETED"
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .animateItem()
+                                            .onGloballyPositioned { learnItemHeights[item.id] = it.size.height }
+                                    ) {
+                                        LearnItemCard(
+                                            item = item,
+                                            expanded = expandAllLearnItems,
+                                            isDragging = isDragging,
+                                            dragOffsetX = if (isDragging) dragOffsetX else 0f,
+                                            dragOffsetY = if (isDragging) dragOffsetY else 0f,
+                                            viewModel = viewModel,
+                                            allTasks = allTasks,
+                                            todayDate = todayDate,
+                                            onEdit = { itemToEdit = item },
+                                            onStart = { itemToStart = item },
+                                            onDelete = { viewModel.deleteLearnItemWithUndo(item) },
+                                            onDragStart = if (!isCompleted) {
+                                                {
+                                                    draggingLearnItemId = item.id
+                                                    dragOffsetX = 0f
+                                                    dragOffsetY = 0f
+                                                    draggedLearnItems = filteredItems.toList()
+                                                }
+                                            } else null,
+                                            onDrag = if (!isCompleted) {
+                                                { amount ->
+                                                    if (draggingLearnItemId == item.id) {
+                                                        dragOffsetX += amount.x
+                                                        dragOffsetY += amount.y
+                                                        val currentList = draggedLearnItems
+                                                        if (currentList != null) {
+                                                            val draggedIndex = currentList.indexOfFirst { it.id == item.id }
+                                                            if (draggedIndex != -1) {
+                                                                val spacing = with(densityL) { 8.dp.toPx() }
+                                                                if (dragOffsetY > 0 && draggedIndex < currentList.size - 1) {
+                                                                    val nextItem = currentList[draggedIndex + 1]
+                                                                    val nextHeight = learnItemHeights[nextItem.id] ?: 150
+                                                                    val threshold = nextHeight / 2f + spacing
+                                                                    if (dragOffsetY > threshold) {
+                                                                        val mutable = currentList.toMutableList()
+                                                                        mutable.removeAt(draggedIndex)
+                                                                        mutable.add(draggedIndex + 1, item)
+                                                                        draggedLearnItems = mutable
+                                                                        dragOffsetY -= (nextHeight + spacing)
+                                                                    }
+                                                                } else if (dragOffsetY < 0 && draggedIndex > 0) {
+                                                                    val prevItem = currentList[draggedIndex - 1]
+                                                                    val prevHeight = learnItemHeights[prevItem.id] ?: 150
+                                                                    val threshold = -(prevHeight / 2f) - spacing
+                                                                    if (dragOffsetY < threshold) {
+                                                                        val mutable = currentList.toMutableList()
+                                                                        mutable.removeAt(draggedIndex)
+                                                                        mutable.add(draggedIndex - 1, item)
+                                                                        draggedLearnItems = mutable
+                                                                        dragOffsetY += (prevHeight + spacing)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } else null,
+                                            onDragEnd = if (!isCompleted) {
+                                                {
+                                                    if (draggingLearnItemId == item.id) {
+                                                        val originalIndex = filteredItems.indexOfFirst { it.id == item.id }
+                                                        val currentList = draggedLearnItems
+                                                        if (currentList != null && originalIndex != -1) {
+                                                            val finalIndex = currentList.indexOfFirst { it.id == item.id }
+                                                            val deltaIndex = finalIndex - originalIndex
+                                                            if (deltaIndex != 0) {
+                                                                viewModel.reorderLearnItem(item, filteredItems, deltaIndex)
+                                                            }
+                                                        }
+                                                        draggingLearnItemId = null
+                                                        draggedLearnItems = null
+                                                        dragOffsetX = 0f
+                                                        dragOffsetY = 0f
+                                                    }
+                                                }
+                                            } else null
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -6651,12 +6736,18 @@ fun LearnTab(viewModel: MainViewModel) {
 fun LearnItemCard(
     item: LearnItemEntity,
     expanded: Boolean = true,
+    isDragging: Boolean = false,
+    dragOffsetX: Float = 0f,
+    dragOffsetY: Float = 0f,
     viewModel: MainViewModel,
     allTasks: List<TaskEntity>,
     todayDate: String,
     onEdit: () -> Unit,
     onStart: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDragStart: (() -> Unit)? = null,
+    onDrag: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val sections by viewModel.sectionsForLearnItem(item.id).collectAsState(initial = emptyList())
@@ -6673,22 +6764,64 @@ fun LearnItemCard(
             ((System.currentTimeMillis() - item.pausedAt) / (1000 * 60 * 60 * 24)).toInt()
         } else 0
     }
+    val isCompleted = item.status == "COMPLETED"
 
-    Card(
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isDragging) 1.04f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
+        label = "scale"
+    )
+    val elevation by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isDragging) 12.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow),
+        label = "elevation"
+    )
+    val cardContainerColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isDragging) MaterialTheme.colorScheme.surfaceVariant
+        else if (item.status == "PAUSED") MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else MaterialTheme.colorScheme.surface,
+        animationSpec = tween(200),
+        label = "bgColor"
+    )
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = {},
-                onLongClick = { showMenu = true }
-            ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (item.status == "PAUSED") MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            else MaterialTheme.colorScheme.surface
-        ),
-        border = groupColor?.let { BorderStroke(2.dp, it) }
-            ?: BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            .then(if (isDragging) Modifier.zIndex(10f) else Modifier)
     ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    shadowElevation = elevation.toPx()
+                }
+                .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { showMenu = true }
+                )
+                .then(
+                    if (onDragStart != null && !isCompleted) {
+                        Modifier.pointerInput(item.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { _ -> onDragStart() },
+                                onDragEnd = { onDragEnd?.invoke() },
+                                onDragCancel = { onDragEnd?.invoke() },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    onDrag?.invoke(dragAmount)
+                                }
+                            )
+                        }
+                    } else Modifier
+                ),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor),
+            border = groupColor?.let { BorderStroke(2.dp, it) }
+                ?: BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // === HEADER: icon + type badge + group badge + title + priority + status ===
             Row(
@@ -6965,6 +7098,7 @@ fun LearnItemCard(
                 }
             }
         }
+    }
     }
 
     DropdownMenu(

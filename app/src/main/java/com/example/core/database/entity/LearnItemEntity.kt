@@ -25,5 +25,6 @@ data class LearnItemEntity(
     val status: String = "NOT_STARTED", // NOT_STARTED, ACTIVE, PAUSED, COMPLETED, ARCHIVED
     val pausedAt: Long = 0,
     val priorityLevel: String = "Medium", // Low, Medium, High
+    val sortOrder: Int = 0,
     val createdAt: Long = System.currentTimeMillis()
 )
