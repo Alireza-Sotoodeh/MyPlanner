@@ -30,6 +30,8 @@ class TaskRepository(
 
     suspend fun updateTaskPriorities(tasks: List<TaskEntity>) = taskDao.updateTaskPriorities(tasks)
 
+    suspend fun getSubtasks(parentId: Long): List<TaskEntity> = taskDao.getSubtasks(parentId)
+
     // Pomodoro session history
     fun getSessionsForTask(taskId: Long): Flow<List<PomodoroSessionEntity>> = 
         pomodoroSessionDao.getSessionsForTask(taskId)

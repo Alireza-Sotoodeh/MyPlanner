@@ -33,6 +33,9 @@ interface TaskDao {
     @Delete
     suspend fun deleteTask(task: TaskEntity)
 
+    @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId")
+    suspend fun getSubtasks(parentId: Long): List<TaskEntity>
+
     @Query("DELETE FROM tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubtasks(parentId: Long)
 

@@ -913,6 +913,10 @@ class MainViewModel(
         viewModelScope.launch {
             val updated = task.copy(date = targetDate, status = "PENDING")
             taskRepository.updateTask(updated)
+            val subtasks = taskRepository.getSubtasks(task.id)
+            subtasks.forEach { sub ->
+                taskRepository.updateTask(sub.copy(date = targetDate, status = "PENDING"))
+            }
             if (updated.type == "EVENT") {
                 com.example.core.manager.ReminderManager.cancelReminders(context, task)
                 com.example.core.manager.ReminderManager.scheduleReminders(
