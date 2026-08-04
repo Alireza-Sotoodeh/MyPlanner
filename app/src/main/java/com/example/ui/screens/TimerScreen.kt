@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -1214,25 +1215,29 @@ private fun TimerControls(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Discard
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(52.dp)
+                .shadow(3.dp, CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.errorContainer)
                 .clickable { onDiscard() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Delete, contentDescription = "Discard", tint = MaterialTheme.colorScheme.onErrorContainer)
+            Icon(Icons.Default.Delete, contentDescription = "Discard", tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
         }
+
+        Spacer(modifier = Modifier.width(10.dp))
 
         // Start/Pause
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(68.dp)
+                .shadow(6.dp, CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary)
                 .clickable { onStartPause() },
@@ -1242,57 +1247,68 @@ private fun TimerControls(
                 imageVector = if (isRunning && !isPaused) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (isRunning && !isPaused) "Pause" else "Start",
                 tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
+
+        Spacer(modifier = Modifier.width(10.dp))
 
         // Stop
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(52.dp)
+                .shadow(3.dp, CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
                 .clickable { onStop() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Default.Stop,
                 contentDescription = "Stop",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
         }
+
+        Spacer(modifier = Modifier.width(10.dp))
 
         // Reset
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(52.dp)
+                .shadow(3.dp, CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
                 .clickable { onReset() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = "Reset",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
         }
+
+        Spacer(modifier = Modifier.width(10.dp))
 
         // -1 min
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(52.dp)
+                .shadow(3.dp, CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
                 .clickable { onMinusOne() },
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "-1m",
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
