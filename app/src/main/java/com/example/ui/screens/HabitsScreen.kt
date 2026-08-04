@@ -315,7 +315,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
             onClick = { showCreateHabitDialog = true },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
+                .padding(end = 24.dp, bottom = 16.dp),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.background,
             shape = CircleShape
