@@ -150,6 +150,7 @@ fun TemplateChip(
 
 @Composable
 fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange: (Int) -> Unit) {
+    var showInputDialog by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth().height(32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -164,7 +165,8 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                 Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(18.dp),
                     tint = if (value > min) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
-            Text(text = "$value min", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(text = "$value min", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { showInputDialog = true })
             Box(
                 modifier = Modifier.size(32.dp).clip(CircleShape).clickable(enabled = value < max) { onValueChange(value + 5) },
                 contentAlignment = Alignment.Center
@@ -173,6 +175,33 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                     tint = if (value < max) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
         }
+    }
+    if (showInputDialog) {
+        var input by remember(value) { mutableStateOf(value.toString()) }
+        AlertDialog(
+            onDismissRequest = { showInputDialog = false },
+            title = { Text("Edit $label") },
+            text = {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it.filter { c -> c.isDigit() } },
+                    label = { Text("Minutes") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val newValue = input.toIntOrNull()?.coerceIn(min, max) ?: value
+                    onValueChange(newValue)
+                    showInputDialog = false
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showInputDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
