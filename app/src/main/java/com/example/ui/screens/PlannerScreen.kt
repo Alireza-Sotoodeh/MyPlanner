@@ -232,10 +232,17 @@ fun PlannerScreen(viewModel: MainViewModel) {
         ActiveTimerWidget(viewModel)
 
         var selectedFilterLabels by remember { mutableStateOf<Set<String>>(emptySet()) }
+        var showPostponedOnly by remember { mutableStateOf(false) }
 
         Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
-                0 -> DailyPlannerView(viewModel, selectedFilterLabels) { selectedFilterLabels = it }
+                0 -> DailyPlannerView(
+                    viewModel,
+                    selectedFilterLabels,
+                    onLabelsSelected = { selectedFilterLabels = it },
+                    showPostponedOnly = showPostponedOnly,
+                    onPostponedToggle = { showPostponedOnly = it }
+                )
                 1 -> WeeklyPlannerView(viewModel, null) { date ->
                     selectedTab = 0
                     viewModel.selectDate(date)
@@ -409,14 +416,18 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
 }
 
 @Composable
-fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = emptySet(), onLabelsSelected: (Set<String>) -> Unit = {}) {
+fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = emptySet(), onLabelsSelected: (Set<String>) -> Unit = {}, showPostponedOnly: Boolean = false, onPostponedToggle: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val selectedDate by viewModel.selectedDate.collectAsState()
     val todayDate by viewModel.todayDate.collectAsState()
     val rawTasks by viewModel.dailyTasks.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
     val allTodos by viewModel.allTodos.collectAsState()
-    val tasks = if (filterLabels.isNotEmpty()) rawTasks.filter { it.label in filterLabels } else rawTasks
+    val tasks = rawTasks.filter { task ->
+        val matchesLabel = filterLabels.isEmpty() || task.label in filterLabels
+        val matchesStatus = !showPostponedOnly || task.postponed
+        matchesLabel && matchesStatus
+    }
 
     val labelInfos = rawTasks
         .filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") }
@@ -485,10 +496,22 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
             ) {
                 item {
                     FilterChip(
-                        selected = filterLabels.isEmpty(),
-                        onClick = { onLabelsSelected(emptySet()) },
+                        selected = filterLabels.isEmpty() && !showPostponedOnly,
+                        onClick = { onLabelsSelected(emptySet()); onPostponedToggle(false) },
                         label = { Text("All", fontSize = 12.sp) }
                     )
+                }
+                val postponedCount = rawTasks.count {
+                    it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") && it.postponed
+                }
+                if (postponedCount > 0) {
+                    item {
+                        FilterChip(
+                            selected = showPostponedOnly,
+                            onClick = { onPostponedToggle(!showPostponedOnly) },
+                            label = { Text("Postponed ($postponedCount)", fontSize = 12.sp) }
+                        )
+                    }
                 }
                 items(labelInfos) { info ->
                     FilterChip(
@@ -797,7 +820,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                 }
 
                 AnimatedContent(
-                    targetState = filterLabels,
+                    targetState = filterLabels to showPostponedOnly,
                     transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }
                 ) {
                 if (tasks.isEmpty()) {
@@ -809,14 +832,22 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Your daily log is empty.",
+                                text = when {
+                                    showPostponedOnly -> "No postponed tasks."
+                                    filterLabels.isNotEmpty() -> "No tasks with this label."
+                                    else -> "Your daily log is empty."
+                                },
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Tap + to add standard tasks, events, or notes.",
+                                text = when {
+                                    showPostponedOnly -> "All tasks are in progress."
+                                    filterLabels.isNotEmpty() -> "Try removing the filter."
+                                    else -> "Tap + to add standard tasks, events, or notes."
+                                },
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
@@ -832,7 +863,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val lazyListState = rememberLazyListState()
 
-                    LaunchedEffect(filterLabels) {
+                    LaunchedEffect(filterLabels, showPostponedOnly) {
                         lazyListState.animateScrollToItem(0)
                     }
 
