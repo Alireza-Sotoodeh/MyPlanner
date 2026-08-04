@@ -163,6 +163,8 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val selectedDate by viewModel.selectedDate.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showTaskManager by remember { mutableStateOf(false) }
+    var taskManagerInitialType by remember { mutableStateOf("TASK") }
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
 
@@ -256,6 +258,27 @@ fun PlannerScreen(viewModel: MainViewModel) {
                  4 -> IdeasTab(viewModel)
             }
 
+            if (selectedTab == 0 || selectedTab == 3 || selectedTab == 4) {
+                FloatingActionButton(
+                    onClick = {
+                        taskManagerInitialType = when (selectedTab) {
+                            3 -> "TODO"
+                            4 -> "IDEA"
+                            else -> "TASK"
+                        }
+                        showTaskManager = true
+                    },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.background,
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Create"
+                    )
+                }
+            }
         }
     }
 
@@ -483,6 +506,15 @@ fun PlannerScreen(viewModel: MainViewModel) {
                 }
             },
             shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (showTaskManager) {
+        com.example.ui.components.TaskManagerDialog(
+            viewModel = viewModel,
+            initialDate = selectedDate,
+            initialType = taskManagerInitialType,
+            onDismiss = { showTaskManager = false }
         )
     }
 }
