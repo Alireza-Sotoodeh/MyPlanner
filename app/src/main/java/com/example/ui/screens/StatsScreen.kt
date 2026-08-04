@@ -412,12 +412,10 @@ fun StatsScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(20.dp))
 
                     val labelGroups = allTimerSessions.groupBy {
-                        if (it.label.isBlank()) "Unlabeled" else it.label.uppercase()
+                        if (it.label.isBlank()) "Unlabeled" else it.label
                     }
                     val labelStats = labelGroups.map { (label, sessions) ->
-                        val totalSeconds = sessions.sumOf { it.durationSeconds }
-                        val minutes = totalSeconds / 60
-                        label to minutes
+                        label to sessions.sumOf { it.durationSeconds }
                     }.filter { it.second > 0 }.sortedByDescending { it.second }
 
                     if (labelStats.isEmpty()) {
@@ -427,22 +425,35 @@ fun StatsScreen(viewModel: MainViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        val totalMinutes = labelStats.sumOf { it.second }
-                        val totalDuration = totalMinutes.toFloat()
-                        val totalHoursVal = totalMinutes / 60
-                        val totalMinsVal = totalMinutes % 60
-                        val totalTimeString = if (totalHoursVal > 0) "${totalHoursVal}h ${totalMinsVal}m" else "${totalMinsVal}m"
+                        val totalSeconds = labelStats.sumOf { it.second }
+                        val totalDuration = totalSeconds.toFloat()
+                        val totalHoursVal = totalSeconds / 3600
+                        val totalMinsVal = (totalSeconds % 3600) / 60
+                        val totalTimeString = when {
+                            totalHoursVal > 0 -> "${totalHoursVal}h ${totalMinsVal}m"
+                            totalMinsVal > 0 -> "${totalMinsVal}m"
+                            else -> "${totalSeconds}s"
+                        }
 
                         val pieColors = listOf(
                             MaterialTheme.colorScheme.primary,
                             MaterialTheme.colorScheme.secondary,
                             MaterialTheme.colorScheme.tertiary,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
-                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f),
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
-                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
+                            MaterialTheme.colorScheme.error,
+                            Color(0xFF9C27B0),
+                            Color(0xFFFF9800),
+                            Color(0xFF4CAF50),
+                            Color(0xFFE91E63),
+                            Color(0xFF00BCD4),
+                            Color(0xFF795548),
+                            Color(0xFF607D8B),
+                            Color(0xFFCDDC39),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f),
+                            Color(0xFF9C27B0).copy(alpha = 0.6f),
+                            Color(0xFFFF9800).copy(alpha = 0.6f),
+                            Color(0xFF4CAF50).copy(alpha = 0.6f)
                         )
 
                         // Donut chart + Legend row
@@ -465,10 +476,11 @@ fun StatsScreen(viewModel: MainViewModel) {
                                     var startAngle = -90f
                                     labelStats.forEachIndexed { index, stat ->
                                         val sweep = (stat.second / totalDuration) * 360f
+                                        val arcSweep = if (sweep > gapDeg * 2) (sweep - gapDeg) else sweep.coerceAtLeast(0.5f)
                                         drawArc(
                                             color = pieColors[index % pieColors.size],
                                             startAngle = startAngle,
-                                            sweepAngle = (sweep - gapDeg).coerceAtLeast(0f),
+                                            sweepAngle = arcSweep,
                                             useCenter = false,
                                             topLeft = arcTopLeft,
                                             size = arcSize,
@@ -503,9 +515,10 @@ fun StatsScreen(viewModel: MainViewModel) {
                             ) {
                                 labelStats.take(6).forEachIndexed { index, stat ->
                                     val pct = (stat.second / totalDuration * 100).toInt()
-                                    val hours = stat.second / 60
-                                    val mins = stat.second % 60
-                                    val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+                                    val hours = stat.second / 3600
+                                    val mins = (stat.second % 3600) / 60
+                                    val secs = stat.second % 60
+                                    val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m ${secs}s"
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(
