@@ -979,8 +979,15 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                         val mainTasks = tasks.filter { it.parentTaskId == null }
                         val activeTasks = mainTasks.filter { it.status != "COMPLETED" }
                         val completedTasks = mainTasks.filter { it.status == "COMPLETED" }
+                        val sortedActiveTasks = activeTasks.sortedWith(
+                            compareBy(
+                                { if (it.postponed) 0 else 1 },
+                                { it.priority },
+                                { it.id }
+                            )
+                        )
 
-                        val displayedActiveTasks = draggedTasks ?: activeTasks
+                        val displayedActiveTasks = draggedTasks ?: sortedActiveTasks
 
                         items(displayedActiveTasks, key = { it.id }) { task ->
                             var showInteractDialog by remember { mutableStateOf(false) }
@@ -1021,7 +1028,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                         draggingTaskId = task.id
                                         dragOffsetX = 0f
                                         dragOffsetY = 0f
-                                        draggedTasks = activeTasks.toList()
+                                        draggedTasks = sortedActiveTasks.toList()
                                     },
                                     onDrag = { dragAmount ->
                                         if (draggingTaskId == task.id) {
@@ -1067,13 +1074,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                     onDragEnd = {
                                         if (draggingTaskId == task.id) {
                                             val currentList = draggedTasks
-                                            val originalIndex = activeTasks.indexOfFirst { it.id == task.id }
+                                            val originalIndex = sortedActiveTasks.indexOfFirst { it.id == task.id }
                                             if (currentList != null && originalIndex != -1) {
                                                 val finalIndex = currentList.indexOfFirst { it.id == task.id }
                                                 val isSubtask = dragOffsetX > with(density) { 50.dp.toPx() }
                                                 val deltaIndex = finalIndex - originalIndex
                                                 if (deltaIndex != 0 || isSubtask) {
-                                                    viewModel.reorderTask(task, activeTasks, deltaIndex, isSubtask)
+                                                    viewModel.reorderTask(task, sortedActiveTasks, deltaIndex, isSubtask)
                                                 }
                                             }
                                             draggingTaskId = null
@@ -1294,6 +1301,8 @@ fun BulletTaskItem(
             MaterialTheme.colorScheme.surfaceVariant
         } else if (isCompleted) {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        } else if (task.postponed) {
+            Color(0xFFE53935).copy(alpha = 0.06f)
         } else {
             Color.Transparent
         },
@@ -1504,6 +1513,20 @@ fun BulletTaskItem(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                if (task.postponed) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFFE53935).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "POSTPONED",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE53935),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
                 val priorityColor = when(task.priorityLevel) {
                     "High" -> Color(0xFFE53935)
                     "Medium" -> Color(0xFFFB8C00)

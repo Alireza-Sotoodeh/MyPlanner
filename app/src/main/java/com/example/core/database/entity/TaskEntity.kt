@@ -30,5 +30,6 @@ data class TaskEntity(
     val parentTaskId: Long? = null, // For subtasks
     val targetSessions: Int? = null,
     val breakMinutes: Int? = 5,
-    val linkedTodoId: Long? = null
+    val linkedTodoId: Long? = null,
+    val postponed: Boolean = false
 )

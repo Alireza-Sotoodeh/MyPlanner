@@ -227,14 +227,17 @@ class MainViewModel(
         viewModelScope.launch {
             val currentTasks = dailyTasks.value
             val sorted = currentTasks.sortedWith(
-                compareBy {
-                    when (it.priorityLevel) {
-                        "High" -> 1
-                        "Medium" -> 2
-                        "Low" -> 3
-                        else -> 4
+                compareBy(
+                    { if (it.postponed) 0 else 1 },
+                    {
+                        when (it.priorityLevel) {
+                            "High" -> 1
+                            "Medium" -> 2
+                            "Low" -> 3
+                            else -> 4
+                        }
                     }
-                }
+                )
             )
             val updated = sorted.mapIndexed { index, task ->
                 task.copy(priority = index)
@@ -1089,9 +1092,13 @@ class MainViewModel(
         return taskRepository.getSessionsForTask(taskId)
     }
 
-    fun migrateTask(task: TaskEntity, targetDate: String) {
+    fun migrateTask(task: TaskEntity, targetDate: String, postpone: Boolean = true) {
         viewModelScope.launch {
-            val updated = task.copy(date = targetDate, status = "PENDING")
+            val updated = if (postpone) {
+                task.copy(date = targetDate, status = "PENDING", postponed = true)
+            } else {
+                task.copy(date = targetDate, status = "PENDING")
+            }
             taskRepository.updateTask(updated)
             val subtasks = taskRepository.getSubtasks(task.id)
             subtasks.forEach { sub ->
