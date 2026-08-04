@@ -124,29 +124,39 @@ if (prefs.getBoolean("review_reminder_enabled", false)) {
 Scaffold additions:
 - Add `SnackbarHostState` + `SnackbarHost(snackbarHostState)` to the existing Scaffold
 
-**Runtime permissions (on app start or when enabling reminder):**
+**Runtime permissions (inside SettingsDialog composable, triggered on enable toggle, NOT on app start):**
 ```kotlin
-// Android 13+ (API 33): POST_NOTIFICATIONS — runtime permission
-if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        // If denied, show Toast explaining how to enable in Settings
-        if (!granted) Toast.makeText(context, "Notifications disabled — you can enable in Settings", Toast.LENGTH_LONG).show()
-    }
-    // Request when user taps the enable switch
-    LaunchedEffect(Unit) {
-        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-    }
-}
+@Composable
+fun SettingsDayReviewSection(viewModel: MainViewModel) {
+    val context = LocalContext.current
 
-// Android 12+ (API 31): SCHEDULE_EXACT_ALARM — may need runtime request on API 31-32
-// On API 33+ this is auto-granted for apps targeting API 33+
-if (Build.VERSION.SDK_INT in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU) {
-    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    if (!alarmManager.canScheduleExactAlarms()) {
-        Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).also {
-            context.startActivity(it)
+    // Android 13+ (API 33): POST_NOTIFICATIONS — runtime permission
+    val postNotificationsLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                Toast.makeText(context, "Notifications disabled — enable in Settings", Toast.LENGTH_LONG).show()
+            }
+        }
+    } else null
+
+    // Called when user taps the enable switch
+    val onToggleReminderEnabled: (Boolean) -> Unit = { enabled ->
+        viewModel.updateReviewReminderEnabled(enabled)
+        if (enabled) {
+            // Request POST_NOTIFICATIONS on API 33+
+            postNotificationsLauncher?.launch(Manifest.permission.POST_NOTIFICATIONS)
+
+            // Request SCHEDULE_EXACT_ALARM on API 31-32 (on API 33+ this is auto-granted)
+            if (Build.VERSION.SDK_INT in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU) {
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                if (!alarmManager.canScheduleExactAlarms()) {
+                    context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                }
+            }
         }
     }
+
+    // ... existing SettingsDialog UI with onToggleReminderEnabled ...
 }
 ```
 
@@ -311,6 +321,9 @@ LaunchedEffect(showPrompt) {
             showDayReviewOverlay = true
         }
         // Don't clear prompt here — it clears on save or next day
+    } else {
+        showDayReviewOverlay = false
+        snackbarHostState.currentSnackbarData?.dismiss()
     }
 }
 ```
@@ -432,6 +445,7 @@ fun sendImmediateDayReviewNotification(context: Context) {
         .setAutoCancel(true)
         .build()
 
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     notificationManager.notify(5000, notification)
 }
 ```
@@ -582,6 +596,8 @@ DAY AFTER REVIEW:
 ### `PlannerScreen.kt`
 - Remove DayReviewCard import + composable + `reviewForDate()` collect
 - Remove `showDayReviewDialog` + `DayReviewScreen` dialog (overlay replaces it)
+- Add `POST_NOTIFICATIONS` permission launcher in SettingsDialog (API 33+, triggered on enable toggle)
+- Add `SCHEDULE_EXACT_ALARM` settings redirect in SettingsDialog (API 31-32, triggered on enable toggle)
 
 ### `MainViewModel.kt`
 - New: `scheduleDayReviewAlarm(context)`, `cancelDayReviewAlarm(context)`
@@ -602,7 +618,6 @@ DAY AFTER REVIEW:
 
 ### `MainActivity.kt`
 - Add `SnackbarHostState` + `SnackbarHost` to existing Scaffold
-- Add runtime permission launcher for `POST_NOTIFICATIONS` (API 33+) + `SCHEDULE_EXACT_ALARM` (API 31-32)
 - Add `onNewIntent()` override for `open_day_review` extra
 - Add `showDayReviewOverlay: rememberSaveable` state + `DayReviewScreen` overlay rendering
 - Add `dayReviewTriggeredReceiver` BroadcastReceiver registered in `onResume()`, unregistered in `onPause()` → calls `checkAndTriggerDayReviewPrompt()`
@@ -614,3 +629,72 @@ DAY AFTER REVIEW:
 ### `AndroidManifest.xml`
 - Add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` (API 33+)
 - Add `<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />` (API 31+)
+
+---
+
+## Implementation Stages (Execution Order)
+
+### Stage 1: `PlannerScreen.kt` — Cleanup + SettingsDialog Permissions
+- [ ] Remove `import com.example.ui.components.DayReviewCard`
+- [ ] Remove `DayReviewCard` composable + `reviewForDate()` flow collection from Column
+- [ ] Remove `showDayReviewDialog` state + `DayReviewScreen` dialog
+- [ ] Add `POST_NOTIFICATIONS` permission launcher inside SettingsDialog composable (`rememberLauncherForActivityResult`, triggered on enable toggle, not on composition)
+- [ ] Add `SCHEDULE_EXACT_ALARM` settings redirect inside SettingsDialog enable toggle (API 31-32)
+- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+
+### Stage 2: `MainViewModel.kt` — Shared Helpers + Alarm + Prompt State
+- [ ] Add `createDayReviewChannel(context)` — idempotent notification channel helper
+- [ ] Add `getImmutableFlag()` — version-safe `PendingIntent.FLAG_IMMUTABLE` (returns 0 on API < 31)
+- [ ] Add `scheduleDayReviewAlarm(context)` — `AlarmManager.setRepeating()` with `RTC_WAKEUP`, 24h interval, PendingIntent → `ReminderReceiver` (requestCode=5000)
+- [ ] Add `cancelDayReviewAlarm(context)` — cancel alarm + cancel PendingIntent
+- [ ] Add `sendImmediateDayReviewNotification(context)` — one-shot notification (ID=5000) via `LocalBroadcastManager`, uses `createDayReviewChannel()` + `getImmutableFlag()` + properly declares `notificationManager`
+- [ ] Add `_showDayReviewPrompt: MutableStateFlow<Boolean>` — exposed as `showDayReviewPrompt: StateFlow<Boolean>`
+- [ ] Add `checkAndTriggerDayReviewPrompt()` — enabled guard, prefs cache fast-path, time-past check, DB query for today's review
+- [ ] Add `dismissDayReviewPrompt()` — sets `_showDayReviewPrompt = false` + `notificationManager.cancel(5000)`
+- [ ] Modify `saveDayReview()` — after DB upsert, cache `reviewed_today=true` in prefs, call `dismissDayReviewPrompt()`
+- [ ] Modify `refreshSystemDate()` — on date change, reset `reviewed_today=false` in prefs
+- [ ] Modify `updateReviewReminderEnabled(true)` → calls `scheduleDayReviewAlarm()`
+- [ ] Modify `updateReviewReminderEnabled(false)` → calls `cancelDayReviewAlarm()`
+- [ ] Modify `updateReviewReminderTime()` → calls `cancelDayReviewAlarm()` + `scheduleDayReviewAlarm()`
+- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+
+### Stage 3: `ReminderReceiver.kt` — DAY_REVIEW Handler
+- [ ] In `onReceive()`, add `action == "com.example.action.DAY_REVIEW"` check BEFORE existing event reminder logic → `handleDayReview(context); return`
+- [ ] Add `handleDayReview(context)`:
+  - `goAsync()` → `CoroutineScope(Dispatchers.IO).launch`
+  - `createDayReviewChannel(context)`
+  - Query DB: `AppDatabase.getDatabase(context).dayReviewDao().getReviewForDateSync(todayStr)`
+  - If review exists → `pendingResult.finish(); return`
+  - Build notification with PendingIntent → `MainActivity` + `open_day_review=true`
+  - `LocalBroadcastManager.getInstance(context).sendBroadcast(Intent("com.example.action.DAY_REVIEW_TRIGGERED"))`
+  - `notificationManager.notify(5000, builder.build())`
+  - `finally { pendingResult.finish() }`
+- [ ] Extend boot/time-change/timezone-change block: if `review_reminder_enabled` prefs → reschedule alarm
+- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+
+### Stage 4: `MainActivity.kt` — Snackbar + Overlay + LocalBroadcast + Intent
+- [ ] Add `SnackbarHostState` + `SnackbarHost(snackbarHostState)` to existing Scaffold
+- [ ] Add `dayReviewTriggeredReceiver` — `BroadcastReceiver` that calls `viewModel.checkAndTriggerDayReviewPrompt()` when action is `DAY_REVIEW_TRIGGERED`
+- [ ] Modify `onResume()` — register `dayReviewTriggeredReceiver` via `LocalBroadcastManager.getInstance(this).registerReceiver(...)`, add `viewModel.refreshSystemDate()` + `viewModel.checkAndTriggerDayReviewPrompt()`
+- [ ] Add `override fun onPause()` — `LocalBroadcastManager.getInstance(this).unregisterReceiver(dayReviewTriggeredReceiver)`
+- [ ] Add `showDayReviewOverlay: Boolean` state (`rememberSaveable { mutableStateOf(false) }`)
+- [ ] Add single consolidated `LaunchedEffect(showPrompt)`:
+  - If `true`: show Snackbar ("Time to review your day!" / "Review" action) → on action → `showDayReviewOverlay = true`
+  - If `false`: `showDayReviewOverlay = false` + dismiss Snackbar
+- [ ] Add overlay rendering below Scaffold: `if (showDayReviewOverlay) { Box + DayReviewScreen(...) }`
+  - `DayReviewScreen(viewModel, todayDate, onBack = { showDayReviewOverlay = false; viewModel.dismissDayReviewPrompt() })`
+- [ ] Override `onNewIntent(intent)` — if `open_day_review` extra → call `viewModel.checkAndTriggerDayReviewPrompt()`
+- [ ] In `onCreate()` after ViewModel init — check `intent.getBooleanExtra("open_day_review", false)` → call `viewModel.checkAndTriggerDayReviewPrompt()`
+- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+
+### Stage 5: `AndroidManifest.xml` — Permissions
+- [ ] Add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` inside `<manifest>`
+- [ ] Add `<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />` inside `<manifest>`
+- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+
+### Stage 6: Final Build & Cross-Check
+- [ ] Full build: `.\gradlew.bat assembleDebug` — **BUILD SUCCESSFUL**
+- [ ] Verify DayReviewCard is gone from DailyPlannerView
+- [ ] Verify SettingsDialog has Day Review Reminder section with enable switch and time picker
+- [ ] Verify all edge cases from table are covered by the implementation
+- [ ] Confirm no dead code or orphaned imports
