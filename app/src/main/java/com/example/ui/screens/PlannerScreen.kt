@@ -219,6 +219,7 @@ private sealed class TaskManagerType {
 
 @Composable
 fun PlannerScreen(viewModel: MainViewModel) {
+    val context = LocalContext.current
     val todayDate by viewModel.todayDate.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -237,6 +238,14 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
     val ideaGroups by viewModel.ideaGroups.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS", "LEARN")
+
+    val autoRescheduleMessage by viewModel.autoRescheduleMessage.collectAsState()
+    LaunchedEffect(autoRescheduleMessage) {
+        autoRescheduleMessage?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearAutoRescheduleMessage()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -4744,7 +4753,26 @@ fun SettingsDialog(
                 }
             }
 
-            // 5. More Screen
+            // 5. Auto-Reschedule
+            SettingsCard(title = "AUTO-RESCHEDULE") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Auto-Reschedule Unfinished", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Move unfinished tasks & notes to the next day", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    val autoRescheduleEnabled by viewModel.autoRescheduleUnfinished.collectAsState()
+                    Switch(
+                        checked = autoRescheduleEnabled,
+                        onCheckedChange = { viewModel.updateAutoRescheduleUnfinished(it) }
+                    )
+                }
+            }
+
+            // 6. More Screen
             SettingsCard(title = "MORE SCREEN") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -9,6 +9,8 @@ class TaskRepository(
 ) {
     fun getTasksForDate(date: String): Flow<List<TaskEntity>> = taskDao.getTasksForDate(date)
 
+    suspend fun getTasksForDateSync(date: String): List<TaskEntity> = taskDao.getTasksForDateSync(date)
+
     fun getTasksForMonth(datePrefix: String): Flow<List<TaskEntity>> = taskDao.getTasksForMonth(datePrefix)
 
     fun getTasksForYear(yearPrefix: String): Flow<List<TaskEntity>> = taskDao.getTasksForYear(yearPrefix)

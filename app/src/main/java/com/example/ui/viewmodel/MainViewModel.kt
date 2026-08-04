@@ -430,6 +430,16 @@ private val mottoRepository: MottoRepository,
     private val _expandAllLearnItems = MutableStateFlow(prefs.getBoolean("learn_expand_all_items", true))
     val expandAllLearnItems: StateFlow<Boolean> = _expandAllLearnItems.asStateFlow()
 
+    private val _autoRescheduleUnfinished = MutableStateFlow(prefs.getBoolean("auto_reschedule_unfinished", false))
+    val autoRescheduleUnfinished: StateFlow<Boolean> = _autoRescheduleUnfinished.asStateFlow()
+
+    private val _autoRescheduleMessage = MutableStateFlow<String?>(null)
+    val autoRescheduleMessage: StateFlow<String?> = _autoRescheduleMessage.asStateFlow()
+
+    fun clearAutoRescheduleMessage() {
+        _autoRescheduleMessage.value = null
+    }
+
     private fun loadCustomLabels(): List<Pair<String, Long>> {
         val serialized = prefs.getString("custom_labels", "") ?: ""
         if (serialized.isBlank()) return emptyList()
@@ -557,6 +567,14 @@ private val mottoRepository: MottoRepository,
         val newValue = !_expandAllLearnItems.value
         _expandAllLearnItems.value = newValue
         prefs.edit().putBoolean("learn_expand_all_items", newValue).apply()
+    }
+
+    fun updateAutoRescheduleUnfinished(enabled: Boolean) {
+        _autoRescheduleUnfinished.value = enabled
+        prefs.edit().putBoolean("auto_reschedule_unfinished", enabled).apply()
+        if (enabled) {
+            performAutoRescheduleIfNeeded()
+        }
     }
 
     fun triggerReorderByPriority() {
@@ -905,7 +923,24 @@ private val mottoRepository: MottoRepository,
             if (cachedDate != null && cachedDate != newToday) {
                 prefs.edit().remove("reviewed_today").remove("reviewed_today_date").apply()
             }
+
+            // Auto-reschedule unfinished tasks from past dates to today
+            performAutoRescheduleIfNeeded()
         }
+    }
+
+    private fun performAutoRescheduleIfNeeded() {
+        if (!_autoRescheduleUnfinished.value) return
+        val today = getTodayDateString()
+        val lastProcessed = prefs.getString("last_auto_reschedule_date", null)
+        if (lastProcessed != null && lastProcessed < today) {
+            var cursor = addDays(lastProcessed, 1)
+            while (cursor < today) {
+                autoRescheduleUnfinishedTasks(cursor, today)
+                cursor = addDays(cursor, 1)
+            }
+        }
+        prefs.edit().putString("last_auto_reschedule_date", today).apply()
     }
 
     private val _selectedDate = MutableStateFlow(getTodayDateString())
@@ -2089,6 +2124,9 @@ private val mottoRepository: MottoRepository,
         viewModelScope.launch {
             refreshBackupWritable()
         }
+
+        // Auto-reschedule unfinished tasks from previous days
+        performAutoRescheduleIfNeeded()
     }
 
     fun refreshTodayMotto() {
@@ -2122,8 +2160,12 @@ private val mottoRepository: MottoRepository,
 
     // --- Date Navigation Methods ---
     fun selectDate(date: String) {
+        val fromDate = _selectedDate.value
+        val toDate = date
+        if (_autoRescheduleUnfinished.value && toDate == addDays(fromDate, 1) && fromDate <= getTodayDateString()) {
+            autoRescheduleUnfinishedTasks(fromDate, toDate)
+        }
         _selectedDate.value = date
-        // Extract month string from selected date "yyyy-MM-dd" -> "yyyy-MM"
         if (date.length >= 7) {
             _selectedMonth.value = date.substring(0, 7)
         }
@@ -2543,6 +2585,21 @@ private val mottoRepository: MottoRepository,
                     vibrate = _eventReminderVibrate.value,
                     sound = _eventReminderSound.value
                 )
+            }
+        }
+    }
+
+    fun autoRescheduleUnfinishedTasks(fromDate: String, toDate: String) {
+        viewModelScope.launch {
+            val tasks = taskRepository.getTasksForDateSync(fromDate)
+                .filter { it.type != "EVENT"
+                        && it.status == "PENDING"
+                        && it.recurrenceMode == "NONE"
+                        && !it.isDeleted
+                        && it.parentTaskId == null }
+            if (tasks.isNotEmpty()) {
+                tasks.forEach { migrateTask(it, toDate, postpone = false) }
+                _autoRescheduleMessage.value = "${tasks.size} tasks moved to $toDate"
             }
         }
     }
