@@ -179,6 +179,7 @@ import android.content.Intent
 import android.net.Uri
 import android.media.RingtoneManager
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CheckCircle
@@ -3639,6 +3640,13 @@ fun SettingsDialog(
         }
     }
 
+    // Launcher for MANAGE_EXTERNAL_STORAGE settings
+    val manageStorageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.refreshBackupWritable()
+    }
+
     // Formatted last backup time
     val lastBackupTime = if (lastBackupTimestamp > 0) {
         SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(lastBackupTimestamp))
@@ -3976,6 +3984,41 @@ fun SettingsDialog(
                             color = if (isSuccessStatus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
                     }
+                }
+
+                // Direct file access toggle
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Use direct file access", fontSize = 13.sp)
+                        Text(
+                            text = "Fallback to java.io.File when SAF is unavailable (requires All files access)",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    val directAccess by viewModel.useDirectFileAccess.collectAsState()
+                    Switch(
+                        checked = directAccess,
+                        onCheckedChange = { enabled ->
+                            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                                !android.os.Environment.isExternalStorageManager()
+                            ) {
+                                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                try {
+                                    manageStorageLauncher.launch(intent)
+                                } catch (_: Exception) { }
+                            } else {
+                                viewModel.setUseDirectFileAccess(enabled)
+                            }
+                        }
+                    )
                 }
 
                 // Keep last N months

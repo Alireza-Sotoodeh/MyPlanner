@@ -227,6 +227,15 @@ private val mottoRepository: MottoRepository,
     val backupLocationUri: StateFlow<String?> = _backupLocationUri.asStateFlow()
     private val _backupLocationWritable = MutableStateFlow(false)
     val backupLocationWritable: StateFlow<Boolean> = _backupLocationWritable.asStateFlow()
+    private val _useDirectFileAccess = MutableStateFlow(prefs.getBoolean("direct_file_access", false))
+    val useDirectFileAccess: StateFlow<Boolean> = _useDirectFileAccess.asStateFlow()
+
+    fun setUseDirectFileAccess(enabled: Boolean) {
+        prefs.edit().putBoolean("direct_file_access", enabled).apply()
+        _useDirectFileAccess.value = enabled
+        backupFileManager.setDirectFileAccess(enabled)
+        refreshBackupWritable()
+    }
 
     fun refreshBackupWritable() {
         val uriStr = _backupLocationUri.value ?: run { _backupLocationWritable.value = false; return }
@@ -2005,6 +2014,9 @@ private val mottoRepository: MottoRepository,
             delay(1000) // let UI settle
             updateAppUsage(context)
         }
+
+        // Sync direct file access preference to BackupFileManager
+        backupFileManager.setDirectFileAccess(prefs.getBoolean("direct_file_access", false))
 
         // Check backup location writability on start
         viewModelScope.launch {

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,6 +46,12 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     var hasUsageStats by remember { mutableStateOf(viewModel.hasUsageStatsPermission(context)) }
     var hasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
     var hasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
+    var hasManageStorage by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) android.os.Environment.isExternalStorageManager()
+            else true
+        )
+    }
     val backupUri by viewModel.backupLocationUri.collectAsState()
     val hasBackupLocation = backupUri != null
     var continueClicked by remember { mutableStateOf(false) }
@@ -98,6 +105,14 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             } catch (_: SecurityException) { }
             viewModel.setBackupLocationUri(uri.toString())
         }
+    }
+
+    val manageStorageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        hasManageStorage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else true
     }
 
     Surface(
@@ -204,6 +219,24 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 onClick = { backupFolderLauncher.launch(null) },
                 buttonText = "CHOOSE"
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                PermissionItem(
+                    title = "All Files Access (Optional)",
+                    description = "Fallback for backup on devices where SAF does not work (e.g. Samsung).",
+                    icon = Icons.Default.Folder,
+                    isGranted = hasManageStorage,
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                        try {
+                            manageStorageLauncher.launch(intent)
+                        } catch (_: Exception) { }
+                    },
+                    buttonText = "GRANT"
+                )
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
             
