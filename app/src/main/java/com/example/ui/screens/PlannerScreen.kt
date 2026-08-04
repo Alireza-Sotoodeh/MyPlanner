@@ -6756,6 +6756,7 @@ fun LearnItemCard(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun LearnItemDialog(
     viewModel: MainViewModel,
     existingItem: LearnItemEntity?,
@@ -6769,6 +6770,9 @@ fun LearnItemDialog(
     var priorityLevel by remember { mutableStateOf(existingItem?.priorityLevel ?: "Medium") }
     var selectedGroupId by remember { mutableStateOf(existingItem?.groupId) }
     var showNewGroupDialog by remember { mutableStateOf(false) }
+    var groupMenuTarget by remember { mutableStateOf<LearnGroupEntity?>(null) }
+    var editingGroup by remember { mutableStateOf<LearnGroupEntity?>(null) }
+    var showDeleteGroupConfirm by remember { mutableStateOf<LearnGroupEntity?>(null) }
     val learnGroups by viewModel.learnGroups.collectAsState()
     val isEditing = existingItem != null
 
@@ -6873,20 +6877,38 @@ fun LearnItemDialog(
                     }
                     items(learnGroups) { group ->
                         val isSelected = selectedGroupId == group.id
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedGroupId = group.id }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        Box {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .combinedClickable(
+                                        onClick = { selectedGroupId = group.id },
+                                        onLongClick = { groupMenuTarget = group }
+                                    )
                             ) {
-                                Box(modifier = Modifier.size(8.dp).background(Color(group.color), CircleShape))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(group.name, fontSize = 11.sp, color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurface)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Box(modifier = Modifier.size(8.dp).background(Color(group.color), CircleShape))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(group.name, fontSize = 11.sp, color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = groupMenuTarget?.id == group.id,
+                                onDismissRequest = { groupMenuTarget = null }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Edit") },
+                                    onClick = { editingGroup = group; groupMenuTarget = null }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Remove", color = MaterialTheme.colorScheme.error) },
+                                    onClick = { showDeleteGroupConfirm = group; groupMenuTarget = null }
+                                )
                             }
                         }
                     }
@@ -6978,6 +7000,75 @@ fun LearnItemDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showNewGroupDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    editingGroup?.let { group ->
+        var editName by remember(group.id) { mutableStateOf(group.name) }
+        var editColor by remember(group.id) { mutableStateOf(group.color) }
+        val presetColors = listOf(
+            0xFF4CAF50, 0xFF2196F3, 0xFFFF9800, 0xFFE91E63,
+            0xFF9C27B0, 0xFF00BCD4, 0xFFFF5722, 0xFF607D8B
+        )
+        AlertDialog(
+            onDismissRequest = { editingGroup = null },
+            title = { Text("Edit Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("Group Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(presetColors) { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(color))
+                                    .border(2.dp, if (editColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                    .clickable { editColor = color }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (editName.isNotBlank()) {
+                            viewModel.updateLearnGroup(group.copy(name = editName.trim(), color = editColor))
+                            editingGroup = null
+                        }
+                    },
+                    enabled = editName.isNotBlank()
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingGroup = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    showDeleteGroupConfirm?.let { group ->
+        AlertDialog(
+            onDismissRequest = { showDeleteGroupConfirm = null },
+            title = { Text("Delete group?") },
+            text = { Text("All learn items in \"${group.name}\" will also be deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (selectedGroupId == group.id) selectedGroupId = null
+                    viewModel.deleteLearnGroup(group)
+                    showDeleteGroupConfirm = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteGroupConfirm = null }) { Text("Cancel") }
             }
         )
     }
