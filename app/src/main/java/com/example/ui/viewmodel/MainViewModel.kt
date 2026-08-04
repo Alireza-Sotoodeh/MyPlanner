@@ -2005,6 +2005,11 @@ private val mottoRepository: MottoRepository,
             delay(1000) // let UI settle
             updateAppUsage(context)
         }
+
+        // Check backup location writability on start
+        viewModelScope.launch {
+            refreshBackupWritable()
+        }
     }
 
     fun refreshTodayMotto() {
