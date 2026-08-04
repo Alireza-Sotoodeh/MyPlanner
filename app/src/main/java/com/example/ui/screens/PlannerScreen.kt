@@ -22,6 +22,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -4377,8 +4378,6 @@ private fun IdeasTab(viewModel: MainViewModel) {
     val ideas by viewModel.allIdeas.collectAsState()
 
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
-    var showCreateGroupDialog by remember { mutableStateOf(false) }
-    var showCreateGroupFromIdeaDialog by remember { mutableStateOf(false) }
     var showCreateIdeaDialog by remember { mutableStateOf(false) }
     var editingIdea by remember { mutableStateOf<IdeaEntity?>(null) }
     var showDeleteIdeaConfirm by remember { mutableStateOf<IdeaEntity?>(null) }
@@ -4451,9 +4450,6 @@ private fun IdeasTab(viewModel: MainViewModel) {
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        TextButton(onClick = { showCreateGroupDialog = true }) {
-                            Text("+ Group", fontSize = 11.sp)
-                        }
                     }
                 }
 
@@ -4512,18 +4508,6 @@ private fun IdeasTab(viewModel: MainViewModel) {
     }
     }
 
-    if (showCreateGroupDialog) {
-        CreateGroupDialog(
-            onDismiss = { showCreateGroupDialog = false },
-            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupDialog = false }
-        )
-    }
-    if (showCreateGroupFromIdeaDialog) {
-        CreateGroupDialog(
-            onDismiss = { showCreateGroupFromIdeaDialog = false },
-            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupFromIdeaDialog = false }
-        )
-    }
     editingGroup?.let { group ->
         CreateGroupDialog(
             initialName = group.name,
@@ -4534,23 +4518,23 @@ private fun IdeasTab(viewModel: MainViewModel) {
     }
     if (showCreateIdeaDialog) {
         CreateIdeaDialog(
+            viewModel = viewModel,
             groups = groups,
             onDismiss = { showCreateIdeaDialog = false },
-            onConfirm = { groupId, title, description, stages -> viewModel.addIdea(groupId, title, description, stages); showCreateIdeaDialog = false },
-            onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
+            onConfirm = { groupId, title, description, stages -> viewModel.addIdea(groupId, title, description, stages); showCreateIdeaDialog = false }
         )
     }
     editingIdea?.let { idea ->
         val ideaStages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
         CreateIdeaDialog(
+            viewModel = viewModel,
             groups = groups,
             initialTitle = idea.title,
             initialDescription = idea.description,
             initialGroupId = idea.groupId,
             initialStages = ideaStages,
             onDismiss = { editingIdea = null },
-            onConfirm = { groupId, title, description, stages -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description), stages); editingIdea = null },
-            onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
+            onConfirm = { groupId, title, description, stages -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description), stages); editingIdea = null }
         )
     }
     showDeleteIdeaConfirm?.let { idea ->
@@ -4866,26 +4850,28 @@ private fun CreateGroupDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CreateIdeaDialog(
+    viewModel: MainViewModel,
     groups: List<IdeaGroupEntity>,
     initialTitle: String = "",
     initialDescription: String = "",
     initialGroupId: Long? = null,
     initialStages: List<IdeaStageEntity> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit,
-    onShowCreateGroup: () -> Unit
+    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var description by remember { mutableStateOf(initialDescription) }
     var selectedGroupId by remember { mutableStateOf(initialGroupId) }
     var stages by remember { mutableStateOf(initialStages) }
-    var expanded by remember { mutableStateOf(false) }
     var newStageTitle by remember { mutableStateOf("") }
     var editingStageIndex by remember { mutableStateOf(-1) }
     var editingStageText by remember { mutableStateOf("") }
+    var showNewGroupDialog by remember { mutableStateOf(false) }
+
+    val presetColors = listOf(0xFF6750A4, 0xFFB3261E, 0xFF00E676, 0xFF2196F3, 0xFFFF7043, 0xFFFFEB3B, 0xFFE91E63, 0xFF00BCD4)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -4908,47 +4894,68 @@ private fun CreateIdeaDialog(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Description (optional)") },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    maxLines = 3
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    maxLines = 4
                 )
-                Text("Group", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Box {
-                    Surface(
-                        onClick = { expanded = true },
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+
+                Text("Group:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp).height(32.dp)
+                ) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier.clickable { showNewGroupDialog = true }.fillMaxHeight()
                         ) {
-                            Text(
-                                groups.find { it.id == selectedGroupId }?.name ?: "None",
-                                fontSize = 13.sp,
-                                color = if (selectedGroupId != null) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text("+ New", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("None") },
-                            onClick = { selectedGroupId = null; expanded = false }
-                        )
-                        groups.forEach { group ->
-                            DropdownMenuItem(
-                                text = { Text(group.name) },
-                                onClick = { selectedGroupId = group.id; expanded = false }
-                            )
+                    item {
+                        val isNone = selectedGroupId == null
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isNone) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isNone) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier.clickable { selectedGroupId = null }.fillMaxHeight()
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text(
+                                    "None",
+                                    fontSize = 14.sp,
+                                    color = if (isNone) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Create New Group...", color = MaterialTheme.colorScheme.primary) },
-                            onClick = { expanded = false; onShowCreateGroup() }
-                        )
+                    }
+                    items(groups) { group ->
+                        val isSelected = selectedGroupId == group.id
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .combinedClickable(
+                                    onClick = { selectedGroupId = group.id },
+                                    onLongClick = {
+                                        viewModel.deleteGroup(group)
+                                    }
+                                )
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text(
+                                    group.name,
+                                    fontSize = 14.sp,
+                                    color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -5041,6 +5048,53 @@ private fun CreateIdeaDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+
+    if (showNewGroupDialog) {
+        var newGroupName by remember { mutableStateOf("") }
+        var selectedColor by remember { mutableStateOf(presetColors[0]) }
+        AlertDialog(
+            onDismissRequest = { showNewGroupDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("New Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newGroupName,
+                        onValueChange = { newGroupName = it },
+                        label = { Text("Group Name") }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(presetColors) { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(color))
+                                    .border(
+                                        2.dp,
+                                        if (selectedColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                        CircleShape
+                                    )
+                                    .clickable { selectedColor = color }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newGroupName.isNotBlank()) {
+                        viewModel.addGroup(newGroupName.trim(), selectedColor)
+                        showNewGroupDialog = false
+                    }
+                }) { Text("ADD") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewGroupDialog = false }) { Text("CANCEL") }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
