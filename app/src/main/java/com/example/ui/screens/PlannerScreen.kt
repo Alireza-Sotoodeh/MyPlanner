@@ -2565,18 +2565,18 @@ private fun GregorianYearOverviewView(
                 letterSpacing = 1.sp
             )
 
+            val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { viewModel.toggleUsePersianCalendar() },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DateRange,
-                        contentDescription = "Switch to Persian Calendar",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Text(
+                    text = if (usePersianCalendar) "FA" else "EN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable { viewModel.toggleUsePersianCalendar() }
+                        .padding(horizontal = 4.dp)
+                )
                 IconButton(onClick = {
                     val cal = Calendar.getInstance()
                     val sdf = SimpleDateFormat("yyyy", Locale.getDefault())
@@ -2764,18 +2764,18 @@ private fun PersianYearOverviewView(
                 letterSpacing = 1.sp
             )
 
+            val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { viewModel.toggleUsePersianCalendar() },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DateRange,
-                        contentDescription = "Switch to Western Calendar",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Text(
+                    text = if (usePersianCalendar) "FA" else "EN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable { viewModel.toggleUsePersianCalendar() }
+                        .padding(horizontal = 4.dp)
+                )
                 IconButton(onClick = {
                     viewModel.selectPersianMonth(persianYear + 1, 1)
                 }) {
