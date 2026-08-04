@@ -72,7 +72,7 @@ object PersianCalendarHelper {
     fun getPersianDateParts(gregorianDateStr: String): Triple<Int, Int, Int> {
         try {
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val date = sdf.parse(gregorianDateStr) ?: return Triple(1400, 1, 1)
+            val date = sdf.parse(gregorianDateStr) ?: return getCurrentPersianDateParts()
             
             val calendar = Calendar.getInstance(persianLocale)
             calendar.time = date
@@ -82,6 +82,19 @@ object PersianCalendarHelper {
             val day = calendar.get(Calendar.DAY_OF_MONTH)
             
             return Triple(year, month, day)
+        } catch (e: Exception) {
+            return getCurrentPersianDateParts()
+        }
+    }
+
+    private fun getCurrentPersianDateParts(): Triple<Int, Int, Int> {
+        val now = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val date = sdf.parse(now) ?: return Triple(1400, 1, 1)
+            val calendar = Calendar.getInstance(persianLocale)
+            calendar.time = date
+            return Triple(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH))
         } catch (e: Exception) {
             return Triple(1400, 1, 1)
         }

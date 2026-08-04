@@ -738,12 +738,10 @@ class MainViewModel(
     fun toggleUsePersianCalendar() {
         val newValue = !_usePersianCalendar.value
         if (newValue) {
-            val parts = PersianCalendarHelper.getPersianDateParts("$_selectedMonth-15")
-            _persianYear.value = parts.first
-            _persianMonth.value = parts.second
+            _persianYear.value = PersianCalendarHelper.getCurrentPersianYear()
+            _persianMonth.value = PersianCalendarHelper.getCurrentPersianMonth()
         } else {
-            val gregDate = PersianCalendarHelper.getGregorianDateString(_persianYear.value, _persianMonth.value, 15)
-            _selectedMonth.value = gregDate.substring(0, 7)
+            _selectedMonth.value = getTodayMonthString()
         }
         _usePersianCalendar.value = newValue
         prefs.edit().putBoolean("use_persian_calendar", newValue).apply()
