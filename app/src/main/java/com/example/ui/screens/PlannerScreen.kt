@@ -2093,13 +2093,14 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
     val selectedDate by viewModel.selectedDate.collectAsState()
     val todayDate by viewModel.todayDate.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
+    val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
 
     // Local week anchor — decouples week scrolling from selectedDate.
     // Initializes from selectedDate each time WeeklyPlannerView enters composition.
     var weekAnchorDate by remember { mutableStateOf(selectedDate) }
 
-    val weekDays = remember(weekAnchorDate) {
-        getDaysOfWeek(weekAnchorDate)
+    val weekDays = remember(weekAnchorDate, usePersianCalendar) {
+        getDaysOfWeek(weekAnchorDate, usePersianCalendar)
     }
 
     val isCurrentWeek = remember(weekDays, todayDate) {
@@ -2185,6 +2186,18 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                 }
             }
 
+            TextButton(
+                onClick = { viewModel.toggleUsePersianCalendar() },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Text(
+                    text = if (usePersianCalendar) "FA" else "EN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
             IconButton(onClick = {
                 weekAnchorDate = getOffsetDateString(weekAnchorDate, 7)
             }) {
@@ -2210,7 +2223,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
             val dateObj = sdf.parse(dayDate)
             val gregorianDayLabel = SimpleDateFormat("EEEE", Locale.getDefault()).format(dateObj ?: Date())
             val persianDayLabel = com.example.core.utils.PersianCalendarHelper.getPersianDayOfWeekName(dayDate)
-            val dayLabel = if (persianDayLabel.isNotEmpty()) "$gregorianDayLabel / $persianDayLabel" else gregorianDayLabel
+            val dayLabel = if (usePersianCalendar) persianDayLabel else gregorianDayLabel
             val dateLabelGreg = SimpleDateFormat("MMM d", Locale.getDefault()).format(dateObj ?: Date())
             val persianStr = com.example.core.utils.PersianCalendarHelper.getPersianDateString(dayDate)
             val persianParts = persianStr.split(" ")
@@ -3381,12 +3394,12 @@ fun getOffsetMonthString(monthStr: String, offsetMonths: Int): String {
     return sdf.format(cal.time)
 }
 
-fun getDaysOfWeek(dateStr: String): List<String> {
+fun getDaysOfWeek(dateStr: String, usePersian: Boolean = false): List<String> {
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val date = sdf.parse(dateStr) ?: Date()
     val cal = Calendar.getInstance()
     cal.time = date
-    cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+    cal.set(Calendar.DAY_OF_WEEK, if (usePersian) Calendar.SATURDAY else cal.firstDayOfWeek)
 
     val list = mutableListOf<String>()
     for (i in 0..6) {
