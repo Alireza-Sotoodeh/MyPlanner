@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -49,7 +52,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -73,6 +78,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.foundation.Canvas
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.nativeCanvas
@@ -119,9 +126,10 @@ fun StatsScreen(viewModel: MainViewModel) {
         viewModel.updateAppUsage(context)
     }
 
-
+    val lazyListState = rememberLazyListState()
 
     LazyColumn(
+        state = lazyListState,
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
@@ -777,6 +785,7 @@ fun StatsScreen(viewModel: MainViewModel) {
         // 5. Activity Heatmap
         item {
             ActivityHeatmapSection(
+                lazyListState = lazyListState,
                 year = heatmapYear,
                 month = heatmapMonth,
                 isPersian = usePersianCalendar,
@@ -944,6 +953,7 @@ private data class GridData(
 
 @Composable
 private fun ActivityHeatmapSection(
+    lazyListState: LazyListState,
     year: Int,
     month: Int,
     isPersian: Boolean,
@@ -1008,6 +1018,12 @@ private fun ActivityHeatmapSection(
 
             Spacer(Modifier.height(8.dp))
 
+            var tappedCell by remember { mutableStateOf<DayCell?>(null) }
+            var tappedCellPos by remember { mutableStateOf(Offset.Zero) }
+            val cellLayouts = remember { mutableMapOf<String, Offset>() }
+            val isScrolling by remember { derivedStateOf { lazyListState.isScrollInProgress } }
+            LaunchedEffect(isScrolling) { if (isScrolling) tappedCell = null }
+
             if (!hasActivity) {
                 Text(
                     text = "No focus sessions this month.",
@@ -1062,12 +1078,53 @@ private fun ActivityHeatmapSection(
                                             if (isToday) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
                                             else Modifier
                                         )
+                                        .onGloballyPositioned { coords ->
+                                            if (cell != null) {
+                                                cellLayouts[cell.dateStr] = coords.positionInWindow()
+                                            }
+                                        }
+                                        .then(
+                                            if (cell != null && cell.isCurrentMonth) {
+                                                Modifier.clickable {
+                                                    tappedCell = cell
+                                                    tappedCellPos = cellLayouts[cell.dateStr] ?: Offset.Zero
+                                                }
+                                            } else Modifier
+                                        )
                                 )
                             }
                         }
                         Spacer(Modifier.weight(1f))
                     }
                     if (rowIdx < 6) Spacer(Modifier.height(2.dp))
+                }
+            }
+
+            if (tappedCell != null) {
+                Popup(
+                    alignment = Alignment.TopStart,
+                    offset = IntOffset(tappedCellPos.x.roundToInt(), tappedCellPos.y.roundToInt() + 20),
+                    onDismissRequest = { tappedCell = null }
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        shadowElevation = 4.dp,
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(
+                                text = tappedCell!!.dateStr,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatDuration(tappedCell!!.seconds),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1217,6 +1274,17 @@ private fun computeDailyCompletions(
         cal.add(Calendar.DAY_OF_MONTH, 1)
     }
     return results
+}
+
+private fun formatDuration(totalSeconds: Int): String {
+    val h = totalSeconds / 3600
+    val m = (totalSeconds % 3600) / 60
+    val s = totalSeconds % 60
+    return buildString {
+        if (h > 0) append("${h}h ")
+        if (m > 0 || h > 0) append("${m}m ")
+        append("${s}s")
+    }
 }
 
 private fun computeLineGraphRange(
