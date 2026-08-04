@@ -42,7 +42,11 @@ data class TimerServiceState(
     val taskTitle: String = "",
     val taskId: Long = -1L,
     val focusMinutes: Int = 25,
-    val completed: Boolean = false
+    val completed: Boolean = false,
+    val shortBreakMinutes: Int? = 5,
+    val longBreakMinutes: Int? = null,
+    val targetSessions: Int? = null,
+    val markCompleteOnFinish: Boolean = false
 )
 
 enum class TimerMode { POMODORO, CHRONOMETER }
@@ -63,7 +67,11 @@ class TimerForegroundService : Service() {
             val taskTitle: String,
             val taskId: Long,
             val focusMinutes: Int,
-            val sessionNumber: Int
+            val sessionNumber: Int,
+            val shortBreakMinutes: Int?,
+            val longBreakMinutes: Int?,
+            val targetSessions: Int?,
+            val markCompleteOnFinish: Boolean
         ) : ServiceCommand()
 
         data class StartChronometer(val taskId: Long) : ServiceCommand()
@@ -86,7 +94,11 @@ class TimerForegroundService : Service() {
                 val taskId = intent.getLongExtra(EXTRA_TASK_ID, -1L)
                 val focusMinutes = intent.getIntExtra(EXTRA_FOCUS_MINUTES, 25)
                 val sessionNumber = intent.getIntExtra(EXTRA_SESSION_NUMBER, 1)
-                commandChannel.trySend(ServiceCommand.StartPomodoro(taskTitle, taskId, focusMinutes, sessionNumber))
+                val shortBreakMinutes = if (intent.hasExtra(EXTRA_SHORT_BREAK)) intent.getIntExtra(EXTRA_SHORT_BREAK, 5) else null
+                val longBreakMinutes = if (intent.hasExtra(EXTRA_LONG_BREAK)) intent.getIntExtra(EXTRA_LONG_BREAK, 15) else null
+                val targetSessions = if (intent.hasExtra(EXTRA_TARGET_SESSIONS)) intent.getIntExtra(EXTRA_TARGET_SESSIONS, 4) else null
+                val markCompleteOnFinish = intent.getBooleanExtra(EXTRA_MARK_COMPLETE, false)
+                commandChannel.trySend(ServiceCommand.StartPomodoro(taskTitle, taskId, focusMinutes, sessionNumber, shortBreakMinutes, longBreakMinutes, targetSessions, markCompleteOnFinish))
             }
             ACTION_START_CHRONOMETER -> {
                 val taskId = intent.getLongExtra(EXTRA_CHRONO_TASK_ID, -1L)
@@ -137,7 +149,11 @@ class TimerForegroundService : Service() {
             sessionNumber = cmd.sessionNumber,
             taskTitle = cmd.taskTitle,
             taskId = cmd.taskId,
-            focusMinutes = cmd.focusMinutes
+            focusMinutes = cmd.focusMinutes,
+            shortBreakMinutes = cmd.shortBreakMinutes,
+            longBreakMinutes = cmd.longBreakMinutes,
+            targetSessions = cmd.targetSessions,
+            markCompleteOnFinish = cmd.markCompleteOnFinish
         )
 
         startForeground(NOTIF_ID_POMODORO_LIVE, buildNotification())
@@ -523,6 +539,10 @@ class TimerForegroundService : Service() {
         const val EXTRA_TASK_ID = "taskId"
         const val EXTRA_SESSION_NUMBER = "sessionNumber"
         const val EXTRA_CHRONO_TASK_ID = "chronoTaskId"
+        const val EXTRA_SHORT_BREAK = "shortBreakMinutes"
+        const val EXTRA_LONG_BREAK = "longBreakMinutes"
+        const val EXTRA_TARGET_SESSIONS = "targetSessions"
+        const val EXTRA_MARK_COMPLETE = "markCompleteOnFinish"
 
         const val NOTIF_ID_POMODORO_LIVE = 4006
         const val NOTIF_ID_CHRONOMETER_LIVE = 4007

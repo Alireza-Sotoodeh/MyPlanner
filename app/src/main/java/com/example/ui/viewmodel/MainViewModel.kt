@@ -1715,6 +1715,10 @@ class MainViewModel(
             putExtra(TimerForegroundService.EXTRA_TASK_TITLE, task.title)
             putExtra(TimerForegroundService.EXTRA_TASK_ID, task.id)
             putExtra(TimerForegroundService.EXTRA_SESSION_NUMBER, 1)
+            if (shortBreakMinutes != null) putExtra(TimerForegroundService.EXTRA_SHORT_BREAK, shortBreakMinutes)
+            if (longBreakMinutes != null) putExtra(TimerForegroundService.EXTRA_LONG_BREAK, longBreakMinutes)
+            if (targetSessions != null) putExtra(TimerForegroundService.EXTRA_TARGET_SESSIONS, targetSessions)
+            putExtra(TimerForegroundService.EXTRA_MARK_COMPLETE, markCompleteOnFinish)
         }
         context.startService(intent)
     }
@@ -1780,6 +1784,21 @@ class MainViewModel(
                         _pomodoroPhase.value = s.phase
                         _pomodoroCurrentSession.value = s.sessionNumber
 
+                        // Restore settings and task after process death
+                        _pomodoroFocusMinutes.value = s.focusMinutes
+                        if (s.shortBreakMinutes != null) _pomodoroShortBreakMinutes.value = s.shortBreakMinutes
+                        if (s.longBreakMinutes != null) _pomodoroLongBreakMinutes.value = s.longBreakMinutes
+                        if (s.targetSessions != null) _pomodoroTargetSessions.value = s.targetSessions
+                        _pomodoroMarkCompleteOnFinish.value = s.markCompleteOnFinish
+                        if (s.taskId != -1L && _activePomodoroTask.value?.id != s.taskId) {
+                            viewModelScope.launch {
+                                val restored = taskRepository.getTaskById(s.taskId)
+                                if (restored != null) {
+                                    _activePomodoroTask.value = restored
+                                }
+                            }
+                        }
+
                         if (s.completed && !_pomodoroProcessedCompletion) {
                             _pomodoroProcessedCompletion = true
                             handlePhaseCompletion(context)
@@ -1790,6 +1809,11 @@ class MainViewModel(
                         _chronoElapsed.value = s.elapsedSeconds
                         _chronoRunning.value = s.running && !s.paused
                         _chronoPaused.value = s.paused
+
+                        // Restore the selected task id after process death
+                        if (s.taskId != -1L && _chronoSelectedTaskId.value != s.taskId) {
+                            _chronoSelectedTaskId.value = s.taskId
+                        }
                     }
                     null -> {
                         if (_pomodoroRunning.value || _activePomodoroTask.value != null) {
