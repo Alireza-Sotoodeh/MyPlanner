@@ -17,6 +17,8 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -164,8 +166,13 @@ fun TemplateChip(
 @Composable
 fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange: (Int) -> Unit) {
     var isEditing by remember { mutableStateOf(false) }
-    var inputText by remember(value) { mutableStateOf(value.toString()) }
+    var inputText by remember { mutableStateOf("") }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+    LaunchedEffect(isEditing) {
+        if (isEditing) inputText = value.toString()
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth().height(32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,8 +194,15 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                     focusRequester.requestFocus()
                 }
                 BasicTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it.filter { c -> c.isDigit() } },
+                    value = TextFieldValue(inputText, selection = TextRange(inputText.length)),
+                    onValueChange = { tfv ->
+                        val filtered = tfv.text.filter { c -> c.isDigit() }
+                        inputText = filtered
+                        filtered.toIntOrNull()?.let { parsed ->
+                            val clamped = parsed.coerceIn(1, max)
+                            if (clamped != value) onValueChange(clamped)
+                        }
+                    },
                     maxLines = 1,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = {
