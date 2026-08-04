@@ -637,7 +637,7 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
