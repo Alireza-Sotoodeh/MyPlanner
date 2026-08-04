@@ -1680,239 +1680,7 @@ fun BulletTaskItem(
                 }
             }
 
-            // Subtasks
-            if (subtasks.isNotEmpty()) {
-                val completedSubtasks = subtasks.count { it.status == "COMPLETED" }
-                val progress = if (subtasks.isEmpty()) 0f else completedSubtasks.toFloat() / subtasks.size
-                var subtasksExpanded by remember(isSubtasksExpanded) { mutableStateOf(isSubtasksExpanded) }
-                
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, 
-                    modifier = Modifier.fillMaxWidth().clickable { 
-                        val nextExpanded = !subtasksExpanded
-                        subtasksExpanded = nextExpanded
-                        onToggleSubtasksExpanded(nextExpanded)
-                    }
-                ) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "${(progress * 100).toInt()}%",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = if (subtasksExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Toggle Subtasks",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = subtasksExpanded,
-                    enter = androidx.compose.animation.expandVertically(
-                        animationSpec = androidx.compose.animation.core.spring(
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
-                        )
-                    ) + androidx.compose.animation.fadeIn(
-                        animationSpec = androidx.compose.animation.core.tween(250)
-                    ),
-                    exit = androidx.compose.animation.shrinkVertically(
-                        animationSpec = androidx.compose.animation.core.spring(
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
-                        )
-                    ) + androidx.compose.animation.fadeOut(
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    )
-                ) {
-                    Column {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Column(
-                            modifier = Modifier.padding(start = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                        val displayedSubtasks = draggedSubtasks ?: subtasks
-                        displayedSubtasks.forEach { subtask ->
-                            val subCompleted = subtask.status == "COMPLETED"
-                            var subMenuExpanded by remember { mutableStateOf(false) }
-                            val isCurrentDragging = draggingSubtaskId == subtask.id
-                            val subtaskOffsetY = if (isCurrentDragging) subtaskDragOffsetY else 0f
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .onGloballyPositioned { subtaskItemHeights[subtask.id] = it.size.height }
-                                    .zIndex(if (isCurrentDragging) 10f else 0f)
-                                    .graphicsLayer {
-                                        if (isCurrentDragging) {
-                                            scaleX = 1.04f
-                                            scaleY = 1.04f
-                                        }
-                                    }
-                                    .offset { IntOffset(0, subtaskOffsetY.roundToInt()) }
-                                    .shadow(elevation = if (isCurrentDragging) 8.dp else 0.dp, shape = RoundedCornerShape(8.dp))
-                                    .background(if (isCurrentDragging) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f) else Color.Transparent)
-                                    .then(
-                                        if (onReorderSubtask != null && !subCompleted) {
-                                            Modifier.pointerInput(subtask.id) {
-                                                detectDragGesturesAfterLongPress(
-                                                    onDragStart = {
-                                                        draggingSubtaskId = subtask.id
-                                                        subtaskDragOffsetY = 0f
-                                                        draggedSubtasks = subtasks.toList()
-                                                    },
-                                                    onDragEnd = {
-                                                        if (draggingSubtaskId == subtask.id) {
-                                                            val currentList = draggedSubtasks
-                                                            val originalIndex = subtasks.indexOfFirst { it.id == subtask.id }
-                                                            if (currentList != null && originalIndex != -1) {
-                                                                val finalIndex = currentList.indexOfFirst { it.id == subtask.id }
-                                                                val deltaIndex = finalIndex - originalIndex
-                                                                if (deltaIndex != 0) {
-                                                                    onReorderSubtask(subtask, subtasks, deltaIndex)
-                                                                }
-                                                            }
-                                                            draggingSubtaskId = null
-                                                            draggedSubtasks = null
-                                                            subtaskDragOffsetY = 0f
-                                                        }
-                                                    },
-                                                    onDragCancel = {
-                                                        if (draggingSubtaskId == subtask.id) {
-                                                            draggingSubtaskId = null
-                                                            draggedSubtasks = null
-                                                            subtaskDragOffsetY = 0f
-                                                        }
-                                                    },
-                                                    onDrag = { change, dragAmount ->
-                                                        change.consume()
-                                                        subtaskDragOffsetY += dragAmount.y
-                                                        
-                                                        val currentList = draggedSubtasks
-                                                        if (currentList != null) {
-                                                            val draggedIndex = currentList.indexOfFirst { it.id == subtask.id }
-                                                            if (draggedIndex != -1) {
-                                                                val spacing = with(density) { 4.dp.toPx() }
-                                                                if (subtaskDragOffsetY > 0) {
-                                                                    if (draggedIndex < currentList.size - 1) {
-                                                                        val nextItem = currentList[draggedIndex + 1]
-                                                                        val nextHeight = subtaskItemHeights[nextItem.id] ?: 100
-                                                                        val threshold = nextHeight / 2f + spacing
-                                                                        if (subtaskDragOffsetY > threshold) {
-                                                                            val mutableList = currentList.toMutableList()
-                                                                            mutableList.removeAt(draggedIndex)
-                                                                            mutableList.add(draggedIndex + 1, subtask)
-                                                                            draggedSubtasks = mutableList
-                                                                            subtaskDragOffsetY -= (nextHeight + spacing)
-                                                                        }
-                                                                    }
-                                                                } else if (subtaskDragOffsetY < 0) {
-                                                                    if (draggedIndex > 0) {
-                                                                        val prevItem = currentList[draggedIndex - 1]
-                                                                        val prevHeight = subtaskItemHeights[prevItem.id] ?: 100
-                                                                        val threshold = -prevHeight / 2f - spacing
-                                                                        if (subtaskDragOffsetY < threshold) {
-                                                                            val mutableList = currentList.toMutableList()
-                                                                            mutableList.removeAt(draggedIndex)
-                                                                            mutableList.add(draggedIndex - 1, subtask)
-                                                                            draggedSubtasks = mutableList
-                                                                            subtaskDragOffsetY += (prevHeight + spacing)
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                        } else Modifier
-                                    )
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically, 
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clickable { onSubtaskToggle(subtask) }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (subCompleted) Icons.Default.Check else Icons.Default.PlayArrow,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(12.dp),
-                                            tint = if (subCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        val importanceStr = when (subtask.subtaskImportance) {
-                                            "IMPORTANT" -> "⭐ "
-                                            "OPTIONAL" -> "☕ "
-                                            else -> ""
-                                        }
-                                        Text(
-                                            text = "$importanceStr${subtask.title}",
-                                            fontSize = 11.sp,
-                                            color = if (subCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textDecoration = if (subCompleted) TextDecoration.LineThrough else null,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                    
-                                    Box {
-                                        IconButton(onClick = { subMenuExpanded = true }, modifier = Modifier.size(24.dp)) {
-                                            Icon(
-                                                imageVector = Icons.Default.MoreVert,
-                                                contentDescription = "Subtask Actions",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                            )
-                                        }
-                                        DropdownMenu(
-                                            expanded = subMenuExpanded,
-                                            onDismissRequest = { subMenuExpanded = false },
-                                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Done/Undone") },
-                                                onClick = {
-                                                    onSubtaskToggle(subtask)
-                                                    subMenuExpanded = false
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Postpone to Tomorrow") },
-                                                onClick = {
-                                                    onMigrateSubtask(subtask, getOffsetDateString(subtask.date, 1))
-                                                    subMenuExpanded = false
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Make Main Task") },
-                                                onClick = {
-                                                    onMakeMainTask(subtask)
-                                                    subMenuExpanded = false
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Remove") },
-                                                onClick = {
-                                                    onDeleteSubtask(subtask)
-                                                    subMenuExpanded = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } // Close AnimatedVisibility
-        } // Close if (subtasks.isNotEmpty())
-    } // Close Column
+            } // Close Column
 
     // Quick Pomodoro Trigger
         if (!isCompleted && task.type == "TASK") {
@@ -2098,6 +1866,238 @@ fun BulletTaskItem(
                         expandedMenu = false
                     }
                 )
+            }
+        }
+    }
+    // Subtasks
+    if (subtasks.isNotEmpty()) {
+        val completedSubtasks = subtasks.count { it.status == "COMPLETED" }
+        val progress = if (subtasks.isEmpty()) 0f else completedSubtasks.toFloat() / subtasks.size
+        var subtasksExpanded by remember(isSubtasksExpanded) { mutableStateOf(isSubtasksExpanded) }
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically, 
+            modifier = Modifier.fillMaxWidth().clickable { 
+                val nextExpanded = !subtasksExpanded
+                subtasksExpanded = nextExpanded
+                onToggleSubtasksExpanded(nextExpanded)
+            }
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = if (subtasksExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = "Toggle Subtasks",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        androidx.compose.animation.AnimatedVisibility(
+            visible = subtasksExpanded,
+            enter = androidx.compose.animation.expandVertically(
+                animationSpec = androidx.compose.animation.core.spring(
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+                )
+            ) + androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(250)
+            ),
+            exit = androidx.compose.animation.shrinkVertically(
+                animationSpec = androidx.compose.animation.core.spring(
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy
+                )
+            ) + androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.padding(start = 56.dp, end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                val displayedSubtasks = draggedSubtasks ?: subtasks
+                displayedSubtasks.forEach { subtask ->
+                    val subCompleted = subtask.status == "COMPLETED"
+                    var subMenuExpanded by remember { mutableStateOf(false) }
+                    val isCurrentDragging = draggingSubtaskId == subtask.id
+                    val subtaskOffsetY = if (isCurrentDragging) subtaskDragOffsetY else 0f
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { subtaskItemHeights[subtask.id] = it.size.height }
+                            .zIndex(if (isCurrentDragging) 10f else 0f)
+                            .graphicsLayer {
+                                if (isCurrentDragging) {
+                                    scaleX = 1.04f
+                                    scaleY = 1.04f
+                                }
+                            }
+                            .offset { IntOffset(0, subtaskOffsetY.roundToInt()) }
+                            .shadow(elevation = if (isCurrentDragging) 8.dp else 0.dp, shape = RoundedCornerShape(8.dp))
+                            .background(if (isCurrentDragging) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f) else Color.Transparent)
+                            .then(
+                                if (onReorderSubtask != null && !subCompleted) {
+                                    Modifier.pointerInput(subtask.id) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                draggingSubtaskId = subtask.id
+                                                subtaskDragOffsetY = 0f
+                                                draggedSubtasks = subtasks.toList()
+                                            },
+                                            onDragEnd = {
+                                                if (draggingSubtaskId == subtask.id) {
+                                                    val currentList = draggedSubtasks
+                                                    val originalIndex = subtasks.indexOfFirst { it.id == subtask.id }
+                                                    if (currentList != null && originalIndex != -1) {
+                                                        val finalIndex = currentList.indexOfFirst { it.id == subtask.id }
+                                                        val deltaIndex = finalIndex - originalIndex
+                                                        if (deltaIndex != 0) {
+                                                            onReorderSubtask(subtask, subtasks, deltaIndex)
+                                                        }
+                                                    }
+                                                    draggingSubtaskId = null
+                                                    draggedSubtasks = null
+                                                    subtaskDragOffsetY = 0f
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                if (draggingSubtaskId == subtask.id) {
+                                                    draggingSubtaskId = null
+                                                    draggedSubtasks = null
+                                                    subtaskDragOffsetY = 0f
+                                                }
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                subtaskDragOffsetY += dragAmount.y
+                                                
+                                                val currentList = draggedSubtasks
+                                                if (currentList != null) {
+                                                    val draggedIndex = currentList.indexOfFirst { it.id == subtask.id }
+                                                    if (draggedIndex != -1) {
+                                                        val spacing = with(density) { 4.dp.toPx() }
+                                                        if (subtaskDragOffsetY > 0) {
+                                                            if (draggedIndex < currentList.size - 1) {
+                                                                val nextItem = currentList[draggedIndex + 1]
+                                                                val nextHeight = subtaskItemHeights[nextItem.id] ?: 100
+                                                                val threshold = nextHeight / 2f + spacing
+                                                                if (subtaskDragOffsetY > threshold) {
+                                                                    val mutableList = currentList.toMutableList()
+                                                                    mutableList.removeAt(draggedIndex)
+                                                                    mutableList.add(draggedIndex + 1, subtask)
+                                                                    draggedSubtasks = mutableList
+                                                                    subtaskDragOffsetY -= (nextHeight + spacing)
+                                                                }
+                                                            }
+                                                        } else if (subtaskDragOffsetY < 0) {
+                                                            if (draggedIndex > 0) {
+                                                                val prevItem = currentList[draggedIndex - 1]
+                                                                val prevHeight = subtaskItemHeights[prevItem.id] ?: 100
+                                                                val threshold = -prevHeight / 2f - spacing
+                                                                if (subtaskDragOffsetY < threshold) {
+                                                                    val mutableList = currentList.toMutableList()
+                                                                    mutableList.removeAt(draggedIndex)
+                                                                    mutableList.add(draggedIndex - 1, subtask)
+                                                                    draggedSubtasks = mutableList
+                                                                    subtaskDragOffsetY += (prevHeight + spacing)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else Modifier
+                            )
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically, 
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onSubtaskToggle(subtask) }
+                            ) {
+                                Icon(
+                                    imageVector = if (subCompleted) Icons.Default.Check else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = if (subCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                val importanceStr = when (subtask.subtaskImportance) {
+                                    "IMPORTANT" -> "⭐ "
+                                    "OPTIONAL" -> "☕ "
+                                    else -> ""
+                                }
+                                Text(
+                                    text = "$importanceStr${subtask.title}",
+                                    fontSize = 11.sp,
+                                    color = if (subCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textDecoration = if (subCompleted) TextDecoration.LineThrough else null,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            
+                            Box {
+                                IconButton(onClick = { subMenuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "Subtask Actions",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = subMenuExpanded,
+                                    onDismissRequest = { subMenuExpanded = false },
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Done/Undone") },
+                                        onClick = {
+                                            onSubtaskToggle(subtask)
+                                            subMenuExpanded = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Postpone to Tomorrow") },
+                                        onClick = {
+                                            onMigrateSubtask(subtask, getOffsetDateString(subtask.date, 1))
+                                            subMenuExpanded = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Make Main Task") },
+                                        onClick = {
+                                            onMakeMainTask(subtask)
+                                            subMenuExpanded = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Remove") },
+                                        onClick = {
+                                            onDeleteSubtask(subtask)
+                                            subMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                }
             }
         }
     }
