@@ -125,7 +125,8 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(24.dp)
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
