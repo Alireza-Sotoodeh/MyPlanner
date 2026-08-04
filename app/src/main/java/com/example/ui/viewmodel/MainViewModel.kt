@@ -223,6 +223,7 @@ class MainViewModel(
                 val shopItemsList = shopItemRepository.allItems.first()
                 val mottosList = mottoRepository.allMottos.first()
                 val dayReviewsList = dayReviewRepository.getAllReviews().first()
+                val ideaStagesList = allIdeas.value.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
                 val backupObj = BulletCoachBackup(
                     tasks = tasksList,
                     habits = habitsList,
@@ -230,6 +231,7 @@ class MainViewModel(
                     sleepLogs = sleepLogsList,
                     ideaGroups = ideaGroupsList,
                     ideas = ideasList,
+                    ideaStages = ideaStagesList,
                     todos = todosList,
                     diaryEntries = diaryEntriesList,
                     shopItems = shopItemsList,
@@ -1460,200 +1462,269 @@ class MainViewModel(
     }
 
     fun deleteGroup(group: IdeaGroupEntity) {
-        viewModelScope.launch { ideaRepository.deleteGroup(group) }
+        viewModelScope.launch {
+            try { ideaRepository.deleteGroup(group) } catch (e: Exception) { Log.e(TAG, "Failed to delete group", e) }
+        }
     }
 
     fun addIdea(groupId: Long?, title: String, description: String, stages: List<IdeaStageEntity> = emptyList()) {
+        if (title.isBlank()) return
         viewModelScope.launch {
-            val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title, description = description))
-            stages.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
-                ideaRepository.insertStage(s.copy(ideaId = ideaId, orderIndex = i))
+            try {
+                val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title.trim(), description = description.trim()))
+                stages.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
+                    ideaRepository.insertStage(s.copy(ideaId = ideaId, orderIndex = i))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add idea", e)
             }
         }
     }
 
     fun updateIdea(idea: IdeaEntity, stages: List<IdeaStageEntity> = emptyList()) {
         viewModelScope.launch {
-            ideaRepository.updateIdea(idea)
-            val existingStages = ideaRepository.getStagesForIdeaSync(idea.id)
-            existingStages.forEach { existing ->
-                if (stages.none { it.id == existing.id }) {
-                    ideaRepository.deleteStage(existing)
+            try {
+                ideaRepository.updateIdea(idea)
+                val existingStages = ideaRepository.getStagesForIdeaSync(idea.id)
+                existingStages.forEach { existing ->
+                    if (stages.none { it.id == existing.id }) {
+                        ideaRepository.deleteStage(existing)
+                    }
                 }
-            }
-            stages.filter { it.title.isNotBlank() }.forEachIndexed { i, stage ->
-                if (stage.id == 0L) {
-                    ideaRepository.insertStage(stage.copy(ideaId = idea.id, orderIndex = i))
-                } else {
-                    ideaRepository.updateStage(stage.copy(orderIndex = i))
+                stages.filter { it.title.isNotBlank() }.forEachIndexed { i, stage ->
+                    if (stage.id == 0L) {
+                        ideaRepository.insertStage(stage.copy(ideaId = idea.id, orderIndex = i))
+                    } else {
+                        ideaRepository.updateStage(stage.copy(orderIndex = i))
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update idea", e)
             }
         }
     }
 
     fun deleteIdea(idea: IdeaEntity) {
-        viewModelScope.launch { ideaRepository.deleteIdea(idea) }
+        viewModelScope.launch {
+            try { ideaRepository.deleteIdea(idea) } catch (e: Exception) { Log.e(TAG, "Failed to delete idea", e) }
+        }
     }
 
     fun moveIdeaToGroup(ideaId: Long, newGroupId: Long?) {
-        viewModelScope.launch { ideaRepository.moveIdeaToGroup(ideaId, newGroupId) }
+        viewModelScope.launch {
+            try { ideaRepository.moveIdeaToGroup(ideaId, newGroupId) } catch (e: Exception) { Log.e(TAG, "Failed to move idea", e) }
+        }
     }
 
     fun addStage(ideaId: Long, title: String) {
+        if (title.isBlank()) return
         viewModelScope.launch {
-            val stages = ideaRepository.getStagesForIdeaSync(ideaId)
-            ideaRepository.insertStage(IdeaStageEntity(ideaId = ideaId, title = title, orderIndex = stages.size))
+            try {
+                val stages = ideaRepository.getStagesForIdeaSync(ideaId)
+                ideaRepository.insertStage(IdeaStageEntity(ideaId = ideaId, title = title.trim(), orderIndex = stages.size))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add stage", e)
+            }
         }
     }
 
     fun updateStage(stage: IdeaStageEntity) {
-        viewModelScope.launch { ideaRepository.updateStage(stage) }
+        viewModelScope.launch {
+            try { ideaRepository.updateStage(stage) } catch (e: Exception) { Log.e(TAG, "Failed to update stage", e) }
+        }
     }
 
     fun deleteStage(stage: IdeaStageEntity) {
-        viewModelScope.launch { ideaRepository.deleteStage(stage) }
+        viewModelScope.launch {
+            try { ideaRepository.deleteStage(stage) } catch (e: Exception) { Log.e(TAG, "Failed to delete stage", e) }
+        }
     }
 
     fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String) {
         viewModelScope.launch {
-            val parentId = taskRepository.insertTask(
-                TaskEntity(
-                    title = idea.title,
-                    description = idea.description,
-                    date = date,
-                    type = type,
-                    label = "IDEA",
-                    durationMinutes = 25,
-                    priority = dailyTasks.value.size + 1
-                )
-            )
-            val stages = ideaRepository.getStagesForIdeaSync(idea.id)
-            stages.filter { it.title.isNotBlank() }.forEach { stage ->
-                taskRepository.insertTask(
+            try {
+                val parentId = taskRepository.insertTask(
                     TaskEntity(
-                        title = stage.title,
+                        title = idea.title,
+                        description = idea.description,
                         date = date,
-                        type = "TASK",
-                        parentTaskId = parentId,
-                        subtaskImportance = "OPTIONAL",
+                        type = type,
                         label = "IDEA",
-                        priority = 0
+                        durationMinutes = 25,
+                        priority = dailyTasks.value.size + 1
                     )
                 )
+                val stages = ideaRepository.getStagesForIdeaSync(idea.id)
+                stages.filter { it.title.isNotBlank() }.forEach { stage ->
+                    taskRepository.insertTask(
+                        TaskEntity(
+                            title = stage.title,
+                            date = date,
+                            type = "TASK",
+                            parentTaskId = parentId,
+                            subtaskImportance = "OPTIONAL",
+                            label = "IDEA",
+                            priority = 0
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add idea to planner", e)
             }
         }
     }
 
     fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String) {
         viewModelScope.launch {
-            taskRepository.insertTask(
-                TaskEntity(
-                    title = stage.title,
-                    date = date,
-                    type = type,
-                    label = "IDEA",
-                    durationMinutes = 25,
-                    priority = dailyTasks.value.size + 1
+            try {
+                taskRepository.insertTask(
+                    TaskEntity(
+                        title = stage.title,
+                        date = date,
+                        type = type,
+                        label = "IDEA",
+                        durationMinutes = 25,
+                        priority = dailyTasks.value.size + 1
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add stage to planner", e)
+            }
         }
     }
 
     // === To-Do CRUD ===
     fun addTodo(title: String, description: String = "", priority: String = "Medium") {
-        viewModelScope.launch { todoRepository.insertTodo(TodoEntity(title = title, description = description, priority = priority)) }
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            try {
+                todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add todo", e)
+            }
+        }
     }
 
     fun updateTodo(todo: TodoEntity) {
-        viewModelScope.launch { todoRepository.updateTodo(todo) }
+        viewModelScope.launch {
+            try {
+                todoRepository.updateTodo(todo)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update todo", e)
+            }
+        }
     }
 
     fun deleteTodo(todo: TodoEntity) {
         viewModelScope.launch {
-            if (todo.linkedTaskId != null) {
-                taskRepository.deleteTaskById(todo.linkedTaskId)
+            try {
+                if (todo.linkedTaskId != null) {
+                    taskRepository.deleteTaskById(todo.linkedTaskId)
+                }
+                todoRepository.deleteTodo(todo)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete todo", e)
             }
-            todoRepository.deleteTodo(todo)
         }
     }
 
     fun toggleTodoCompletion(todo: TodoEntity) {
         viewModelScope.launch {
-            val newStatus = if (todo.status == "DONE") "PENDING" else "DONE"
-            todoRepository.updateTodo(todo.copy(status = newStatus))
+            try {
+                val newStatus = if (todo.status == "DONE") "PENDING" else "DONE"
+                todoRepository.updateTodo(todo.copy(status = newStatus))
 
-            if (todo.linkedTaskId != null && newStatus == "DONE") {
-                val linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
-                if (linkedTask != null && linkedTask.status != "COMPLETED") {
-                    taskRepository.updateTask(linkedTask.copy(status = "COMPLETED"))
+                if (todo.linkedTaskId != null && newStatus == "DONE") {
+                    val linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
+                    if (linkedTask != null && linkedTask.status != "COMPLETED") {
+                        taskRepository.updateTask(linkedTask.copy(status = "COMPLETED"))
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to toggle todo completion", e)
             }
         }
     }
 
     fun linkTodoToTask(todo: TodoEntity, targetDate: String) {
         viewModelScope.launch {
-            val taskId = taskRepository.insertTask(
-                TaskEntity(
-                    title = todo.title,
-                    description = todo.description,
-                    date = targetDate,
-                    type = "TASK",
-                    label = "TODO",
-                    linkedTodoId = todo.id,
-                    priority = dailyTasks.value.size + 1
+            try {
+                val taskId = taskRepository.insertTask(
+                    TaskEntity(
+                        title = todo.title,
+                        description = todo.description,
+                        date = targetDate,
+                        type = "TASK",
+                        label = "TODO",
+                        linkedTodoId = todo.id,
+                        priority = dailyTasks.value.size + 1
+                    )
                 )
-            )
-            todoRepository.updateTodo(todo.copy(linkedTaskId = taskId))
+                todoRepository.updateTodo(todo.copy(linkedTaskId = taskId))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to link todo to task", e)
+            }
         }
     }
 
     fun unlinkTodoFromTask(todo: TodoEntity) {
         viewModelScope.launch {
-            if (todo.linkedTaskId != null) {
-                taskRepository.deleteTaskById(todo.linkedTaskId)
-                todoRepository.updateTodo(todo.copy(linkedTaskId = null))
+            try {
+                if (todo.linkedTaskId != null) {
+                    taskRepository.deleteTaskById(todo.linkedTaskId)
+                    todoRepository.updateTodo(todo.copy(linkedTaskId = null))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to unlink todo from task", e)
             }
         }
     }
 
     fun moveTaskToTodo(task: TaskEntity, subtasks: List<TaskEntity>) {
         viewModelScope.launch {
-            val mergedDescription = buildString {
-                append(task.description)
-                if (subtasks.isNotEmpty()) {
-                    append("\n\nSubtasks:\n")
-                    subtasks.forEachIndexed { i, s -> append("${i + 1}. ${s.title}\n") }
+            try {
+                val mergedDescription = buildString {
+                    append(task.description)
+                    if (subtasks.isNotEmpty()) {
+                        append("\n\nSubtasks:\n")
+                        subtasks.forEachIndexed { i, s -> append("${i + 1}. ${s.title}\n") }
+                    }
                 }
-            }
-            todoRepository.insertTodo(
-                TodoEntity(
-                    title = task.title,
-                    description = mergedDescription.trim(),
-                    priority = task.priorityLevel,
-                    status = "PENDING"
+                todoRepository.insertTodo(
+                    TodoEntity(
+                        title = task.title,
+                        description = mergedDescription.trim(),
+                        priority = task.priorityLevel,
+                        status = "PENDING"
+                    )
                 )
-            )
-            taskRepository.deleteTaskAndSubtasks(task)
+                taskRepository.deleteTaskAndSubtasks(task)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to move task to todo", e)
+            }
         }
     }
 
     fun turnNoteIntoIdea(task: TaskEntity, subtasks: List<TaskEntity>) {
         viewModelScope.launch {
-            val ideaId = ideaRepository.insertIdea(
-                IdeaEntity(title = task.title, description = task.description)
-            )
-            subtasks.forEachIndexed { index, subtask ->
-                ideaRepository.insertStage(
-                    IdeaStageEntity(
-                        ideaId = ideaId,
-                        title = subtask.title,
-                        isCompleted = false,
-                        orderIndex = index
-                    )
+            try {
+                val ideaId = ideaRepository.insertIdea(
+                    IdeaEntity(title = task.title, description = task.description)
                 )
+                subtasks.forEachIndexed { index, subtask ->
+                    ideaRepository.insertStage(
+                        IdeaStageEntity(
+                            ideaId = ideaId,
+                            title = subtask.title,
+                            isCompleted = false,
+                            orderIndex = index
+                        )
+                    )
+                }
+                taskRepository.deleteTaskAndSubtasks(task)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to turn note into idea", e)
             }
-            taskRepository.deleteTaskAndSubtasks(task)
         }
     }
 
