@@ -532,7 +532,9 @@ private fun CronometerTab(
                     fontSize = 72.sp,
                     fontWeight = FontWeight.Light,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
+                    softWrap = false,
+                    maxLines = 1
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
