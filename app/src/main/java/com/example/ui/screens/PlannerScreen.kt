@@ -3887,13 +3887,17 @@ private fun TodoItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = if (descExpanded) "less" else "more",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { descExpanded = !descExpanded }
-                    )
+                    IconButton(
+                        onClick = { descExpanded = !descExpanded },
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (descExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (descExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }

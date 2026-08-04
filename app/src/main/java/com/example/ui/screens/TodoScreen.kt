@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -81,6 +82,16 @@ fun TodoScreen(
                     selected = filter == f,
                     onClick = { filter = f },
                     label = { Text(f.name, fontSize = 12.sp) }
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            val linkedCount = displayTodos.count { it.linkedTaskId != null }
+            if (linkedCount > 0) {
+                Text(
+                    "$linkedCount linked to planner",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 )
             }
         }
@@ -202,6 +213,7 @@ private fun TodoItem(
     onUnlink: (TodoEntity) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var descExpanded by remember { mutableStateOf(false) }
     val isDone = todo.status == "DONE"
 
     Card(
@@ -285,6 +297,35 @@ private fun TodoItem(
                 }
             }
         }
+
+            if (todo.description.isNotBlank()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 28.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
+                        .animateContentSize()
+                ) {
+                    Text(
+                        todo.description,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        maxLines = if (descExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    IconButton(
+                        onClick = { descExpanded = !descExpanded },
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (descExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (descExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
     }
 }
 
