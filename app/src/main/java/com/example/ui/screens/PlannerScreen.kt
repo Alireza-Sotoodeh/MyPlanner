@@ -4713,8 +4713,6 @@ private fun IdeaCard(
     var newStageTitle by remember { mutableStateOf("") }
     var showIdeaMenu by remember { mutableStateOf(false) }
     var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
-    var descExpanded by remember { mutableStateOf(false) }
-
     val ideaGroup = remember(idea.groupId) {
         viewModel.ideaGroups.value.find { it.id == idea.groupId }
     }
@@ -4811,28 +4809,12 @@ private fun IdeaCard(
             ) {
                 Column {
                     if (idea.description.isNotBlank()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 26.dp, end = 4.dp, top = 2.dp)
-                                .animateContentSize()
-                        ) {
-                            Text(
-                                idea.description,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                maxLines = if (descExpanded) Int.MAX_VALUE else 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = if (descExpanded) "less" else "more",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { descExpanded = !descExpanded }
-                            )
-                        }
+                        Text(
+                            idea.description,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(start = 26.dp, end = 4.dp, top = 2.dp)
+                        )
                     }
 
                     if (stages.isNotEmpty()) {
@@ -4908,38 +4890,84 @@ private fun StageRow(
     val index = stages.indexOf(stage)
     val previousCompleted = index == 0 || stages.take(index).all { it.isCompleted }
     val canToggle = previousCompleted
+    var stageMenuExpanded by remember { mutableStateOf(false) }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(
-            checked = stage.isCompleted,
-            onCheckedChange = { checked ->
-                viewModel.updateStage(stage.copy(isCompleted = checked))
-                if (!checked) {
-                    stages.drop(index + 1).forEach {
-                        viewModel.updateStage(it.copy(isCompleted = false))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(
+            imageVector = Icons.Default.SubdirectoryArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp).padding(end = 4.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                .clickable {
+                    if (canToggle || stage.isCompleted) {
+                        viewModel.updateStage(stage.copy(isCompleted = !stage.isCompleted))
+                        if (stage.isCompleted) {
+                            stages.drop(index + 1).forEach {
+                                viewModel.updateStage(it.copy(isCompleted = false))
+                            }
+                        }
                     }
                 }
-            },
-            enabled = canToggle || stage.isCompleted,
-            modifier = Modifier.size(20.dp),
-            colors = CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary,
-                uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                .padding(horizontal = 6.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                imageVector = if (stage.isCompleted) Icons.Default.Check else Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = if (stage.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            stage.title,
-            fontSize = 13.sp,
-            color = if (stage.isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-            else MaterialTheme.colorScheme.onSurface,
-            textDecoration = if (stage.isCompleted) TextDecoration.LineThrough else TextDecoration.None
-        )
-        Spacer(Modifier.weight(1f))
-        if (canToggle) {
-            IconButton(onClick = { onDelete(stage) }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Delete stage", modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                stage.title,
+                fontSize = 11.sp,
+                color = if (stage.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                textDecoration = if (stage.isCompleted) TextDecoration.LineThrough else null,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Box {
+            IconButton(onClick = { stageMenuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Stage Actions",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+            DropdownMenu(
+                expanded = stageMenuExpanded,
+                onDismissRequest = { stageMenuExpanded = false },
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+            ) {
+                if (canToggle || stage.isCompleted) {
+                    DropdownMenuItem(
+                        text = { Text(if (stage.isCompleted) "Mark Undone" else "Mark Done") },
+                        onClick = {
+                            viewModel.updateStage(stage.copy(isCompleted = !stage.isCompleted))
+                            if (stage.isCompleted) {
+                                stages.drop(index + 1).forEach {
+                                    viewModel.updateStage(it.copy(isCompleted = false))
+                                }
+                            }
+                            stageMenuExpanded = false
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        onDelete(stage)
+                        stageMenuExpanded = false
+                    }
+                )
             }
         }
     }
