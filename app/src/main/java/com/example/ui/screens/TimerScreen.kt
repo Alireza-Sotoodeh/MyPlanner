@@ -908,7 +908,7 @@ private fun TaskSelectorSection(
                     "TASKS" to "Tasks",
                     "SUBTASKS" to "Subtasks",
                     "NOTES" to "Notes",
-                    "SUB_NOTES" to "Sub Notes"
+                    "SUB_NOTES" to "SubNotes"
                 ).forEach { (key, label) ->
                     FilterChip(
                         selected = selectedCategory == key,
