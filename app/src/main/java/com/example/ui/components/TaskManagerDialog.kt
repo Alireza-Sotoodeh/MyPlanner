@@ -99,6 +99,9 @@ fun TaskManagerDialog(
     var editingStageText by remember { mutableStateOf("") }
     var editingStageImportance by remember { mutableStateOf("OPTIONAL") }
     var showNewGroupDialog by remember { mutableStateOf(false) }
+    var groupMenuTarget by remember { mutableStateOf<IdeaGroupEntity?>(null) }
+    var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
+    var showDeleteGroupConfirm by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     val presetColors = listOf(0xFF6750A4, 0xFFB3261E, 0xFF00E676, 0xFF2196F3, 0xFFFF7043, 0xFFFFEB3B, 0xFFE91E63, 0xFF00BCD4)
     var showNewLabelDialog by remember { mutableStateOf(false) }
     var labelToEdit by remember { mutableStateOf<Pair<String, Long>?>(null) }
@@ -411,17 +414,32 @@ fun TaskManagerDialog(
                             }
                             items(ideaGroups) { group ->
                                 val isSelected = selectedGroupId == group.id
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
-                                    border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                                    modifier = Modifier.fillMaxHeight().combinedClickable(
-                                        onClick = { selectedGroupId = group.id },
-                                        onLongClick = { viewModel.deleteGroup(group) }
-                                    )
-                                ) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
-                                        Text(group.name, fontSize = 14.sp, color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Box {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                                        border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                        modifier = Modifier.fillMaxHeight().combinedClickable(
+                                            onClick = { selectedGroupId = group.id },
+                                            onLongClick = { groupMenuTarget = group }
+                                        )
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                            Text(group.name, fontSize = 14.sp, color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                    DropdownMenu(
+                                        expanded = groupMenuTarget?.id == group.id,
+                                        onDismissRequest = { groupMenuTarget = null }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Edit") },
+                                            onClick = { editingGroup = group; groupMenuTarget = null }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Remove", color = MaterialTheme.colorScheme.error) },
+                                            onClick = { showDeleteGroupConfirm = group; groupMenuTarget = null }
+                                        )
                                     }
                                 }
                             }
@@ -1302,6 +1320,71 @@ fun TaskManagerDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showNewGroupDialog = false }) { Text("CANCEL") }
+            }
+        )
+    }
+
+    editingGroup?.let { group ->
+        var editName by remember(group.id) { mutableStateOf(group.name) }
+        var editColor by remember(group.id) { mutableStateOf(group.color) }
+        AlertDialog(
+            onDismissRequest = { editingGroup = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Edit Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("Group Name") }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(presetColors) { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(color))
+                                    .border(2.dp, if (editColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                    .clickable { editColor = color }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (editName.isNotBlank()) {
+                            viewModel.updateGroup(group.copy(name = editName.trim(), color = editColor))
+                            editingGroup = null
+                        }
+                    },
+                    enabled = editName.isNotBlank()
+                ) { Text("SAVE") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingGroup = null }) { Text("CANCEL") }
+            }
+        )
+    }
+
+    showDeleteGroupConfirm?.let { group ->
+        AlertDialog(
+            onDismissRequest = { showDeleteGroupConfirm = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Delete group?") },
+            text = { Text("All ideas in \"${group.name}\" will also be deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (selectedGroupId == group.id) selectedGroupId = null
+                    viewModel.deleteGroup(group)
+                    showDeleteGroupConfirm = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteGroupConfirm = null }) { Text("CANCEL") }
             }
         )
     }
