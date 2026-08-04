@@ -325,7 +325,7 @@ fun DiaryScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.Center
         ) {
             val buttons = listOf(
                 Triple("B", "Bold") { formatBold() },
@@ -334,13 +334,14 @@ fun DiaryScreen(
                 Triple("\u2022", "Bullet") { insertBullet() },
                 Triple("H", "Heading") { insertHeading() },
             )
-            buttons.forEach { (label, desc, action) ->
-                OutlinedButton(
-                    onClick = action,
-                    modifier = Modifier.height(40.dp).widthIn(min = 40.dp),
-                    contentPadding = PaddingValues(8.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+            buttons.forEachIndexed { i, (label, desc, action) ->
+                if (i > 0) Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                        .clickable(onClick = action),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         label,
