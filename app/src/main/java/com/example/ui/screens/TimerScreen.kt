@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
@@ -1047,7 +1049,7 @@ private fun HistoryDatePickerDialog(
                 if (editingYear) {
                     val focusRequester = remember { FocusRequester() }
                     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-                    TextField(
+                    BasicTextField(
                         value = yearInput,
                         onValueChange = { yearInput = it.filter { c -> c.isDigit() }.take(5) },
                         singleLine = true,
@@ -1068,6 +1070,7 @@ private fun HistoryDatePickerDialog(
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center
                         ),
+                        cursorBrush = SolidColor(Color.Transparent),
                         modifier = Modifier
                             .focusRequester(focusRequester)
                             .widthIn(min = 80.dp)
