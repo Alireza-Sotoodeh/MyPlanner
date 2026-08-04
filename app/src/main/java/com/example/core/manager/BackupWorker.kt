@@ -97,7 +97,6 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val fileId = DriveManager.uploadBackup(applicationContext, data, filename)
 
             if (fileId != null) {
-                DriveManager.rotateBackups(applicationContext)
                 prefs.edit().putLong("drive_last_sync_at", System.currentTimeMillis()).apply()
                 Log.d(TAG, "Auto-backup successful")
             } else {

@@ -559,7 +559,6 @@ class MainViewModel(
                 val fileId = com.example.core.manager.DriveManager.uploadBackup(context, data, filename)
 
                 if (fileId != null) {
-                    com.example.core.manager.DriveManager.rotateBackups(context)
                     val lastSync = System.currentTimeMillis()
                     prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
                     onResult(true, "Successfully backed up ${tasksList.size} intentions, ${habitsList.size} habits, and logs to Google Drive!")

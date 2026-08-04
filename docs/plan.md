@@ -199,28 +199,14 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 - [x] **Edge case:** Deletion fails silently — `catch (e: Exception) { Log.w(...) }`, doesn't block the backup
 - [x] **Verify:** `assembleDebug` succeeds
 
-### 4.4 — Wire DriveManager into MainViewModel
+### 4.4 — Wire DriveManager into MainViewModel `[x] DONE`
 
-- [ ] **`backupDataToGoogleDrive()` changes:**
-  
-  - After building `BulletCoachBackup` object and serializing to JSON:
-    1. If `google_drive_connected` → gzip bytes → `DriveManager.uploadBackup()`
-    2. Always save local uncompressed `bulletcoach_backup.json` (offline fallback)
-    3. Update `_statusMessage`: "Backed up locally" / "Backed up to Google Drive"
-    4. Update `drive_last_sync_at` pref
-  - If Drive upload fails → still save locally, show "Drive upload failed, saved locally"
-
-- [ ] **`restoreDataFromGoogleDrive()` changes:**
-  
-  - Attempt to read from Drive first:
-    1. Download → gunzip → Moshi parse
-    2. If Drive download fails → fall back to local file
-    3. If both fail → show "No backup available"
-  - Rest of restore logic unchanged
-
-- [ ] **Edge case:** Drive connected but no network → skip Drive, use local cache
-
-- [ ] **Edge case:** User signed out → show "Google Drive disconnected, using local backup"
+- [x] `backupDataToGoogleDrive()` — checks `isSignedIn()`, builds `BulletCoachBackup`, serializes to JSON, saves local `bulletcoach_backup.json`, uploads to Drive via `DriveManager.uploadBackup()`, updates `drive_last_sync_at`, reports status via callback
+- [x] `restoreDataFromGoogleDrive()` — tries `DriveManager.downloadLatest()` first, falls back to local file, parses with Moshi, runs FK nullification + `SystemSettingsApplier`, reports via callback
+- [x] Removed redundant `rotateBackups()` call from both functions (now handled inside `uploadBackup()`)
+- [x] **Edge case:** Drive connected but no network → `uploadBackup()` returns null → still saved locally
+- [x] **Edge case:** User signed out → `isSignedIn()` returns false → shows "Not signed in" message
+- [x] **Verify:** `assembleDebug` succeeds
 
 ### 4.5 — Auto-backup via WorkManager
 
