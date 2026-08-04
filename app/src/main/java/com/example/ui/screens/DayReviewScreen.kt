@@ -46,6 +46,20 @@ fun DayReviewScreen(
     var savedMessage by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
 
+    val allTasks by viewModel.allTasks.collectAsState()
+    val allHabitLogs by viewModel.allHabitLogs.collectAsState()
+    val allTimerSessions by viewModel.allTimerSessions.collectAsState()
+    val allSleepLogs by viewModel.allSleepLogs.collectAsState()
+    val diaryEntry by viewModel.diaryEntryForDate(currentDate).collectAsState(initial = null)
+
+    val completedTasks = remember(allTasks, currentDate) { allTasks.count { it.date == currentDate && it.status == "COMPLETED" } }
+    val totalTasks = remember(allTasks, currentDate) { allTasks.count { it.date == currentDate && it.type == "TASK" } }
+    val habitsChecked = remember(allHabitLogs, currentDate) { allHabitLogs.count { it.date == currentDate } }
+    val pomodoroCount = remember(allTimerSessions, currentDate) { allTimerSessions.count { it.date == currentDate && it.type == "POMODORO" } }
+    val hoursSlept = remember(allSleepLogs, currentDate) { allSleepLogs.find { it.date == currentDate }?.hoursSlept }
+    val hasDiary = remember(diaryEntry) { diaryEntry != null }
+    val eventsCount = remember(allTasks, currentDate) { allTasks.count { it.date == currentDate && it.type == "EVENT" } }
+
     LaunchedEffect(review) {
         if (review != null) {
             good = review!!.good
@@ -145,6 +159,98 @@ fun DayReviewScreen(
                 Text(savedMessage, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End)
             }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "At a Glance",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            StatTile(
+                                icon = Icons.Default.CheckCircle,
+                                label = "Tasks",
+                                value = if (totalTasks > 0) "$completedTasks/$totalTasks" else "0",
+                                active = completedTasks > 0
+                            )
+                            StatTile(
+                                icon = Icons.Default.FavoriteBorder,
+                                label = "Habits",
+                                value = if (habitsChecked > 0) "$habitsChecked" else "0",
+                                active = habitsChecked > 0
+                            )
+                            StatTile(
+                                icon = Icons.Default.Timer,
+                                label = "Pomodoro",
+                                value = if (pomodoroCount > 0) "$pomodoroCount" else "0",
+                                active = pomodoroCount > 0
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            StatTile(
+                                icon = Icons.Default.Bedtime,
+                                label = "Sleep",
+                                value = hoursSlept?.let { h ->
+                                    val rounded = (h * 10).toInt() / 10.0
+                                    "${rounded}h"
+                                } ?: "—",
+                                active = hoursSlept != null
+                            )
+                            StatTile(
+                                icon = Icons.Default.Notes,
+                                label = "Diary",
+                                value = if (hasDiary) "Saved" else "—",
+                                active = hasDiary
+                            )
+                            StatTile(
+                                icon = Icons.Default.Event,
+                                label = "Events",
+                                value = if (eventsCount > 0) "$eventsCount" else "0",
+                                active = eventsCount > 0
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             SectionCard(
                 title = "How was your day?",
@@ -386,6 +492,43 @@ private fun ReviewField(label: String, value: String, onValueChange: (String) ->
             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
         )
     )
+}
+
+@Composable
+private fun RowScope.StatTile(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    active: Boolean
+) {
+    val color = if (active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.weight(1f)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+        )
+        Text(
+            text = value,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = color
+        )
+    }
 }
 
 private fun formatDisplayDate(dateStr: String): String {
