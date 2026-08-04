@@ -42,7 +42,6 @@ fun IdeasScreen(
 
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
     var showCreateGroupDialog by remember { mutableStateOf(false) }
-    var showCreateGroupFromIdeaDialog by remember { mutableStateOf(false) }
     var showCreateIdeaDialog by remember { mutableStateOf(false) }
     var editingIdea by remember { mutableStateOf<IdeaEntity?>(null) }
     var showDeleteIdeaConfirm by remember { mutableStateOf<IdeaEntity?>(null) }
@@ -156,14 +155,6 @@ fun IdeasScreen(
             onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupDialog = false }
         )
     }
-    if (showCreateGroupFromIdeaDialog) {
-        CreateGroupDialog(
-            initialName = null,
-            initialColor = presetColors[0],
-            onDismiss = { showCreateGroupFromIdeaDialog = false },
-            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupFromIdeaDialog = false }
-        )
-    }
     editingGroup?.let { group ->
         CreateGroupDialog(
             initialName = group.name,
@@ -179,6 +170,7 @@ fun IdeasScreen(
         val existing = editingIdea
         val existingStages by viewModel.stagesForIdea(existing?.id ?: -1L).collectAsState(initial = emptyList())
         CreateIdeaDialog(
+            viewModel = viewModel,
             groups = groups,
             initialTitle = existing?.title ?: "",
             initialDescription = existing?.description ?: "",
@@ -192,8 +184,7 @@ fun IdeasScreen(
                     viewModel.addIdea(groupId, title, description, stages)
                 }
                 showCreateIdeaDialog = false; editingIdea = null
-            },
-            onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
+            }
         )
     }
     showDeleteIdeaConfirm?.let { idea ->
@@ -542,27 +533,26 @@ private fun CreateGroupDialog(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CreateIdeaDialog(
+    viewModel: MainViewModel,
     groups: List<IdeaGroupEntity>,
     initialTitle: String,
     initialDescription: String,
     initialGroupId: Long?,
     initialStages: List<IdeaStageEntity> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit,
-    onShowCreateGroup: () -> Unit = {}
+    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var description by remember { mutableStateOf(initialDescription) }
     var selectedGroupId by remember { mutableStateOf(initialGroupId) }
     var stages by remember { mutableStateOf(initialStages) }
-    var expanded by remember { mutableStateOf(false) }
     var newStageTitle by remember { mutableStateOf("") }
     var editingStageIndex by remember { mutableStateOf(-1) }
     var editingStageText by remember { mutableStateOf("") }
-
-    val selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "None"
+    var showNewGroupDialog by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -588,56 +578,74 @@ private fun CreateIdeaDialog(
                     modifier = Modifier.fillMaxWidth().height(100.dp),
                     maxLines = 4
                 )
-                Box {
-                    Surface(
-                        onClick = { expanded = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = OutlinedTextFieldDefaults.shape,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "Group",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+
+                Text("Group:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    item {
+                        val isNone = selectedGroupId == null
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isNone) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isNone) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .clickable { selectedGroupId = null }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
                                 Text(
-                                    selectedGroupName,
-                                    fontSize = 16.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(
-                                    Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    "None",
+                                    fontSize = 14.sp,
+                                    color = if (isNone) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Create New Group...")
-                                }
-                            },
-                            onClick = { expanded = false; onShowCreateGroup() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("None") },
-                            onClick = { selectedGroupId = null; expanded = false }
-                        )
-                        groups.forEach { group ->
-                            DropdownMenuItem(
-                                text = { Text(group.name) },
-                                onClick = { selectedGroupId = group.id; expanded = false }
-                            )
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .clickable { showNewGroupDialog = true }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text("+ New", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    items(groups) { group ->
+                        val isSelected = selectedGroupId == group.id
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .combinedClickable(
+                                    onClick = { selectedGroupId = group.id },
+                                    onLongClick = {
+                                        viewModel.deleteGroup(group)
+                                    }
+                                )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(group.color))
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(group.name, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                            }
                         }
                     }
                 }
@@ -731,6 +739,59 @@ private fun CreateIdeaDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+
+    if (showNewGroupDialog) {
+        var newGroupName by remember { mutableStateOf("") }
+        var selectedColor by remember { mutableStateOf(presetColors[0]) }
+        AlertDialog(
+            onDismissRequest = { showNewGroupDialog = false },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("New Group", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = newGroupName,
+                        onValueChange = { newGroupName = it },
+                        label = { Text("Group name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Color", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        presetColors.forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(color))
+                                    .border(
+                                        if (selectedColor == color) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                        CircleShape
+                                    )
+                                    .clickable { selectedColor = color }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newGroupName.isNotBlank()) {
+                            viewModel.addGroup(newGroupName.trim(), selectedColor)
+                            showNewGroupDialog = false
+                        }
+                    },
+                    enabled = newGroupName.isNotBlank()
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewGroupDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
