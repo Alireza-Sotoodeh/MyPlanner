@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -824,8 +825,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     var dragOffsetY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
                     var draggedTasks by remember { mutableStateOf<List<TaskEntity>?>(null) }
                     val density = androidx.compose.ui.platform.LocalDensity.current
+                    val lazyListState = rememberLazyListState()
 
-                    LazyColumn(
+                    LaunchedEffect(filterLabels) {
+                        lazyListState.animateScrollToItem(0)
+                    }
+
+                    LazyColumn(state = lazyListState,
                         modifier = Modifier
                             .weight(1f)
                             .padding(12.dp),
@@ -3751,19 +3757,10 @@ private fun TodoTab(viewModel: MainViewModel) {
                     )
                     val pendingTodos = allRootTodos.filter { it.status == "PENDING" }
                     val pendingCount = pendingTodos.size
-                    val linkedCount = allRootTodos.count { it.linkedTaskId != null && it.status == "PENDING" }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (linkedCount > 0) {
-                            Text(
-                                "$linkedCount linked",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                            )
-                        }
                         IconButton(
                             onClick = { viewModel.triggerReorderTodosByPriority() },
                             modifier = Modifier.size(24.dp)
@@ -4138,7 +4135,6 @@ private fun TodoItem(
     onMoveToPlanner: (TodoEntity) -> Unit = {}
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    var addSubTodoText by remember { mutableStateOf("") }
     val isDone = todo.status == "DONE"
 
     val scale by androidx.compose.animation.core.animateFloatAsState(
@@ -4339,7 +4335,7 @@ private fun TodoItem(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(
-                        imageVector = if (expandedSubTodos) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        imageVector = if (expanded || expandedSubTodos) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = "Toggle Subtasks",
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -4347,7 +4343,7 @@ private fun TodoItem(
                 }
 
                 AnimatedVisibility(
-                    visible = expandedSubTodos,
+                    visible = expanded || expandedSubTodos,
                     enter = expandVertically(
                         animationSpec = androidx.compose.animation.core.spring(
                             stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
@@ -4436,41 +4432,6 @@ private fun TodoItem(
                                             )
                                         }
                                     }
-                                }
-                            }
-
-                            // Inline add subtodo
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().padding(start = 18.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = addSubTodoText,
-                                    onValueChange = { addSubTodoText = it },
-                                    placeholder = { Text("Add subtask...", fontSize = 11.sp) },
-                                    modifier = Modifier.weight(1f).height(40.dp),
-                                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                                    )
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = {
-                                        if (addSubTodoText.isNotBlank()) {
-                                            viewModel.addSubTodo(todo, addSubTodoText)
-                                            addSubTodoText = ""
-                                        }
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = "Add Subtask",
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
                                 }
                             }
                         }
