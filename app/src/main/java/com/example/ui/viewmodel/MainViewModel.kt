@@ -21,6 +21,7 @@ import androidx.core.app.NotificationCompat
 import android.app.NotificationChannel
 import android.provider.Settings
 import android.provider.MediaStore
+import android.provider.DocumentsContract
 import android.util.Log
 import kotlin.math.ceil
 import java.util.concurrent.ConcurrentHashMap
@@ -58,6 +59,8 @@ import com.example.core.repository.TodoRepository
 import com.example.core.utils.PersianCalendarHelper
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.squareup.moshi.JsonAdapter
+import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -210,6 +213,54 @@ class MainViewModel(
     private val TAG = "MainViewModel"
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
     private val moshiStrict = moshi.adapter(BulletCoachBackup::class.java).failOnUnknown().lenient()
+    private val adapterCache = HashMap<Class<*>, JsonAdapter<*>>()
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T : Any> entityListAdapter(clazz: Class<T>): JsonAdapter<List<T>> {
+        return adapterCache.getOrPut(clazz) {
+            val type = Types.newParameterizedType(List::class.java, clazz)
+            moshi.adapter<List<T>>(type).indent("  ")
+        } as JsonAdapter<List<T>>
+    }
+
+    private fun isTaskInMonth(task: TaskEntity, month: String): Boolean {
+        val d = task.date
+        return when {
+            d.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$")) -> d.startsWith(month)
+            d.matches(Regex("^\\d{4}-\\d{2}$")) -> d == month
+            d.matches(Regex("^\\d{4}-W\\d{2}$")) -> {
+                try {
+                    val cal = Calendar.getInstance()
+                    cal.set(Calendar.YEAR, d.substring(0, 4).toInt())
+                    cal.set(Calendar.WEEK_OF_YEAR, d.substring(6).toInt())
+                    cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                    SimpleDateFormat("yyyy-MM", Locale.US).format(cal.time) == month
+                } catch (_: Exception) { false }
+            }
+            else -> false
+        }
+    }
+
+    private fun writeEntityFile(parentUri: android.net.Uri, name: String, json: String) {
+        val existing = findChildUri(parentUri, name)
+        if (existing != null) deleteDocument(existing)
+        val createdUri = DocumentsContract.createDocument(
+            context.contentResolver, parentUri, "application/json", name.removeSuffix(".json")
+        )
+        if (createdUri != null) {
+            context.contentResolver.openOutputStream(createdUri)?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+        }
+    }
+
+    private val backupRootDir: android.net.Uri?
+        get() {
+            val uriStr = _backupLocationUri.value ?: return null
+            return try {
+                val uri = android.net.Uri.parse(uriStr)
+                if (documentExists(uri)) uri else null
+            } catch (_: Exception) { null }
+        }
+
     private val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
 
     private val _isSyncing = MutableStateFlow(false)
@@ -230,11 +281,11 @@ class MainViewModel(
     }
 
     // State flows for Settings
-    private val _googleDriveConnected = MutableStateFlow(prefs.getBoolean("google_drive_connected", false))
-    val googleDriveConnected: StateFlow<Boolean> = _googleDriveConnected.asStateFlow()
+    private val _backupLocationUri = MutableStateFlow<String?>(prefs.getString("backup_location_uri", null))
+    val backupLocationUri: StateFlow<String?> = _backupLocationUri.asStateFlow()
 
-    private val _googleDriveEmail = MutableStateFlow(prefs.getString("google_drive_email", "") ?: "")
-    val googleDriveEmail: StateFlow<String> = _googleDriveEmail.asStateFlow()
+    private val _backupMaxMonths = MutableStateFlow(prefs.getInt("backup_max_months", 5))
+    val backupMaxMonths: StateFlow<Int> = _backupMaxMonths.asStateFlow()
 
     private val _lastBackupTimestamp = MutableStateFlow(prefs.getLong("drive_last_sync_at", 0L))
     val lastBackupTimestamp: StateFlow<Long> = _lastBackupTimestamp.asStateFlow()
@@ -441,64 +492,19 @@ class MainViewModel(
         _defaultBreakMinutes.value = minutes
     }
 
-    fun updateGoogleDriveConnected(connected: Boolean, email: String = "") {
-        if (connected) {
-            trySilentSignIn(email)
+    fun setBackupLocationUri(uri: String?) {
+        if (uri != null) {
+            prefs.edit().putString("backup_location_uri", uri).apply()
         } else {
-            com.example.core.manager.DriveManager.signOut(context)
-            com.example.core.manager.DriveManager.invalidateToken()
-            prefs.edit().putBoolean("google_drive_connected", false)
-                .putString("google_drive_email", "")
-                .apply()
-            _googleDriveConnected.value = false
-            _googleDriveEmail.value = ""
+            prefs.edit().remove("backup_location_uri").apply()
         }
+        _backupLocationUri.value = uri
     }
 
-    private fun clearDriveConnected() {
-        if (_googleDriveConnected.value) {
-            com.example.core.manager.DriveManager.signOut(context)
-            com.example.core.manager.DriveManager.invalidateToken()
-            prefs.edit().putBoolean("google_drive_connected", false)
-                .putString("google_drive_email", "")
-                .apply()
-            _googleDriveConnected.value = false
-            _googleDriveEmail.value = ""
-        }
-    }
-
-    private val _pendingDriveSignInIntent = MutableStateFlow<android.content.Intent?>(null)
-    val pendingDriveSignInIntent: StateFlow<android.content.Intent?> = _pendingDriveSignInIntent.asStateFlow()
-
-    private fun trySilentSignIn(email: String) {
-        viewModelScope.launch {
-            if (com.example.core.manager.DriveManager.isSignedIn(context)) {
-                val account = com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(context)
-                val accEmail = account?.email ?: email
-                prefs.edit().putBoolean("google_drive_connected", true)
-                    .putString("google_drive_email", accEmail)
-                    .apply()
-                _googleDriveConnected.value = true
-                _googleDriveEmail.value = accEmail
-            } else {
-                _pendingDriveSignInIntent.value = com.example.core.manager.DriveManager.getSignInIntent(context)
-            }
-        }
-    }
-
-    fun onDriveSignInResult(data: android.content.Intent?): Boolean {
-        _pendingDriveSignInIntent.value = null
-        val account = com.example.core.manager.DriveManager.handleSignInResult(data)
-        if (account != null) {
-            val email = account.email ?: ""
-            prefs.edit().putBoolean("google_drive_connected", true)
-                .putString("google_drive_email", email)
-                .apply()
-            _googleDriveConnected.value = true
-            _googleDriveEmail.value = email
-            return true
-        }
-        return false
+    fun setBackupMaxMonths(count: Int) {
+        val clamped = count.coerceIn(1, 99)
+        prefs.edit().putInt("backup_max_months", clamped).apply()
+        _backupMaxMonths.value = clamped
     }
 
     fun updateDndEnabled(enabled: Boolean) {
@@ -615,13 +621,14 @@ class MainViewModel(
         }
     }
 
-    // Google Drive / JSON Backup and Restore
-    fun backupDataToGoogleDrive(onResult: (Boolean, String) -> Unit) {
+    // Local directory backup
+    fun backupDataToLocation(onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             _isSyncing.value = true
             try {
-                if (!com.example.core.manager.DriveManager.isSignedIn(context)) {
-                    onResult(false, "Not signed in to Google Drive. Please reconnect.")
+                val rootDir = backupRootDir
+                if (rootDir == null) {
+                    onResult(false, "Please choose a backup location first")
                     return@launch
                 }
 
@@ -639,51 +646,68 @@ class MainViewModel(
                 val timerSessionsList = timerRepository.getAllSessions().first()
                 val timerTemplatesList = timerRepository.getAllTemplates().first()
                 val ideaStagesList = allIdeas.value.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
-                val backupObj = BulletCoachBackup(
-                    tasks = tasksList,
-                    habits = habitsList,
-                    habitLogs = habitLogsList,
-                    sleepLogs = sleepLogsList,
-                    ideaGroups = ideaGroupsList,
-                    ideas = ideasList,
-                    ideaStages = ideaStagesList,
-                    todos = todosList,
-                    diaryEntries = diaryEntriesList,
-                    shopItems = shopItemsList,
-                    mottos = mottosList,
-                    dayReviews = dayReviewsList,
-                    learnGroups = learnRepository.getAllGroupsSync(),
-                    learnItems = learnItems.value,
-                    learnSections = learnItems.value.flatMap { learnRepository.getSectionsForItemSync(it.id) },
-                    timerSessions = timerSessionsList,
-                    timerTemplates = timerTemplatesList
-                )
+                val learnGroupsList = learnRepository.getAllGroupsSync()
+                val learnItemsList = learnItems.value
+                val learnSectionsList = learnItemsList.flatMap { learnRepository.getSectionsForItemSync(it.id) }
 
-                val adapter = moshi.adapter(BulletCoachBackup::class.java)
-                val jsonString = adapter.toJson(backupObj)
+                val currentMonth = backupMonthLabel()
 
-                // Save locally (offline fallback) — uncompressed
-                val backupFile = java.io.File(context.filesDir, "bulletcoach_backup.json")
-                backupFile.writeText(jsonString)
+                // Filter date-based entities by current month
+                val monthTasks = tasksList.filter { isTaskInMonth(it, currentMonth) }
+                val monthHabitLogs = habitLogsList.filter { it.date.startsWith(currentMonth) }
+                val monthSleepLogs = sleepLogsList.filter { it.date.startsWith(currentMonth) }
+                val monthDiaryEntries = diaryEntriesList.filter { it.date.startsWith(currentMonth) }
+                val monthDayReviews = dayReviewsList.filter { it.date.startsWith(currentMonth) }
+                val monthTimerSessions = timerSessionsList.filter { it.date.startsWith(currentMonth) }
 
-                // Gzip for Drive upload
-                val jsonBytes = jsonString.toByteArray(StandardCharsets.UTF_8)
-                val bos = java.io.ByteArrayOutputStream()
-                java.util.zip.GZIPOutputStream(bos).use { it.write(jsonBytes) }
-                val gzipBytes = bos.toByteArray()
-                val dateStr = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                val filename = "bulletcoach_${dateStr}.json.gz"
-                val fileId = com.example.core.manager.DriveManager.uploadBackup(context, gzipBytes, filename)
-
-                if (fileId != null) {
-                    val lastSync = System.currentTimeMillis()
-                    prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
-                    _lastBackupTimestamp.value = lastSync
-                    onResult(true, "Successfully backed up ${tasksList.size} intentions, ${habitsList.size} habits, and logs to Google Drive!")
-                } else {
-                    if (!com.example.core.manager.DriveManager.isSignedIn(context)) clearDriveConnected()
-                    onResult(true, "Saved locally (Drive upload failed). ${tasksList.size} intentions backed up.")
+                // Get or create _permanent directory
+                var permanentDir = findChildUri(rootDir, "_permanent")
+                if (permanentDir == null) {
+                    permanentDir = DocumentsContract.createDocument(
+                        context.contentResolver, rootDir, DocumentsContract.Document.MIME_TYPE_DIR, "_permanent"
+                    )
                 }
+
+                // Write permanent entity files
+                if (permanentDir != null) {
+                    writeEntityFile(permanentDir, "HabitEntity.json", entityListAdapter(HabitEntity::class.java).toJson(habitsList))
+                    writeEntityFile(permanentDir, "TodoEntity.json", entityListAdapter(TodoEntity::class.java).toJson(todosList))
+                    writeEntityFile(permanentDir, "MottoEntity.json", entityListAdapter(MottoEntity::class.java).toJson(mottosList))
+                    writeEntityFile(permanentDir, "ShopItemEntity.json", entityListAdapter(ShopItemEntity::class.java).toJson(shopItemsList))
+                    writeEntityFile(permanentDir, "IdeaGroupEntity.json", entityListAdapter(IdeaGroupEntity::class.java).toJson(ideaGroupsList))
+                    writeEntityFile(permanentDir, "IdeaEntity.json", entityListAdapter(IdeaEntity::class.java).toJson(ideasList))
+                    writeEntityFile(permanentDir, "IdeaStageEntity.json", entityListAdapter(IdeaStageEntity::class.java).toJson(ideaStagesList))
+                    writeEntityFile(permanentDir, "LearnGroupEntity.json", entityListAdapter(LearnGroupEntity::class.java).toJson(learnGroupsList))
+                    writeEntityFile(permanentDir, "LearnItemEntity.json", entityListAdapter(LearnItemEntity::class.java).toJson(learnItemsList))
+                    writeEntityFile(permanentDir, "LearnSectionEntity.json", entityListAdapter(LearnSectionEntity::class.java).toJson(learnSectionsList))
+                    writeEntityFile(permanentDir, "TimerTemplateEntity.json", entityListAdapter(TimerTemplateEntity::class.java).toJson(timerTemplatesList))
+                }
+
+                // Get or create month directory
+                var monthDir = findChildUri(rootDir, currentMonth)
+                if (monthDir == null) {
+                    monthDir = DocumentsContract.createDocument(
+                        context.contentResolver, rootDir, DocumentsContract.Document.MIME_TYPE_DIR, currentMonth
+                    )
+                }
+
+                // Write date-filtered entity files
+                if (monthDir != null) {
+                    writeEntityFile(monthDir, "TaskEntity.json", entityListAdapter(TaskEntity::class.java).toJson(monthTasks))
+                    writeEntityFile(monthDir, "HabitLogEntity.json", entityListAdapter(HabitLogEntity::class.java).toJson(monthHabitLogs))
+                    writeEntityFile(monthDir, "SleepLogEntity.json", entityListAdapter(SleepLogEntity::class.java).toJson(monthSleepLogs))
+                    writeEntityFile(monthDir, "DiaryEntryEntity.json", entityListAdapter(DiaryEntryEntity::class.java).toJson(monthDiaryEntries))
+                    writeEntityFile(monthDir, "DayReviewEntity.json", entityListAdapter(DayReviewEntity::class.java).toJson(monthDayReviews))
+                    writeEntityFile(monthDir, "TimerSessionEntity.json", entityListAdapter(TimerSessionEntity::class.java).toJson(monthTimerSessions))
+                }
+
+                // Run rotation
+                rotateOldBackups(rootDir)
+
+                val lastSync = System.currentTimeMillis()
+                prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
+                _lastBackupTimestamp.value = lastSync
+                onResult(true, "Backup successful — ${monthTasks.size} tasks, ${habitsList.size} habits, ${todosList.size} todos backed up")
             } catch (e: Exception) {
                 Log.e(TAG, "Backup failed", e)
                 onResult(false, "Backup failed: ${e.localizedMessage}")
@@ -693,54 +717,165 @@ class MainViewModel(
         }
     }
 
-    fun restoreDataFromGoogleDrive(onResult: (Boolean, String) -> Unit) {
+    private fun rotateOldBackups(rootUri: android.net.Uri) {
+        val maxMonths = _backupMaxMonths.value
+        val monthDirs = listChildren(rootUri)
+            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(Regex("""^\d{4}-\d{2}$""")) }
+            .sortedByDescending { it.name }
+        if (monthDirs.size > maxMonths) {
+            monthDirs.drop(maxMonths).forEach { deleteRecursive(it.uri) }
+        }
+    }
+
+    private fun deleteRecursive(dirUri: android.net.Uri) {
+        for (child in listChildren(dirUri)) {
+            if (child.mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                deleteRecursive(child.uri)
+            } else {
+                deleteDocument(child.uri)
+            }
+        }
+        deleteDocument(dirUri)
+    }
+
+    fun listBackupMonths(): List<String> {
+        val rootUri = backupRootDir ?: return emptyList()
+        return listChildren(rootUri)
+            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR && it.name.matches(Regex("""^\d{4}-\d{2}$""")) }
+            .map { it.name }
+            .sortedDescending()
+    }
+
+    private fun <T : Any> readEntityFile(parentUri: android.net.Uri?, name: String, clazz: Class<T>): List<T> {
+        val fileUri = parentUri?.let { findChildUri(it, name) } ?: return emptyList()
+        return try {
+            val json = context.contentResolver.openInputStream(fileUri)?.use {
+                it.reader(Charsets.UTF_8).readText()
+            } ?: return emptyList()
+            entityListAdapter(clazz).fromJson(json) ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // DocumentFile replacement helpers
+
+    private fun documentExists(uri: android.net.Uri): Boolean {
+        return try {
+            val docId = DocumentsContract.getDocumentId(uri)
+            val docUri = DocumentsContract.buildDocumentUriUsingTree(
+                DocumentsContract.buildTreeDocumentUri(uri.authority ?: return false, docId),
+                docId
+            )
+            val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            context.contentResolver.query(docUri, projection, null, null, null)?.use { it.moveToFirst() } ?: false
+        } catch (_: Exception) { false }
+    }
+
+    private fun findChildUri(parentUri: android.net.Uri, name: String): android.net.Uri? {
+        val parentId = DocumentsContract.getTreeDocumentId(parentUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, parentId)
+        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val docId = cursor.getString(0)
+                val displayName = cursor.getString(1)
+                if (displayName == name) {
+                    return DocumentsContract.buildDocumentUriUsingTree(parentUri, docId)
+                }
+            }
+        }
+        return null
+    }
+
+    private data class ChildInfo(val uri: android.net.Uri, val name: String, val mimeType: String)
+
+    private fun listChildren(parentUri: android.net.Uri): List<ChildInfo> {
+        val parentId = DocumentsContract.getTreeDocumentId(parentUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parentUri, parentId)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        val result = mutableListOf<ChildInfo>()
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val docId = cursor.getString(0)
+                val name = cursor.getString(1) ?: continue
+                val mimeType = cursor.getString(2) ?: ""
+                result.add(ChildInfo(DocumentsContract.buildDocumentUriUsingTree(parentUri, docId), name, mimeType))
+            }
+        }
+        return result
+    }
+
+    private fun deleteDocument(uri: android.net.Uri) {
+        try {
+            DocumentsContract.deleteDocument(context.contentResolver, uri)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to delete document: $uri", e)
+        }
+    }
+
+    fun restoreFromMonth(month: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             _isSyncing.value = true
             try {
-                var jsonString: String? = null
-                var fromDrive = false
-
-                // Try Drive first
-                if (com.example.core.manager.DriveManager.isSignedIn(context)) {
-                    try {
-                        val driveBytes = com.example.core.manager.DriveManager.downloadLatest(context)
-                        if (driveBytes != null) {
-                            jsonString = try {
-                                java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(driveBytes))
-                                    .use { it.reader(StandardCharsets.UTF_8).readText() }
-                            } catch (_: java.util.zip.ZipException) {
-                                String(driveBytes, StandardCharsets.UTF_8)
-                            }
-                            fromDrive = jsonString != null
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Drive download failed, falling back to local", e)
-                    }
-                }
-
-                // Fall back to local
-                if (jsonString == null) {
-                    val backupFile = java.io.File(context.filesDir, "bulletcoach_backup.json")
-                    if (!backupFile.exists()) {
-                        onResult(false, "No backup file found. Please create a backup first!")
-                        return@launch
-                    }
-                    val MAX_BACKUP_SIZE = 50 * 1024 * 1024L
-                    if (backupFile.length() > MAX_BACKUP_SIZE) {
-                        onResult(false, "Backup file too large (${backupFile.length() / 1024 / 1024} MB). Max supported: 50 MB.")
-                        return@launch
-                    }
-jsonString = backupFile.readText()
-            }
-
-            val backupObj = moshiStrict.fromJson(jsonString)
-
-                if (backupObj == null) {
-                    onResult(false, "Failed to parse backup data.")
+                val rootDir = backupRootDir
+                if (rootDir == null) {
+                    onResult(false, "Backup location not available")
                     return@launch
                 }
 
-                // Clear existing data
+                val permanentDir = findChildUri(rootDir, "_permanent")
+                val monthDir = findChildUri(rootDir, month)
+
+                if (monthDir == null) {
+                    onResult(false, "No backup found for $month")
+                    return@launch
+                }
+
+                // Read all entity files from _permanent (non-date entities)
+                val habits = readEntityFile(permanentDir, "HabitEntity.json", HabitEntity::class.java)
+                val todos = readEntityFile(permanentDir, "TodoEntity.json", TodoEntity::class.java)
+                val mottos = readEntityFile(permanentDir, "MottoEntity.json", MottoEntity::class.java)
+                val shopItems = readEntityFile(permanentDir, "ShopItemEntity.json", ShopItemEntity::class.java)
+                val ideaGroups = readEntityFile(permanentDir, "IdeaGroupEntity.json", IdeaGroupEntity::class.java)
+                val ideas = readEntityFile(permanentDir, "IdeaEntity.json", IdeaEntity::class.java)
+                val ideaStages = readEntityFile(permanentDir, "IdeaStageEntity.json", IdeaStageEntity::class.java)
+                val learnGroups = readEntityFile(permanentDir, "LearnGroupEntity.json", LearnGroupEntity::class.java)
+                val learnItems = readEntityFile(permanentDir, "LearnItemEntity.json", LearnItemEntity::class.java)
+                val learnSections = readEntityFile(permanentDir, "LearnSectionEntity.json", LearnSectionEntity::class.java)
+                val timerTemplates = readEntityFile(permanentDir, "TimerTemplateEntity.json", TimerTemplateEntity::class.java)
+
+                // Read all entity files from month (date-filtered entities)
+                val tasks = readEntityFile(monthDir, "TaskEntity.json", TaskEntity::class.java)
+                val habitLogs = readEntityFile(monthDir, "HabitLogEntity.json", HabitLogEntity::class.java)
+                val sleepLogs = readEntityFile(monthDir, "SleepLogEntity.json", SleepLogEntity::class.java)
+                val diaryEntries = readEntityFile(monthDir, "DiaryEntryEntity.json", DiaryEntryEntity::class.java)
+                val dayReviews = readEntityFile(monthDir, "DayReviewEntity.json", DayReviewEntity::class.java)
+                val timerSessions = readEntityFile(monthDir, "TimerSessionEntity.json", TimerSessionEntity::class.java)
+
+                val backupObj = BulletCoachBackup(
+                    tasks = tasks,
+                    habits = habits,
+                    habitLogs = habitLogs,
+                    sleepLogs = sleepLogs,
+                    ideaGroups = ideaGroups,
+                    ideas = ideas,
+                    ideaStages = ideaStages,
+                    todos = todos,
+                    diaryEntries = diaryEntries,
+                    shopItems = shopItems,
+                    mottos = mottos,
+                    dayReviews = dayReviews,
+                    learnGroups = learnGroups,
+                    learnItems = learnItems,
+                    learnSections = learnSections,
+                    timerSessions = timerSessions,
+                    timerTemplates = timerTemplates
+                )
+
+                // Destructive restore (same logic as current)
                 val writableDb = database.openHelper.writableDatabase
                 writableDb.beginTransaction()
                 try {
@@ -767,7 +902,6 @@ jsonString = backupFile.readText()
                     writableDb.endTransaction()
                 }
 
-                // Restore in FK-safe order: groups before items, parents before children
                 backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
                 backupObj.learnItems.forEach { learnRepository.insertItem(it) }
                 backupObj.learnSections.forEach { learnRepository.insertSection(it) }
@@ -786,7 +920,7 @@ jsonString = backupFile.readText()
                 backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
                 backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
 
-                // FK orphan nullification (runs outside transaction to avoid nested transaction in DAO calls)
+                // FK orphan nullification
                 val taskIds = backupObj.tasks.map { it.id }.toSet()
                 val todoIds = backupObj.todos.map { it.id }.toSet()
                 val ideaIds = backupObj.ideas.map { it.id }.toSet()
@@ -816,7 +950,6 @@ jsonString = backupFile.readText()
 
                 com.example.core.manager.SystemSettingsApplier.reapplyAfterRestore(context)
 
-                // Re-schedule all alarms
                 val eventVibrate = prefs.getBoolean("event_reminder_vibrate", true)
                 val eventSound = prefs.getBoolean("event_reminder_sound", true)
                 backupObj.tasks.forEach { task ->
@@ -832,9 +965,7 @@ jsonString = backupFile.readText()
                 com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
 
                 delay(1500)
-                val sourceLabel = if (fromDrive) "Google Drive" else "local backup"
-                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from $sourceLabel!")
-
+                onResult(true, "Successfully restored from $month — ${tasks.size} tasks, ${habits.size} habits, ${todos.size} todos")
             } catch (e: Exception) {
                 Log.e(TAG, "Restore failed", e)
                 onResult(false, "Restore failed: ${e.localizedMessage}")
@@ -1096,195 +1227,6 @@ jsonString = backupFile.readText()
             }
             val file = File(downloadsDir, fileName)
             FileOutputStream(file).use { it.write(jsonBytes) }
-        }
-    }
-
-    // Manual backup export to file (Downloads folder)
-    fun exportBackupToFile(onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _isSyncing.value = true
-            try {
-                val tasksList = taskRepository.getAllTasks().first()
-                val habitsList = habitRepository.allHabits.first()
-                val habitLogsList = habitRepository.getAllLogs().first()
-                val sleepLogsList = sleepLogRepository.allSleepLogs.first()
-                val ideaGroupsList = ideaRepository.allGroups.first()
-                val ideasList = ideaRepository.getAllIdeas().first()
-                val todosList = todoRepository.allTodos.first()
-                val diaryEntriesList = diaryRepository.getAllEntries().first()
-                val shopItemsList = shopItemRepository.allItems.first()
-                val mottosList = mottoRepository.allMottos.first()
-                val dayReviewsList = dayReviewRepository.getAllReviews().first()
-                val timerSessionsList = timerRepository.getAllSessions().first()
-                val timerTemplatesList = timerRepository.getAllTemplates().first()
-                val ideaStagesList = allIdeas.value.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
-                val backupObj = BulletCoachBackup(
-                    tasks = tasksList,
-                    habits = habitsList,
-                    habitLogs = habitLogsList,
-                    sleepLogs = sleepLogsList,
-                    ideaGroups = ideaGroupsList,
-                    ideas = ideasList,
-                    ideaStages = ideaStagesList,
-                    todos = todosList,
-                    diaryEntries = diaryEntriesList,
-                    shopItems = shopItemsList,
-                    mottos = mottosList,
-                    dayReviews = dayReviewsList,
-                    learnGroups = learnRepository.getAllGroupsSync(),
-                    learnItems = learnItems.value,
-                    learnSections = learnItems.value.flatMap { learnRepository.getSectionsForItemSync(it.id) },
-                    timerSessions = timerSessionsList,
-                    timerTemplates = timerTemplatesList
-                )
-
-                val adapter = moshi.adapter(BulletCoachBackup::class.java)
-                val jsonString = adapter.toJson(backupObj)
-
-                val fileName = "bulletcoach_backup_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.json"
-
-                if (Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
-                    val contentValues = ContentValues().apply {
-                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                        put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                    }
-                    val resolver = context.contentResolver
-                    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                    if (uri != null) {
-                        resolver.openOutputStream(uri)?.use { it.write(jsonString.toByteArray(StandardCharsets.UTF_8)) }
-                        onResult(true, "Backup exported to Downloads/$fileName")
-                    } else {
-                        throw IOException("Failed to create MediaStore entry")
-                    }
-                } else {
-                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                    val file = File(downloadsDir, fileName)
-                    file.writeText(jsonString)
-                    onResult(true, "Backup exported to Downloads/$fileName")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Export backup failed", e)
-                onResult(false, "Export failed: ${e.localizedMessage}")
-            } finally {
-                _isSyncing.value = false
-            }
-        }
-    }
-
-    // Manual backup import from file (using Storage Access Framework)
-    fun importBackupFromFile(uri: android.net.Uri, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _isSyncing.value = true
-            try {
-                val jsonString = context.contentResolver.openInputStream(uri)?.use { it.reader(StandardCharsets.UTF_8).readText() }
-                    ?: throw IOException("Failed to read file")
-
-                val backupObj = moshiStrict.fromJson(jsonString)
-                if (backupObj == null) {
-                    onResult(false, "Failed to parse backup file")
-                    return@launch
-                }
-
-                // Clear existing data
-                val writableDb = database.openHelper.writableDatabase
-                writableDb.beginTransaction()
-                try {
-                    writableDb.execSQL("DELETE FROM tasks")
-                    writableDb.execSQL("DELETE FROM habits")
-                    writableDb.execSQL("DELETE FROM habit_logs")
-                    writableDb.execSQL("DELETE FROM sleep_logs")
-                    writableDb.execSQL("DELETE FROM timer_sessions")
-                    writableDb.execSQL("DELETE FROM timer_templates")
-                    writableDb.execSQL("DELETE FROM idea_groups")
-                    writableDb.execSQL("DELETE FROM ideas")
-                    writableDb.execSQL("DELETE FROM idea_stages")
-                    writableDb.execSQL("DELETE FROM todos")
-                    writableDb.execSQL("DELETE FROM diary_entries")
-                    writableDb.execSQL("DELETE FROM shop_items")
-                    writableDb.execSQL("DELETE FROM mottos")
-                    writableDb.execSQL("DELETE FROM day_reviews")
-                    writableDb.execSQL("DELETE FROM learn_groups")
-                    writableDb.execSQL("DELETE FROM learn_items")
-                    writableDb.execSQL("DELETE FROM learn_sections")
-                    writableDb.execSQL("DELETE FROM sqlite_sequence")
-                    writableDb.setTransactionSuccessful()
-                } finally {
-                    writableDb.endTransaction()
-                }
-
-                // Restore in FK-safe order: groups before items, parents before children
-                backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
-                backupObj.learnItems.forEach { learnRepository.insertItem(it) }
-                backupObj.learnSections.forEach { learnRepository.insertSection(it) }
-                backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
-                backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
-                backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
-                backupObj.tasks.forEach { taskRepository.insertTask(it) }
-                backupObj.habits.forEach { habitRepository.insertHabit(it) }
-                backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
-                backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
-                backupObj.timerSessions.forEach { timerRepository.insertSession(it) }
-                backupObj.timerTemplates.forEach { timerRepository.insertTemplate(it) }
-                backupObj.todos.forEach { todoRepository.insertTodo(it) }
-                backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
-                backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
-                backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
-                backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
-
-                // FK orphan nullification
-                val taskIds = backupObj.tasks.map { it.id }.toSet()
-                val todoIds = backupObj.todos.map { it.id }.toSet()
-                val ideaIds = backupObj.ideas.map { it.id }.toSet()
-                val learnSectionIds = backupObj.learnSections.map { it.id }.toSet()
-
-                backupObj.tasks
-                    .filter { it.linkedTodoId != null && it.linkedTodoId !in todoIds }
-                    .forEach { taskRepository.updateTask(it.copy(linkedTodoId = null)) }
-                backupObj.tasks
-                    .filter { it.linkedIdeaId != null && it.linkedIdeaId !in ideaIds }
-                    .forEach { taskRepository.updateTask(it.copy(linkedIdeaId = null)) }
-                backupObj.tasks
-                    .filter { it.linkedLearnSectionId != null && it.linkedLearnSectionId !in learnSectionIds }
-                    .forEach { taskRepository.updateTask(it.copy(linkedLearnSectionId = null)) }
-                backupObj.todos
-                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
-                    .forEach { todoRepository.updateTodo(it.copy(linkedTaskId = null)) }
-                backupObj.ideas
-                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
-                    .forEach { ideaRepository.updateIdea(it.copy(linkedTaskId = null)) }
-                backupObj.learnSections
-                    .filter { it.studyTaskId != null && it.studyTaskId !in taskIds }
-                    .forEach { learnRepository.updateSection(it.copy(studyTaskId = null)) }
-                backupObj.learnSections
-                    .filter { it.reviewTaskId != null && it.reviewTaskId !in taskIds }
-                    .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
-
-                com.example.core.manager.SystemSettingsApplier.reapplyAfterRestore(context)
-
-                // Re-schedule all alarms
-                val eventVibrate = prefs.getBoolean("event_reminder_vibrate", true)
-                val eventSound = prefs.getBoolean("event_reminder_sound", true)
-                backupObj.tasks.forEach { task ->
-                    if (task.type == "EVENT" && task.eventTime != null) {
-                        com.example.core.manager.ReminderManager.scheduleReminders(context, task, eventVibrate, eventSound)
-                    }
-                }
-                backupObj.habits.forEach { habit ->
-                    if (habit.habitTime != null && habit.reminderEnabled) {
-                        com.example.core.manager.ReminderManager.scheduleHabitReminder(context, habit, eventVibrate, eventSound)
-                    }
-                }
-                com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
-
-                delay(1500)
-                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from local file!")
-            } catch (e: Exception) {
-                Log.e(TAG, "Import backup failed", e)
-                onResult(false, "Import failed: ${e.localizedMessage}")
-            } finally {
-                _isSyncing.value = false
-            }
         }
     }
 
@@ -3883,7 +3825,7 @@ jsonString = backupFile.readText()
         if (enabled) {
             rescheduleAutoBackup(context)
         } else {
-            androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_drive_backup")
+            androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_backup")
         }
     }
 
@@ -3902,17 +3844,13 @@ jsonString = backupFile.readText()
             if (before(now)) add(java.util.Calendar.DAY_OF_YEAR, 1)
         }
         val initialDelay = scheduled.timeInMillis - now.timeInMillis
-        val constraints = androidx.work.Constraints.Builder()
-            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-            .build()
         val request = androidx.work.PeriodicWorkRequestBuilder<com.example.core.manager.BackupWorker>(24, java.util.concurrent.TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .addTag("daily_drive_backup")
+            .addTag("daily_backup")
             .setInitialDelay(initialDelay, java.util.concurrent.TimeUnit.MILLISECONDS)
             .build()
-        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_drive_backup")
+        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_backup")
         androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "daily_drive_backup",
+            "daily_backup",
             androidx.work.ExistingPeriodicWorkPolicy.REPLACE,
             request
         )
@@ -5458,6 +5396,10 @@ jsonString = backupFile.readText()
         } else {
             System.currentTimeMillis()
         }
+    }
+
+    private fun backupMonthLabel(): String {
+        return java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
     }
 
     private fun getTodayMonthString(): String {

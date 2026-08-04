@@ -82,6 +82,9 @@ import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
@@ -174,6 +177,7 @@ import com.example.core.utils.PersianCalendarHelper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
+import android.net.Uri
 import android.media.RingtoneManager
 import android.os.Build
 import androidx.compose.foundation.layout.ColumnScope
@@ -3581,8 +3585,8 @@ fun SettingsDialog(
     viewModel: MainViewModel,
     onDismiss: () -> Unit
 ) {
-    val googleDriveConnected by viewModel.googleDriveConnected.collectAsState()
-    val googleDriveEmail by viewModel.googleDriveEmail.collectAsState()
+    val backupLocationUri by viewModel.backupLocationUri.collectAsState()
+    val backupMaxMonths by viewModel.backupMaxMonths.collectAsState()
     val lastBackupTimestamp by viewModel.lastBackupTimestamp.collectAsState()
     val backupEnabled by viewModel.backupEnabled.collectAsState()
     val backupTime by viewModel.backupTime.collectAsState()
@@ -3592,7 +3596,6 @@ fun SettingsDialog(
     val eventReminderSound by viewModel.eventReminderSound.collectAsState()
     val eventReminderEnabled by viewModel.eventReminderEnabled.collectAsState()
 
-    var enteredEmail by remember { mutableStateOf(googleDriveEmail) }
     var enteredBackupEnabled by remember { mutableStateOf(backupEnabled) }
     var enteredBackupTime by remember { mutableStateOf(backupTime) }
     var enteredBackupFailureNotify by remember { mutableStateOf(backupFailureNotify) }
@@ -3605,48 +3608,23 @@ fun SettingsDialog(
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
     var isExporting by remember { mutableStateOf(false) }
+    var showRestoreMonthPicker by remember { mutableStateOf(false) }
+    var restoreMonths by remember { mutableStateOf<List<String>>(emptyList()) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    var pendingRestoreMonth by remember { mutableStateOf("") }
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val context = LocalContext.current
 
-    // Launcher for Google Drive sign-in
-    val driveSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            viewModel.onDriveSignInResult(result.data)
-        }
-    }
-
-    // Observe pending Drive sign-in intent
-    val pendingSignIn by viewModel.pendingDriveSignInIntent.collectAsState()
-    LaunchedEffect(pendingSignIn) {
-        val intent = pendingSignIn
-        if (intent != null) {
-            driveSignInLauncher.launch(intent)
-        }
-    }
-
-    // Launcher for manual backup export
-    val exportBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
+    // Launcher for backup folder picker
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            viewModel.exportBackupToFile { success, msg ->
-                isSuccessStatus = success
-                statusMessage = msg
-            }
-        }
-    }
-
-    // Launcher for manual backup import
-    val importBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            viewModel.importBackupFromFile(uri) { success, msg ->
-                isSuccessStatus = success
-                statusMessage = msg
-            }
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            viewModel.setBackupLocationUri(uri.toString())
         }
     }
 
@@ -3749,7 +3727,6 @@ fun SettingsDialog(
         is24Hour = true
     )
 
-    val context = LocalContext.current
     val notificationManager = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager }
 
     val postNotificationsLauncher = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -3839,45 +3816,47 @@ fun SettingsDialog(
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Settings & Cloud Sync", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(text = "Settings", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             }
 
-            // 1. Cloud & Sync
-            SettingsCard(title = "CLOUD & SYNC") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (googleDriveConnected) "Connected" else "Disconnected",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (googleDriveConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (googleDriveConnected) {
-                            Text(
-                                text = googleDriveEmail,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+            // 1. Backup & Restore
+            SettingsCard(title = "BACKUP & RESTORE") {
+                // Backup location
+                Text(
+                    text = if (backupLocationUri != null) "Backup location set" else "No backup location set",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (backupLocationUri != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (backupLocationUri != null) {
+                    val displayPath = remember(backupLocationUri) {
+                        try {
+                            Uri.decode(backupLocationUri).substringAfter("tree/")
+                        } catch (_: Exception) {
+                            backupLocationUri ?: ""
                         }
                     }
-                    Switch(
-                        checked = googleDriveConnected,
-                        onCheckedChange = { isConnected ->
-                            if (isConnected) {
-                                viewModel.updateGoogleDriveConnected(true, enteredEmail)
-                            } else {
-                                viewModel.updateGoogleDriveConnected(false)
-                            }
-                        }
+                    Text(
+                        text = displayPath,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { folderPickerLauncher.launch(null) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(if (backupLocationUri != null) "Change Folder" else "Choose Backup Folder")
+                }
 
-                if (googleDriveConnected) {
-                    // Last backup time
+                if (backupLocationUri != null) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
                     if (lastBackupTime != null) {
                         Text(
                             text = "Last backup: $lastBackupTime",
@@ -3890,94 +3869,74 @@ fun SettingsDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                    Button(
-                        onClick = {
-                            viewModel.backupDataToGoogleDrive { success, msg ->
-                                isSuccessStatus = success
-                                statusMessage = msg
+                        Button(
+                            onClick = {
+                                viewModel.backupDataToLocation { success, msg ->
+                                    isSuccessStatus = success
+                                    statusMessage = msg
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSyncing,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Backup Now", fontSize = 12.sp)
+                                }
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = !isSyncing,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Backup", fontSize = 12.sp)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    restoreMonths = viewModel.listBackupMonths()
+                                    showRestoreMonthPicker = true
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSyncing,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Restore", fontSize = 12.sp)
+                                }
                             }
                         }
                     }
 
-                    OutlinedButton(
-                        onClick = { showRestoreConfirm = true },
-                        modifier = Modifier.weight(1f),
-                        enabled = !isSyncing,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Restore", fontSize = 12.sp)
-                            }
-                        }
-                    }
-                    }
-                    // Local backup section
+                    // Keep last N months
                     Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
-                            onClick = { exportBackupLauncher.launch("bulletcoach_backup_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.json") },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isSyncing,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Export Backup", fontSize = 12.sp)
-                            }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Keep last N months", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("$backupMaxMonths months", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-
-                        OutlinedButton(
-                            onClick = { importBackupLauncher.launch(arrayOf("application/json")) },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isSyncing,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Import Backup", fontSize = 12.sp)
-                            }
-                        }
-                    }
-                } else {
-                    OutlinedTextField(
-                        value = googleDriveEmail,
-                        onValueChange = {},
-                        label = { Text("Google Account Email") },
-                        enabled = false,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        Slider(
+                            value = backupMaxMonths.toFloat(),
+                            onValueChange = { viewModel.setBackupMaxMonths(it.toInt()) },
+                            valueRange = 1f..24f,
+                            steps = 22,
+                            modifier = Modifier.width(140.dp)
                         )
-                    )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-
+                // Auto Backup (always visible)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -4022,29 +3981,58 @@ fun SettingsDialog(
                 }
             }
 
+            if (showRestoreMonthPicker) {
+                AlertDialog(
+                    onDismissRequest = { showRestoreMonthPicker = false },
+                    title = { Text("Restore from month") },
+                    text = {
+                        Column {
+                            Text("Select a month to restore. _permanent data (habits, todos, mottos, etc.) will be merged from every backup.")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (restoreMonths.isEmpty()) {
+                                Text("No backup months found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                restoreMonths.forEach { month ->
+                                    TextButton(
+                                        onClick = {
+                                            showRestoreMonthPicker = false
+                                            pendingRestoreMonth = month
+                                            showRestoreConfirm = true
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(month)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showRestoreMonthPicker = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
             if (showRestoreConfirm) {
                 AlertDialog(
                     onDismissRequest = { showRestoreConfirm = false },
-                    title = { Text("Restore Backup") },
-                    text = {
-                        Text("This will replace ALL current data with the backup. This action cannot be undone. Continue?")
-                    },
+                    title = { Text("Confirm Restore") },
+                    text = { Text("Replace all current data with backup from $pendingRestoreMonth? This action cannot be undone.") },
                     confirmButton = {
-                        Button(
-                            onClick = {
-                                showRestoreConfirm = false
-                                viewModel.restoreDataFromGoogleDrive { success, msg ->
-                                    isSuccessStatus = success
-                                    statusMessage = msg
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
+                        TextButton(onClick = {
+                            showRestoreConfirm = false
+                            viewModel.restoreFromMonth(pendingRestoreMonth) { success, msg ->
+                                isSuccessStatus = success
+                                statusMessage = msg
+                            }
+                        }) {
                             Text("Restore")
                         }
                     },
                     dismissButton = {
-                        OutlinedButton(onClick = { showRestoreConfirm = false }) {
+                        TextButton(onClick = { showRestoreConfirm = false }) {
                             Text("Cancel")
                         }
                     }

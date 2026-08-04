@@ -44,7 +44,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -93,11 +92,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var dayReviewTriggeredReceiver: BroadcastReceiver
     private var isReceiverRegistered = false
 
-    private val driveSignInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            viewModel.onDriveSignInResult(result.data)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -273,14 +267,6 @@ class MainActivity : ComponentActivity() {
                     } else {
                         showDayReviewOverlay = false
                         snackbarHostState.currentSnackbarData?.dismiss()
-                    }
-                }
-
-                val pendingSignIn by viewModel.pendingDriveSignInIntent.collectAsState()
-                LaunchedEffect(pendingSignIn) {
-                    val intent = pendingSignIn
-                    if (intent != null) {
-                        driveSignInLauncher.launch(intent)
                     }
                 }
             }
