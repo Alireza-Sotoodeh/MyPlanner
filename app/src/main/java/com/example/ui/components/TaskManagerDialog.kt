@@ -745,7 +745,7 @@ fun TaskManagerDialog(
                                     ) {
                                         Icon(Icons.Default.Add, contentDescription = "Add Stages", modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("+ Stages", fontSize = 12.sp)
+                                        Text("Stages", fontSize = 12.sp)
                                     }
                                 }
                             }
