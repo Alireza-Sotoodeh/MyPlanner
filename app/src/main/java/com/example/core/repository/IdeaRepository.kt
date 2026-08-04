@@ -15,6 +15,8 @@ class IdeaRepository(
 ) {
     val allGroups: Flow<List<IdeaGroupEntity>> = ideaGroupDao.getAllGroups()
 
+    suspend fun getAllGroupsSync(): List<IdeaGroupEntity> = ideaGroupDao.getAllGroupsSync()
+
     suspend fun insertGroup(group: IdeaGroupEntity): Long = ideaGroupDao.insertGroup(group)
 
     suspend fun updateGroup(group: IdeaGroupEntity) = ideaGroupDao.updateGroup(group)

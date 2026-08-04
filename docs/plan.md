@@ -157,17 +157,13 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 *New files: DriveManager.kt, BackupWorker.kt*
 *Modified: build.gradle.kts, MainViewModel.kt*
 
-### 4.1 — Add Drive dependencies
+### 4.1 — Add Drive dependencies `[x] DONE`
 
-- [ ] In `app/build.gradle.kts`, add:
-  
-  ```kotlin
-  implementation("com.google.android.gms:play-services-auth:21.3.0")
-  implementation("com.google.apis:google-api-services-drive:v3-rev20241208-2.0.0")
-  implementation("com.google.http-client:google-http-client-gson:1.46.3")
-  ```
-- [ ] **Sync project** (or `assembleDebug`) to download artifacts
-- [ ] **Verify:** No resolution errors
+- [x] Added to `gradle/libs.versions.toml`: `playServicesAuth = "21.2.0"`, `googleApiServicesDrive = "v3-rev20260712-2.0.0"`, `googleHttpClientGson = "2.1.1"`, `workRuntime = "2.8.0"`
+- [x] Added to `app/build.gradle.kts`: `implementation(libs.play.services.auth)`, `implementation(libs.google.api.services.drive)`, `implementation(libs.google.http.client.gson)`, `implementation("androidx.work:work-runtime-ktx:2.7.1")`
+- [x] Added `packaging { resources { excludes += ... } }` for META-INF conflicts
+- [x] Added `settings.gradle.kts`: `mavenLocal()` + `resolutionStrategy` for AGP plugin resolution
+- [x] **Verify:** `assembleDebug` succeeds with no resolution errors
 
 ### 4.2 — Create DriveManager.kt
 

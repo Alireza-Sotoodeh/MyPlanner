@@ -14,6 +14,9 @@ interface IdeaGroupDao {
     @Query("SELECT * FROM idea_groups ORDER BY sortOrder ASC, id ASC")
     fun getAllGroups(): Flow<List<IdeaGroupEntity>>
 
+    @Query("SELECT * FROM idea_groups ORDER BY sortOrder ASC, id ASC")
+    suspend fun getAllGroupsSync(): List<IdeaGroupEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGroup(group: IdeaGroupEntity): Long
 
