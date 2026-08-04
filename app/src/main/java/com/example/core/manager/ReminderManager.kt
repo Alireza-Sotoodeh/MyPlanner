@@ -236,11 +236,13 @@ object ReminderManager {
             val sound = prefs.getBoolean("event_reminder_sound", true)
 
             events.forEach { event ->
+                cancelReminders(context, event)
                 scheduleReminders(context, event, vibrate, sound)
             }
 
             val habits = database.habitDao().getAllHabitsSync()
             habits.forEach { habit ->
+                cancelHabitReminder(context, habit)
                 scheduleHabitReminder(context, habit, vibrate, sound)
             }
 

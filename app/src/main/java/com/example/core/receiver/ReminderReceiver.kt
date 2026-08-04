@@ -136,6 +136,24 @@ class ReminderReceiver : BroadcastReceiver() {
             }
         } else {
             showNotification(context, title, message, vibrate, sound, taskId, true)
+            if (title == "Habit Reminder") {
+                val pendingResult = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val database = AppDatabase.getDatabase(context)
+                        val habitId = taskId / 100
+                        val habit = database.habitDao().getHabitById(habitId)
+                        if (habit != null) {
+                            com.example.core.manager.ReminderManager.cancelHabitReminder(context, habit)
+                            com.example.core.manager.ReminderManager.scheduleHabitReminder(context, habit, vibrate, sound)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        pendingResult.finish()
+                    }
+                }
+            }
         }
     }
 
