@@ -2563,7 +2563,7 @@ private val mottoRepository: MottoRepository,
             taskRepository.updateTask(updated)
             val subtasks = taskRepository.getSubtasks(task.id)
             subtasks.forEach { sub ->
-                taskRepository.updateTask(sub.copy(date = targetDate, status = "PENDING"))
+                taskRepository.updateTask(sub.copy(date = targetDate))
             }
             // Sync learn section state when migrating learn-linked tasks
             if (task.linkedLearnSectionId != null) {
