@@ -728,7 +728,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                         letterSpacing = 1.5.sp
                     )
 
-                    val pendingCount = tasks.count { it.status != "COMPLETED" }
+                    val pendingCount = tasks.count { it.parentTaskId == null && it.status != "COMPLETED" }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
                             onClick = { showCalendarDialog = true },
