@@ -1,14 +1,18 @@
 package com.example.core.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -49,7 +53,9 @@ data class TimerServiceState(
     val shortBreakMinutes: Int? = 5,
     val longBreakMinutes: Int? = null,
     val targetSessions: Int? = null,
-    val markCompleteOnFinish: Boolean = false
+    val markCompleteOnFinish: Boolean = false,
+    val endTimeRealtime: Long = 0L,
+    val startTimeRealtime: Long = 0L
 )
 
 enum class TimerMode { POMODORO, CHRONOMETER }
@@ -114,6 +120,10 @@ class TimerForegroundService : Service() {
                 val seconds = intent.getIntExtra(EXTRA_ADJUST_SECONDS, 60)
                 commandChannel.trySend(ServiceCommand.AdjustPomodoro(seconds))
             }
+            ACTION_SESSION_END -> {
+                serviceScope.launch { handleBackupSessionEnd() }
+                return START_NOT_STICKY
+            }
         }
         return START_STICKY
     }
@@ -143,9 +153,14 @@ class TimerForegroundService : Service() {
     private fun handleStartPomodoro(cmd: ServiceCommand.StartPomodoro) {
         if (_state.value.running) return
 
+        val totalSeconds = cmd.focusMinutes * 60
+        val nowRealtime = SystemClock.elapsedRealtime()
+        val endRealtime = nowRealtime + totalSeconds * 1000L
+        val endWallClock = System.currentTimeMillis() + totalSeconds * 1000L
         _state.value = TimerServiceState(
             mode = TimerMode.POMODORO,
-            secondsLeft = cmd.focusMinutes * 60,
+            secondsLeft = totalSeconds,
+            endTimeRealtime = endRealtime,
             running = true,
             paused = false,
             phase = "FOCUS",
@@ -161,15 +176,18 @@ class TimerForegroundService : Service() {
 
         startForeground(NOTIF_ID_POMODORO_LIVE, buildNotification())
         lastNotifUpdate = System.currentTimeMillis()
+        scheduleSessionEndAlarm(endWallClock)
         startTicking()
     }
 
     private fun handleStartChronometer(cmd: ServiceCommand.StartChronometer) {
         if (_state.value.running) return
 
+        val now = SystemClock.elapsedRealtime()
         _state.value = TimerServiceState(
             mode = TimerMode.CHRONOMETER,
             elapsedSeconds = 0L,
+            startTimeRealtime = now,
             running = true,
             paused = false,
             taskId = cmd.taskId
@@ -182,21 +200,39 @@ class TimerForegroundService : Service() {
 
     private fun handleTogglePause() {
         _state.update { current ->
-            if (!current.running) current
-            else current.copy(paused = !current.paused)
+            if (!current.running) return@update current
+            if (current.paused) {
+                if (current.mode == TimerMode.POMODORO) {
+                    current.copy(
+                        paused = false,
+                        endTimeRealtime = SystemClock.elapsedRealtime() + current.secondsLeft * 1000L
+                    )
+                } else {
+                    current.copy(
+                        paused = false,
+                        startTimeRealtime = SystemClock.elapsedRealtime() - current.elapsedSeconds * 1000L
+                    )
+                }
+            } else {
+                current.copy(paused = true)
+            }
         }
         updateNotification()
     }
 
     private fun handleAdjustPomodoro(cmd: ServiceCommand.AdjustPomodoro) {
         _state.update { current ->
-            if (current.mode != TimerMode.POMODORO || !current.running) current
-            else current.copy(secondsLeft = (current.secondsLeft + cmd.seconds).coerceAtMost(7200))
+            if (current.mode != TimerMode.POMODORO || !current.running) return@update current
+            val newSecondsLeft = (current.secondsLeft + cmd.seconds).coerceIn(0, 7200)
+            val newEndTime = SystemClock.elapsedRealtime() + newSecondsLeft * 1000L
+            current.copy(secondsLeft = newSecondsLeft, endTimeRealtime = newEndTime)
         }
         updateNotification()
     }
 
     private fun handleStop() {
+        cancelSessionEndAlarm()
+        clearTimerSnapshot()
         val current = _state.value
         tickJob?.cancel()
         tickJob = null
@@ -237,6 +273,8 @@ class TimerForegroundService : Service() {
     }
 
     private fun handleDiscard() {
+        cancelSessionEndAlarm()
+        clearTimerSnapshot()
         tickJob?.cancel()
         tickJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -254,13 +292,18 @@ class TimerForegroundService : Service() {
                 if (s.paused) continue
 
                 if (s.mode == TimerMode.POMODORO) {
-                    _state.update { it.copy(secondsLeft = it.secondsLeft - 1) }
-                    if (_state.value.secondsLeft <= 0) {
+                    val elapsed = SystemClock.elapsedRealtime()
+                    val remaining = ((s.endTimeRealtime - elapsed) / 1000).toInt().coerceAtLeast(0)
+                    _state.update { it.copy(secondsLeft = remaining) }
+                    if (remaining <= 0) {
+                        cancelSessionEndAlarm()
                         handlePomodoroCompletion()
                         break
                     }
                 } else {
-                    _state.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+                    val elapsed = ((SystemClock.elapsedRealtime() - s.startTimeRealtime) / 1000).toInt()
+                        .coerceAtLeast(0)
+                    _state.update { it.copy(elapsedSeconds = elapsed.toLong()) }
                 }
 
                 val now = System.currentTimeMillis()
@@ -275,6 +318,9 @@ class TimerForegroundService : Service() {
     private suspend fun handlePomodoroCompletion() {
         val current = _state.value
         if (current.mode != TimerMode.POMODORO) return
+
+        cancelSessionEndAlarm()
+        clearTimerSnapshot()
 
         val isFg = isAppInForeground
 
@@ -608,6 +654,73 @@ class TimerForegroundService : Service() {
         }
     }
 
+    private fun scheduleSessionEndAlarm(wallClockEndTime: Long) {
+        try {
+            val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, TimerForegroundService::class.java).apply {
+                action = ACTION_SESSION_END
+            }
+            val pendingIntent = PendingIntent.getService(
+                this, RC_SESSION_END, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, wallClockEndTime, pendingIntent
+                )
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, wallClockEndTime, pendingIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "scheduleSessionEndAlarm failed", e)
+        }
+    }
+
+    private fun cancelSessionEndAlarm() {
+        try {
+            val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, TimerForegroundService::class.java).apply {
+                action = ACTION_SESSION_END
+            }
+            val pendingIntent = PendingIntent.getService(
+                this, RC_SESSION_END, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "cancelSessionEndAlarm failed", e)
+        }
+    }
+
+    private suspend fun handleBackupSessionEnd() {
+        val s = _state.value
+        if (s.completed || s.mode == null) return
+
+        cancelSessionEndAlarm()
+        clearTimerSnapshot()
+        _state.update { it.copy(running = false, completed = true) }
+        fireCompletionNotification(s)
+        stopSelf()
+    }
+
+    private fun saveTimerSnapshot() {
+        val s = _state.value
+        if (s.mode == null) return
+        getSharedPreferences("timer_snapshot", Context.MODE_PRIVATE).edit()
+            .putString("snapshot_mode", s.mode.name)
+            .putString("snapshot_phase", s.phase)
+            .putInt("snapshot_session_number", s.sessionNumber)
+            .putString("snapshot_task_title", s.taskTitle)
+            .putInt("snapshot_focus_minutes", s.focusMinutes)
+            .putLong("snapshot_end_realtime", s.endTimeRealtime)
+            .apply()
+    }
+
+    private fun clearTimerSnapshot() {
+        getSharedPreferences("timer_snapshot", Context.MODE_PRIVATE).edit().remove("snapshot_mode").apply()
+    }
+
 companion object {
         private val _state = MutableStateFlow(TimerServiceState())
         val state: StateFlow<TimerServiceState> = _state.asStateFlow()
@@ -621,6 +734,7 @@ companion object {
         const val ACTION_STOP = "com.example.action.STOP"
         const val ACTION_DISCARD = "com.example.action.DISCARD"
         const val ACTION_ADJUST_POMODORO = "com.example.action.ADJUST_POMODORO"
+        const val ACTION_SESSION_END = "com.example.action.SESSION_END"
 
         const val EXTRA_ADJUST_SECONDS = "adjustSeconds"
 
@@ -643,6 +757,7 @@ companion object {
         private const val RC_TOGGLE_PAUSE = 1001
         private const val RC_STOP = 1002
         private const val RC_DISCARD = 1003
+        private const val RC_SESSION_END = 1004
         private const val TAG = "TimerFgService"
         private const val UPDATE_INTERVAL_MS = 10_000L
 
