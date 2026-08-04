@@ -3943,7 +3943,6 @@ private fun TodoTab(viewModel: MainViewModel) {
                                     todo = todo,
                                     expanded = expandAllDescriptions,
                                     viewModel = viewModel,
-                                    linkedItemTitle = todo.linkedTaskId?.let { id -> allTasks.find { it.id == id }?.title },
                                     subTodos = subTodos,
                                     expandedSubTodos = expandedSubTodos,
                                     onToggleSubTodosExpanded = {
@@ -4118,7 +4117,6 @@ private fun TodoItem(
     todo: TodoEntity,
     expanded: Boolean = false,
     viewModel: MainViewModel,
-    linkedItemTitle: String? = null,
     subTodos: List<TodoEntity> = emptyList(),
     expandedSubTodos: Boolean = false,
     onToggleSubTodosExpanded: () -> Unit = {},
@@ -4218,10 +4216,7 @@ private fun TodoItem(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         todo.title,
                         fontSize = 14.sp,
@@ -4230,23 +4225,55 @@ private fun TodoItem(
                         else MaterialTheme.colorScheme.onSurface,
                         textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.width(6.dp))
-                    PriorityBadge(todo.priority)
-                    if (todo.linkedTaskId != null) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            linkedItemTitle ?: "Linked to planner",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    val completedSubTodos = subTodos.count { it.status == "DONE" }
+                    val totalSubTodos = subTodos.size
+                    val subProgress = if (totalSubTodos > 0) completedSubTodos.toFloat() / totalSubTodos else 0f
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .then(
+                                if (subTodos.isNotEmpty()) Modifier.clickable { onToggleSubTodosExpanded() }
+                                else Modifier
+                            )
+                    ) {
+                        PriorityBadge(todo.priority)
+                        if (subTodos.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (completedSubTodos == totalSubTodos) Color(0xFF43A047).copy(alpha = 0.15f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "$completedSubTodos/$totalSubTodos SUBTASKS",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (completedSubTodos == totalSubTodos) Color(0xFF43A047)
+                                        else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "${(subProgress * 100).toInt()}%",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = if (expanded || expandedSubTodos) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Toggle Subtasks",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
-                }
-                if (todo.linkedTaskId != null) {
+                    if (todo.linkedTaskId != null) {
                     IconButton(onClick = { onUnlink(todo) }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.LinkOff, contentDescription = "Unlink", modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
@@ -4306,45 +4333,7 @@ private fun TodoItem(
 
             // Subtasks
             if (subTodos.isNotEmpty()) {
-                val completedSubTodos = subTodos.count { it.status == "DONE" }
-                val totalSubTodos = subTodos.size
-                val subProgress = completedSubTodos.toFloat() / totalSubTodos
-
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable { onToggleSubTodosExpanded() }
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = if (completedSubTodos == totalSubTodos) Color(0xFF43A047).copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            text = "$completedSubTodos/$totalSubTodos SUBTASKS",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (completedSubTodos == totalSubTodos) Color(0xFF43A047)
-                            else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "${(subProgress * 100).toInt()}%",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = if (expanded || expandedSubTodos) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Toggle Subtasks",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
+                Spacer(modifier = Modifier.height(8.dp))
                 AnimatedVisibility(
                     visible = expanded || expandedSubTodos,
                     enter = expandVertically(
