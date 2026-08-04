@@ -1443,9 +1443,10 @@ class MainViewModel(
         }
         
         @android.annotation.SuppressLint("WrongConstant")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.registerReceiver(dateChangeReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
         } else {
+            @Suppress("DEPRECATION")
             context.registerReceiver(dateChangeReceiver, intentFilter)
         }
 
@@ -3509,8 +3510,13 @@ class MainViewModel(
     }
 
     fun updateReviewReminderTime(time: String) {
-        prefs.edit().putString("review_reminder_time", time).apply()
-        _reviewReminderTime.value = time
+        val normalized = time.split(":").let { parts ->
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: 21
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            String.format(Locale.getDefault(), "%02d:%02d", h.coerceIn(0, 23), m.coerceIn(0, 59))
+        }
+        prefs.edit().putString("review_reminder_time", normalized).apply()
+        _reviewReminderTime.value = normalized
         if (_reviewReminderEnabled.value) {
             cancelDayReviewAlarm(context)
             scheduleDayReviewAlarm(context)

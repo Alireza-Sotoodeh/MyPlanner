@@ -1244,12 +1244,13 @@ private fun HabitsHistoryTab(
     allSleepLogs: List<SleepLogEntity>,
     viewModel: MainViewModel
 ) {
-    val todayStr = remember {
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    }
-    val yesterdayStr = remember {
-        val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(c.time)
+    val todayDate by viewModel.todayDate.collectAsState()
+    val todayStr = todayDate
+    val yesterdayStr = remember(todayDate) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date = sdf.parse(todayDate) ?: return@remember todayDate
+        val c = Calendar.getInstance().apply { time = date; add(Calendar.DAY_OF_YEAR, -1) }
+        sdf.format(c.time)
     }
 
     var selectedDate by remember { mutableStateOf(todayStr) }

@@ -139,8 +139,8 @@ fun StatsScreen(viewModel: MainViewModel) {
     val dailyData = remember(lineGraphRange, habits, allHabitLogs) {
         computeDailyCompletions(lineGraphRange.first, lineGraphRange.second, habits, allHabitLogs)
     }
-    var heatmapYear by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear() else Calendar.getInstance().get(Calendar.YEAR)) }
-    var heatmapMonth by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth() else Calendar.getInstance().get(Calendar.MONTH) + 1) }
+    var heatmapYear by remember(usePersianCalendar, todayDateStr) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear() else Calendar.getInstance().get(Calendar.YEAR)) }
+    var heatmapMonth by remember(usePersianCalendar, todayDateStr) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth() else Calendar.getInstance().get(Calendar.MONTH) + 1) }
 
     // Sleep graph state
     var sleepGraphYear by remember(usePersianCalendar) { mutableIntStateOf(
@@ -182,12 +182,11 @@ fun StatsScreen(viewModel: MainViewModel) {
         }
     }
 
-    val dreamDateLabels = remember {
-        val todayCal = Calendar.getInstance()
+    val dreamDateLabels = remember(todayDateStr) {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val today = sdf.format(todayCal.time)
-        todayCal.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterday = sdf.format(todayCal.time)
+        val today = todayDateStr
+        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        val yesterday = sdf.format(cal.time)
         val currentYear = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date())
         Triple(today, yesterday, currentYear)
     }
@@ -1822,7 +1821,7 @@ fun StatsScreen(viewModel: MainViewModel) {
                     )
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    val todayStart = remember {
+                    val todayStart = remember(todayDateStr) {
                         java.util.Calendar.getInstance().apply {
                             set(java.util.Calendar.HOUR_OF_DAY, 0)
                             set(java.util.Calendar.MINUTE, 0)
