@@ -637,15 +637,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                 )
             }
 
-            IconButton(onClick = { showCalendarDialog = true }) {
-                Icon(
-                    imageVector = Icons.Default.CalendarMonth,
-                    contentDescription = "Pick Date",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
             IconButton(onClick = {
                 viewModel.selectDate(getOffsetDateString(selectedDate, 1))
             }) {
@@ -678,7 +669,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "DAILY INTENTIONS",
+                        text = "DAILY",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -687,6 +678,18 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
 
                     val pendingCount = tasks.count { it.status != "COMPLETED" }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { showCalendarDialog = true },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = "Pick Date",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
                             onClick = { viewModel.triggerReorderByPriority() },
                             modifier = Modifier.size(24.dp)
