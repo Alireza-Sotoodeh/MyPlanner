@@ -2175,7 +2175,8 @@ private val mottoRepository: MottoRepository,
         priorityLevel: String = "Medium"
     ) {
         viewModelScope.launch {
-            val dates = mutableListOf(date)
+            val dates = mutableListOf<String>()
+            if (recurrenceMode != "WEEKLY") dates.add(date)
             if (recurrenceMode == "WEEKLY") {
                 val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
                 try {
