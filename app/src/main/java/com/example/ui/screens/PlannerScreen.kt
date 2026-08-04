@@ -3,6 +3,7 @@
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
@@ -795,6 +796,10 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                     }
                 }
 
+                AnimatedContent(
+                    targetState = filterLabels,
+                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }
+                ) {
                 if (tasks.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -1068,6 +1073,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                             }
                         }
                     }
+                }
                 }
             }
 
