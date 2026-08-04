@@ -213,7 +213,8 @@ class BackupFileManager(private val context: Context) {
             val parentFile = uriToFile(parentUri)
             val file = parentFile?.let { File(it, name) }
             if (file == null || !file.exists()) {
-                throw IOException("Parent directory or file not found: $name")
+                Log.w(TAG, "Entity file not found, returning empty list: $name")
+                return emptyList()
             }
             val json = file.readText(Charsets.UTF_8)
             val list = listAdapter(clazz as Class<Any>).fromJson(json)
@@ -224,7 +225,10 @@ class BackupFileManager(private val context: Context) {
             return list
         }
         val fileUri = parentUri?.let { findChildUri(it, name) }
-            ?: throw IOException("Parent directory or file not found: $name")
+        if (fileUri == null) {
+            Log.w(TAG, "Entity file not found, returning empty list: $name")
+            return emptyList()
+        }
 
         val json = contentResolver.openInputStream(fileUri)?.use {
             it.reader(StandardCharsets.UTF_8).readText()
