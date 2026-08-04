@@ -353,21 +353,11 @@ private fun PomodoroTab(
                         },
                         onStop = { viewModel.stopPomodoroEarly(context) },
                         onMinusOne = { viewModel.adjustPomodoroMinusOne() },
+                        onReset = { viewModel.resetPomodoro() },
                         isDiscardConfirm = showStopConfirm,
                         onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
                         onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
                     )
-
-                    // Reset session
-                    TextButton(
-                        onClick = { viewModel.resetPomodoro() },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Reset Session", fontSize = 10.sp)
-                    }
                 }
             }
 
@@ -620,21 +610,11 @@ private fun CronometerTab(
                     onShowChronoSummaryChange(true)
                 },
                 onMinusOne = { viewModel.adjustChronoMinusOne() },
+                onReset = { viewModel.resetChronometer() },
                 isDiscardConfirm = false,
                 onDiscardConfirmDismiss = {},
                 onDiscardConfirmed = {}
             )
-
-            // Reset session
-            TextButton(
-                onClick = { viewModel.resetChronometer() },
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                modifier = Modifier.height(28.dp)
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Reset Session", fontSize = 10.sp)
-            }
         }
 
         // Task selector at bottom
@@ -1290,6 +1270,7 @@ private fun TimerControls(
     onStartPause: () -> Unit,
     onStop: () -> Unit,
     onMinusOne: () -> Unit,
+    onReset: () -> Unit,
     isDiscardConfirm: Boolean,
     onDiscardConfirmDismiss: () -> Unit,
     onDiscardConfirmed: () -> Unit
@@ -1342,6 +1323,24 @@ private fun TimerControls(
                 Icons.Default.Stop,
                 contentDescription = "Stop",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Reset
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .clickable { onReset() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "Reset",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         }
 
