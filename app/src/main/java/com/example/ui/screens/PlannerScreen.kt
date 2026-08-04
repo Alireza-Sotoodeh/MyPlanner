@@ -163,6 +163,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.media.RingtoneManager
+import android.os.Build
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -3527,11 +3542,51 @@ fun SettingsDialog(
         }
     } else null
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    var dirty by remember { mutableStateOf(false) }
+    var showCancelConfirm by remember { mutableStateOf(false) }
+
+    val onReminderToggle = { onEnable: (Boolean) -> Unit ->
+        { enabled: Boolean ->
+            onEnable(enabled)
+            dirty = true
+            if (enabled) {
+                postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                if (Build.VERSION.SDK_INT in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU) {
+                    val alarmMgr = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                    if (!alarmMgr.canScheduleExactAlarms()) {
+                        context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                    }
+                }
+            }
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { newValue ->
+            if (newValue == SheetValue.Hidden && dirty) {
+                showCancelConfirm = true
+                false
+            } else true
+        }
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = { onDismiss() },
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Title
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = null,
@@ -3541,677 +3596,438 @@ fun SettingsDialog(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "Settings & Cloud Sync", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Section 2: Google Drive Connection
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "GOOGLE DRIVE BACKUP & SYNC",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
-                    )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (googleDriveConnected) "Connected" else "Disconnected",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (googleDriveConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (googleDriveConnected) {
-                                Text(
-                                    text = googleDriveEmail,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = googleDriveConnected,
-                            onCheckedChange = { isConnected ->
-                                if (isConnected) {
-                                    viewModel.updateGoogleDriveConnected(true, enteredEmail)
-                                } else {
-                                    viewModel.updateGoogleDriveConnected(false)
-                                }
-                            }
+            // 1. Cloud & Sync
+            SettingsCard(title = "CLOUD & SYNC") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (googleDriveConnected) "Connected" else "Disconnected",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (googleDriveConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-
-                    if (googleDriveConnected) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    viewModel.backupDataToGoogleDrive { success, msg ->
-                                        isSuccessStatus = success
-                                        statusMessage = msg
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Backup", fontSize = 12.sp)
-                                }
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.restoreDataFromGoogleDrive { success, msg ->
-                                        isSuccessStatus = success
-                                        statusMessage = msg
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Restore", fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    } else {
-                        OutlinedTextField(
-                            value = enteredEmail,
-                            onValueChange = { enteredEmail = it },
-                            label = { Text("Google Account Email") },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                focusedLabelColor = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                // Section 4: Timer DND Integration
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "TIMER SETTINGS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        if (googleDriveConnected) {
                             Text(
-                                text = "Do Not Disturb Mode",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Turn on DND when Pomodoro or Chronometer starts",
+                                text = googleDriveEmail,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Switch(
-                            checked = enteredDndEnabled,
-                            onCheckedChange = { checked ->
-                                if (checked && !notificationManager.isNotificationPolicyAccessGranted) {
-                                    val intent = android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                                    context.startActivity(intent)
-                                } else {
-                                    enteredDndEnabled = checked
-                                }
-                            }
-                        )
                     }
+                    Switch(
+                        checked = googleDriveConnected,
+                        onCheckedChange = { isConnected ->
+                            if (isConnected) {
+                                viewModel.updateGoogleDriveConnected(true, enteredEmail)
+                            } else {
+                                viewModel.updateGoogleDriveConnected(false)
+                            }
+                        }
+                    )
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                // Section 5: Pomodoro Alarm
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "POMODORO ALARM",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
-                    )
-                    // Play sound toggle
+                if (googleDriveConnected) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Play sound",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = enteredPomodoroRingtoneEnabled,
-                            onCheckedChange = { enteredPomodoroRingtoneEnabled = it }
-                        )
-                    }
-                    // Ringtone selector
-                    val ringtoneName = if (enteredPomodoroRingtoneUri.isBlank()) "Default ringtone"
-                        else try {
-                            val rt = RingtoneManager.getRingtone(context, android.net.Uri.parse(enteredPomodoroRingtoneUri))
-                            rt?.getTitle(context) ?: "Custom ringtone"
-                        } catch (e: Exception) { "Custom ringtone" }
-                    val ringtoneLauncher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.StartActivityForResult()
-                    ) { result ->
-                        result.data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)?.let { uri ->
-                            enteredPomodoroRingtoneUri = uri.toString()
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = ringtoneName,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (enteredPomodoroRingtoneEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                            )
-                        }
-                        TextButton(
+                        Button(
                             onClick = {
-                                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
-                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Pomodoro Alarm")
-                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
-                                    if (enteredPomodoroRingtoneUri.isNotBlank()) {
-                                        putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(enteredPomodoroRingtoneUri))
-                                    }
+                                viewModel.backupDataToGoogleDrive { success, msg ->
+                                    isSuccessStatus = success
+                                    statusMessage = msg
                                 }
-                                ringtoneLauncher.launch(intent)
                             },
-                            enabled = enteredPomodoroRingtoneEnabled
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Text("Change", fontSize = 12.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Backup", fontSize = 12.sp)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.restoreDataFromGoogleDrive { success, msg ->
+                                    isSuccessStatus = success
+                                    statusMessage = msg
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Restore", fontSize = 12.sp)
+                            }
                         }
                     }
-                    // Vibrate toggle
-                    Row(
+                } else {
+                    OutlinedTextField(
+                        value = enteredEmail,
+                        onValueChange = { enteredEmail = it; dirty = true },
+                        label = { Text("Google Account Email") },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Vibrate",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = enteredPomodoroVibrateEnabled,
-                            onCheckedChange = { enteredPomodoroVibrateEnabled = it }
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
                         )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    )
+                }
+            }
+
+            // 2. Timer & Focus
+            SettingsCard(title = "TIMER & FOCUS") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Pattern: Heartbeat 🫀",
+                            text = "Do Not Disturb Mode",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Turn on DND when timer starts",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    // Test button
-                    TextButton(onClick = {
-                        viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
-                        viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
-                        viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
-                        viewModel.testPomodoroAlarm(context)
-                    }) {
-                        Text("Test Alarm", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                // Section 6: Event Reminders
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "EVENT REMINDERS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
+                    Switch(
+                        checked = enteredDndEnabled,
+                        onCheckedChange = { checked ->
+                            if (checked && !notificationManager.isNotificationPolicyAccessGranted) {
+                                val intent = Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                                context.startActivity(intent)
+                            } else {
+                                enteredDndEnabled = checked; dirty = true
+                            }
+                        }
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Enable Event Reminders",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = enteredEventEnabled,
-                            onCheckedChange = { enteredEventEnabled = it }
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Vibrate on Reminder",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = enteredEventVibrate,
-                            onCheckedChange = { enteredEventVibrate = it }
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Play Sound on Reminder",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = enteredEventSound,
-                            onCheckedChange = { enteredEventSound = it }
-                        )
-                    }
                 }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                // Section: Motto Display
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "MORE SCREEN",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                // Pomodoro sound toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Play sound", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(
+                        checked = enteredPomodoroRingtoneEnabled,
+                        onCheckedChange = { enteredPomodoroRingtoneEnabled = it; dirty = true }
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Show Daily Motto",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        val mottoEnabled by viewModel.mottoEnabled.collectAsState()
-                        Switch(
-                            checked = mottoEnabled,
-                            onCheckedChange = { viewModel.updateMottoEnabled(it) }
-                        )
+                }
+                // Ringtone selector
+                val ringtoneName = if (enteredPomodoroRingtoneUri.isBlank()) "Default ringtone"
+                    else try {
+                        val rt = RingtoneManager.getRingtone(context, android.net.Uri.parse(enteredPomodoroRingtoneUri))
+                        rt?.getTitle(context) ?: "Custom ringtone"
+                    } catch (e: Exception) { "Custom ringtone" }
+                val ringtoneLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) { result ->
+                    result.data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)?.let { uri ->
+                        enteredPomodoroRingtoneUri = uri.toString(); dirty = true
                     }
                 }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                // Section 6: Day Review Reminder
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "DAY REVIEW REMINDER",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Enable Daily Reminder",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Switch(
-                            checked = enteredReviewEnabled,
-                            onCheckedChange = { enabled ->
-                                enteredReviewEnabled = enabled
-                                if (enabled) {
-                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                        if (!alarmManager.canScheduleExactAlarms()) {
-                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    if (enteredReviewEnabled) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Reminder Time:", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                            TextButton(onClick = { showReviewTimePicker = true }) {
-                                Text(enteredReviewTime, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        TextButton(onClick = {
-                            val intent = android.content.Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
-                                action = "com.example.action.DAY_REVIEW"
-                                putExtra("title", "Day Review Reminder")
-                                putExtra("message", "Time to review your day!")
-                            }
-                            context.sendBroadcast(intent)
-                        }) {
-                            Text("Test Notification", fontSize = 12.sp)
-                        }
-                    }
-                }
-
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-
-                // Section 7: Notification Reminders
-                Text(
-                    text = "NOTIFICATION REMINDERS",
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp
-                )
-
-                // --- Sleep Log Reminder ---
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Sleep Log Reminder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Remind to log your sleep", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(
-                            checked = enteredSleepEnabled,
-                            onCheckedChange = { enabled ->
-                                enteredSleepEnabled = enabled
-                                if (enabled) {
-                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                        if (!alarmManager.canScheduleExactAlarms()) {
-                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    if (enteredSleepEnabled) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reminder Time:", fontSize = 14.sp)
-                            TextButton(onClick = { showSleepTimePicker = true }) { Text(enteredSleepTime, fontWeight = FontWeight.Bold) }
-                        }
-                        TextButton(onClick = { viewModel.sendImmediateSleepReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
-                    }
-                }
-
-                // --- Morning Planner Reminder ---
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Morning Planner Summary", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Summary of today's tasks and events", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(
-                            checked = enteredPlannerEnabled,
-                            onCheckedChange = { enabled ->
-                                enteredPlannerEnabled = enabled
-                                if (enabled) {
-                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                        if (!alarmManager.canScheduleExactAlarms()) {
-                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    if (enteredPlannerEnabled) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reminder Time:", fontSize = 14.sp)
-                            TextButton(onClick = { showPlannerTimePicker = true }) { Text(enteredPlannerTime, fontWeight = FontWeight.Bold) }
-                        }
-                        TextButton(onClick = { viewModel.sendImmediatePlannerReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
-                    }
-                }
-
-                // --- Habits Check-in Reminder ---
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Habits Check-in", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("List of habits you missed today", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(
-                            checked = enteredHabitsEnabled,
-                            onCheckedChange = { enabled ->
-                                enteredHabitsEnabled = enabled
-                                if (enabled) {
-                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                        if (!alarmManager.canScheduleExactAlarms()) {
-                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    if (enteredHabitsEnabled) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reminder Time:", fontSize = 14.sp)
-                            TextButton(onClick = { showHabitsTimePicker = true }) { Text(enteredHabitsTime, fontWeight = FontWeight.Bold) }
-                        }
-                        TextButton(onClick = { viewModel.sendImmediateHabitsReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
-                    }
-                }
-
-                // --- Diary Reminder ---
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Diary Reminder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Remind to write in your diary", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(
-                            checked = enteredDiaryEnabled,
-                            onCheckedChange = { enabled ->
-                                enteredDiaryEnabled = enabled
-                                if (enabled) {
-                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                        if (!alarmManager.canScheduleExactAlarms()) {
-                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    if (enteredDiaryEnabled) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reminder Time:", fontSize = 14.sp)
-                            TextButton(onClick = { showDiaryTimePicker = true }) { Text(enteredDiaryTime, fontWeight = FontWeight.Bold) }
-                        }
-                        TextButton(onClick = { viewModel.sendImmediateDiaryReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
-                    }
-                }
-
-                // --- Tomorrow Planner Reminder ---
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Tomorrow Planner", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Preview of tomorrow's schedule", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(
-                            checked = enteredTomorrowPlannerEnabled,
-                            onCheckedChange = { enabled ->
-                                enteredTomorrowPlannerEnabled = enabled
-                                if (enabled) {
-                                    postNotificationsLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                    if (android.os.Build.VERSION.SDK_INT in android.os.Build.VERSION_CODES.S until android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                                        if (!alarmManager.canScheduleExactAlarms()) {
-                                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    if (enteredTomorrowPlannerEnabled) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Reminder Time:", fontSize = 14.sp)
-                            TextButton(onClick = { showTomorrowPlannerTimePicker = true }) { Text(enteredTomorrowPlannerTime, fontWeight = FontWeight.Bold) }
-                        }
-                        TextButton(onClick = { viewModel.sendImmediateTomorrowPlannerReminderNotification(context) }) { Text("Test Notification", fontSize = 12.sp) }
-                    }
-                }
-
-                // Status Message display
-                if (statusMessage.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isSuccessStatus) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
-                            )
-                            .padding(12.dp)
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = statusMessage,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (isSuccessStatus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            text = ringtoneName,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (enteredPomodoroRingtoneEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                         )
                     }
+                    TextButton(
+                        onClick = {
+                            val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Pomodoro Alarm")
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, false)
+                                if (enteredPomodoroRingtoneUri.isNotBlank()) {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(enteredPomodoroRingtoneUri))
+                                }
+                            }
+                            ringtoneLauncher.launch(intent)
+                        },
+                        enabled = enteredPomodoroRingtoneEnabled
+                    ) {
+                        Text("Change", fontSize = 12.sp)
+                    }
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    viewModel.updateDndEnabled(enteredDndEnabled)
-                    viewModel.updateEventReminderVibrate(enteredEventVibrate)
-                    viewModel.updateEventReminderSound(enteredEventSound)
-                    viewModel.updateEventReminderEnabled(enteredEventEnabled)
+                // Vibrate toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Vibrate", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(
+                        checked = enteredPomodoroVibrateEnabled,
+                        onCheckedChange = { enteredPomodoroVibrateEnabled = it; dirty = true }
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Text("Pattern: Heartbeat 🫀", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = {
                     viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
                     viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
                     viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
-                    viewModel.updateReviewReminderTime(enteredReviewTime)
-                    viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
-                    viewModel.updateSleepReminderTime(enteredSleepTime)
-                    viewModel.updateSleepReminderEnabled(enteredSleepEnabled)
-                    viewModel.updateDiaryReminderTime(enteredDiaryTime)
-                    viewModel.updateDiaryReminderEnabled(enteredDiaryEnabled)
-                    viewModel.updatePlannerReminderTime(enteredPlannerTime)
-                    viewModel.updatePlannerReminderEnabled(enteredPlannerEnabled)
-                    viewModel.updateHabitsReminderTime(enteredHabitsTime)
-                    viewModel.updateHabitsReminderEnabled(enteredHabitsEnabled)
-                    viewModel.updateTomorrowPlannerReminderTime(enteredTomorrowPlannerTime)
-                    viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
-                    onDismiss()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    viewModel.testPomodoroAlarm(context)
+                }) {
+                    Text("Test Alarm", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // 3. Daily Reminders
+            SettingsCard(title = "DAILY REMINDERS") {
+                ReminderItem(
+                    icon = Icons.Default.RateReview,
+                    title = "Day Review",
+                    subtitle = "Remind to review your day",
+                    enabled = enteredReviewEnabled,
+                    onEnabledChange = onReminderToggle { enteredReviewEnabled = it },
+                    time = enteredReviewTime,
+                    showDetails = enteredReviewEnabled,
+                    onTimeClick = { showReviewTimePicker = true },
+                    onTestClick = {
+                        val intent = Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
+                            action = "com.example.action.DAY_REVIEW"
+                            putExtra("title", "Day Review Reminder")
+                            putExtra("message", "Time to review your day!")
+                        }
+                        context.sendBroadcast(intent)
+                    }
+                )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.CalendarMonth,
+                    title = "Morning Planner",
+                    subtitle = "Today's task summary",
+                    enabled = enteredPlannerEnabled,
+                    onEnabledChange = onReminderToggle { enteredPlannerEnabled = it },
+                    time = enteredPlannerTime,
+                    showDetails = enteredPlannerEnabled,
+                    onTimeClick = { showPlannerTimePicker = true },
+                    onTestClick = { viewModel.sendImmediatePlannerReminderNotification(context) }
+                )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.CheckCircle,
+                    title = "Habits Check-in",
+                    subtitle = "Missed habits list",
+                    enabled = enteredHabitsEnabled,
+                    onEnabledChange = onReminderToggle { enteredHabitsEnabled = it },
+                    time = enteredHabitsTime,
+                    showDetails = enteredHabitsEnabled,
+                    onTimeClick = { showHabitsTimePicker = true },
+                    onTestClick = { viewModel.sendImmediateHabitsReminderNotification(context) }
+                )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.MenuBook,
+                    title = "Diary",
+                    subtitle = "Remind to write in your diary",
+                    enabled = enteredDiaryEnabled,
+                    onEnabledChange = onReminderToggle { enteredDiaryEnabled = it },
+                    time = enteredDiaryTime,
+                    showDetails = enteredDiaryEnabled,
+                    onTimeClick = { showDiaryTimePicker = true },
+                    onTestClick = { viewModel.sendImmediateDiaryReminderNotification(context) }
+                )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.Bedtime,
+                    title = "Sleep Log",
+                    subtitle = "Remind to log your sleep",
+                    enabled = enteredSleepEnabled,
+                    onEnabledChange = onReminderToggle { enteredSleepEnabled = it },
+                    time = enteredSleepTime,
+                    showDetails = enteredSleepEnabled,
+                    onTimeClick = { showSleepTimePicker = true },
+                    onTestClick = { viewModel.sendImmediateSleepReminderNotification(context) }
+                )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.Schedule,
+                    title = "Tomorrow Planner",
+                    subtitle = "Preview of tomorrow's schedule",
+                    enabled = enteredTomorrowPlannerEnabled,
+                    onEnabledChange = onReminderToggle { enteredTomorrowPlannerEnabled = it },
+                    time = enteredTomorrowPlannerTime,
+                    showDetails = enteredTomorrowPlannerEnabled,
+                    onTimeClick = { showTomorrowPlannerTimePicker = true },
+                    onTestClick = { viewModel.sendImmediateTomorrowPlannerReminderNotification(context) }
+                )
+            }
+
+            // 4. Event Notifications
+            SettingsCard(title = "EVENT NOTIFICATIONS") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Enable Event Reminders", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(
+                        checked = enteredEventEnabled,
+                        onCheckedChange = { enteredEventEnabled = it; dirty = true }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Vibrate on Reminder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(
+                        checked = enteredEventVibrate,
+                        onCheckedChange = { enteredEventVibrate = it; dirty = true }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Play Sound on Reminder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Switch(
+                        checked = enteredEventSound,
+                        onCheckedChange = { enteredEventSound = it; dirty = true }
+                    )
+                }
+            }
+
+            // 5. More Screen
+            SettingsCard(title = "MORE SCREEN") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show Daily Motto", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    val mottoEnabled by viewModel.mottoEnabled.collectAsState()
+                    Switch(
+                        checked = mottoEnabled,
+                        onCheckedChange = { viewModel.updateMottoEnabled(it) }
+                    )
+                }
+            }
+
+            // Status message
+            if (statusMessage.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (isSuccessStatus) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                        )
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = statusMessage,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isSuccessStatus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Bottom bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("SAVE & CLOSE")
+                TextButton(onClick = { if (dirty) showCancelConfirm = true else onDismiss() }) {
+                    Text("CANCEL", color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        viewModel.updateDndEnabled(enteredDndEnabled)
+                        viewModel.updateEventReminderVibrate(enteredEventVibrate)
+                        viewModel.updateEventReminderSound(enteredEventSound)
+                        viewModel.updateEventReminderEnabled(enteredEventEnabled)
+                        viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
+                        viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
+                        viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
+                        viewModel.updateReviewReminderTime(enteredReviewTime)
+                        viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
+                        viewModel.updateSleepReminderTime(enteredSleepTime)
+                        viewModel.updateSleepReminderEnabled(enteredSleepEnabled)
+                        viewModel.updateDiaryReminderTime(enteredDiaryTime)
+                        viewModel.updateDiaryReminderEnabled(enteredDiaryEnabled)
+                        viewModel.updatePlannerReminderTime(enteredPlannerTime)
+                        viewModel.updatePlannerReminderEnabled(enteredPlannerEnabled)
+                        viewModel.updateHabitsReminderTime(enteredHabitsTime)
+                        viewModel.updateHabitsReminderEnabled(enteredHabitsEnabled)
+                        viewModel.updateTomorrowPlannerReminderTime(enteredTomorrowPlannerTime)
+                        viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("SAVE & CLOSE")
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = MaterialTheme.colorScheme.primary)
+
+            Spacer(modifier = Modifier.height(8.dp))
+        } // end scrollable Column
+    }
+
+    // Cancel confirmation
+    if (showCancelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            title = { Text("Discard changes?", fontWeight = FontWeight.Bold) },
+            text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
+            confirmButton = {
+                TextButton(onClick = { onDismiss() }) {
+                    Text("Discard", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) { Text("Keep editing") }
             }
-        },
-        shape = RoundedCornerShape(24.dp)
-    )
+        )
+    }
 
     if (showReviewTimePicker) {
         AlertDialog(
@@ -4226,9 +4042,7 @@ fun SettingsDialog(
                     showReviewTimePicker = false
                 }) { Text("OK") }
             },
-            dismissButton = {
-                TextButton(onClick = { showReviewTimePicker = false }) { Text("Cancel") }
-            }
+            dismissButton = { TextButton(onClick = { showReviewTimePicker = false }) { Text("Cancel") } }
         )
     }
 
@@ -4311,6 +4125,91 @@ fun SettingsDialog(
             dismissButton = { TextButton(onClick = { showTomorrowPlannerTimePicker = false }) { Text("Cancel") } }
         )
     }
+}
+
+@Composable
+private fun SettingsCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ReminderItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    time: String,
+    showDetails: Boolean,
+    onTimeClick: () -> Unit,
+    onTestClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange
+            )
+        }
+        AnimatedVisibility(visible = enabled && showDetails) {
+            Column(modifier = Modifier.padding(start = 30.dp, top = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Reminder Time:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    TextButton(onClick = onTimeClick) {
+                        Text(time, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                TextButton(onClick = onTestClick) {
+                    Text("Test Notification", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 4.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+    )
 }
 
 private enum class TodoTabFilter { ALL, PENDING, DONE, LINKED, UNLINKED }
