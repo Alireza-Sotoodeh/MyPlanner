@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,8 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.MottoEntity
@@ -170,13 +174,25 @@ private fun AddEditMottoDialog(
     var isSaving by remember { mutableStateOf(false) }
 
     val isEdit = initialText.isNotEmpty()
-    val isValid = text.trim().isNotEmpty() && !isSaving
+    val textTrimmed = text.trim()
+    val isValid = textTrimmed.isNotEmpty() && !isSaving
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(if (isEdit) "Edit Motto" else "Add Motto", fontWeight = FontWeight.Bold) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.FormatQuote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(if (isEdit) "Edit Motto" else "Add Motto", fontWeight = FontWeight.Bold)
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -186,6 +202,15 @@ private fun AddEditMottoDialog(
                     modifier = Modifier.fillMaxWidth().height(100.dp),
                     maxLines = 4
                 )
+                Text(
+                    "${text.length}/300",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = if (text.length > 280) 0.7f else 0.35f
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(end = 4.dp),
+                    textAlign = TextAlign.End
+                )
                 OutlinedTextField(
                     value = author,
                     onValueChange = { author = it.take(80) },
@@ -193,13 +218,62 @@ private fun AddEditMottoDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                if (textTrimmed.isNotEmpty()) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Text(
+                        "Preview",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.08f),
+                                RoundedCornerShape(10.dp)
+                            )
+                            .padding(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            textTrimmed,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Serif,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 18.sp
+                        )
+                        if (author.trim().isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                author.trim(),
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                fontStyle = FontStyle.Italic,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
                     isSaving = true
-                    onConfirm(text.trim(), author.trim())
+                    onConfirm(textTrimmed, author.trim())
                 },
                 enabled = isValid
             ) {
