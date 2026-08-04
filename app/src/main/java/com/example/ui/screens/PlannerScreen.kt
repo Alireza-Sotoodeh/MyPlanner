@@ -197,6 +197,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val pendingReviewSection by viewModel.pendingReviewSection.collectAsState()
     val pendingReviewLearnItem by viewModel.pendingReviewLearnItem.collectAsState()
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
+    val ideaGroups by viewModel.ideaGroups.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS", "LEARN")
 
     LaunchedEffect(selectedTab) {
@@ -367,6 +368,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
             viewModel = viewModel,
             initialDate = selectedDate,
             initialType = taskManagerInitialType,
+            ideaGroups = ideaGroups,
             onDismiss = { showTaskManager = false }
         )
     }
