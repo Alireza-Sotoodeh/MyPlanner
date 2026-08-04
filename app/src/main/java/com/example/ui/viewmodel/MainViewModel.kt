@@ -749,6 +749,7 @@ private val mottoRepository: MottoRepository,
                 val writableDb = database.openHelper.writableDatabase
                 writableDb.beginTransaction()
                 try {
+                    writableDb.execSQL("PRAGMA foreign_keys=OFF")
                     writableDb.execSQL("DELETE FROM tasks")
                     writableDb.execSQL("DELETE FROM habits")
                     writableDb.execSQL("DELETE FROM habit_logs")
@@ -810,6 +811,7 @@ private val mottoRepository: MottoRepository,
                         .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
 
                     writableDb.setTransactionSuccessful()
+                    writableDb.execSQL("PRAGMA foreign_keys=ON")
                 } finally {
                     writableDb.endTransaction()
                 }
