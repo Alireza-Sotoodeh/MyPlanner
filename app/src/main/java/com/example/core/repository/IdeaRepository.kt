@@ -42,6 +42,8 @@ class IdeaRepository(
 
     suspend fun updateIdeaSortOrders(ideas: List<IdeaEntity>) = ideaDao.updateIdeaSortOrders(ideas)
 
+    suspend fun ungroupIdeasByGroupId(groupId: Long) = ideaDao.ungroupIdeasByGroupId(groupId)
+
     fun getStagesForIdea(ideaId: Long): Flow<List<IdeaStageEntity>> =
         ideaStageDao.getStagesForIdea(ideaId)
 

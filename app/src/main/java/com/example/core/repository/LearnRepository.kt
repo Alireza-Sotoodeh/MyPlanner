@@ -63,4 +63,6 @@ class LearnRepository(
     suspend fun updateSection(section: LearnSectionEntity) = learnDao.updateSection(section)
 
     suspend fun deleteSection(section: LearnSectionEntity) = learnDao.deleteSection(section)
+
+    suspend fun ungroupItemsByGroupId(groupId: Long) = learnDao.ungroupItemsByGroupId(groupId)
 }

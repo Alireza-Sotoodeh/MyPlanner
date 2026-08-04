@@ -39,6 +39,9 @@ interface IdeaDao {
     @Query("UPDATE ideas SET groupId = :newGroupId WHERE id = :ideaId")
     suspend fun moveIdeaToGroup(ideaId: Long, newGroupId: Long?)
 
+    @Query("UPDATE ideas SET groupId = NULL WHERE groupId = :groupId")
+    suspend fun ungroupIdeasByGroupId(groupId: Long)
+
     @Transaction
     suspend fun updateIdeaSortOrders(ideas: List<IdeaEntity>) {
         ideas.forEach { updateIdea(it) }

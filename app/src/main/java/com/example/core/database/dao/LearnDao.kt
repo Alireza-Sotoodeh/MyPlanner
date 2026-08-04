@@ -42,6 +42,9 @@ interface LearnDao {
     @Query("UPDATE learn_items SET groupId = :newGroupId WHERE id = :itemId")
     suspend fun moveItemToGroup(itemId: Long, newGroupId: Long?)
 
+    @Query("UPDATE learn_items SET groupId = NULL WHERE groupId = :groupId")
+    suspend fun ungroupItemsByGroupId(groupId: Long)
+
     @Query("SELECT * FROM learn_sections WHERE learnItemId = :itemId ORDER BY orderIndex ASC, id ASC")
     fun getSectionsForItem(itemId: Long): Flow<List<LearnSectionEntity>>
 

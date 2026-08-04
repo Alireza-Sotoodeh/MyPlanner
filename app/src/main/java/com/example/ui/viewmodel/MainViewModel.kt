@@ -1039,6 +1039,7 @@ class MainViewModel(
     fun deleteLearnGroup(group: LearnGroupEntity) {
         viewModelScope.launch {
             try {
+                learnRepository.ungroupItemsByGroupId(group.id)
                 learnRepository.deleteGroup(group)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete learn group", e)
@@ -3020,7 +3021,10 @@ class MainViewModel(
 
     fun deleteGroup(group: IdeaGroupEntity) {
         viewModelScope.launch {
-            try { ideaRepository.deleteGroup(group) } catch (e: Exception) { Log.e(TAG, "Failed to delete group", e) }
+            try {
+                ideaRepository.ungroupIdeasByGroupId(group.id)
+                ideaRepository.deleteGroup(group)
+            } catch (e: Exception) { Log.e(TAG, "Failed to delete group", e) }
         }
     }
 
