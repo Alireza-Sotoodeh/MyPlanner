@@ -2250,13 +2250,25 @@ class MainViewModel(
     }
 
     // === To-Do CRUD ===
-    fun addTodo(title: String, description: String = "", priority: String = "Medium") {
+    fun addTodo(title: String, description: String = "", priority: String = "Medium", subtaskTitles: List<String> = emptyList()) {
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
                 val allTodos = todoRepository.getAllTodosSync()
                 val nextOrder = (allTodos.maxOfOrNull { it.sortOrder } ?: -1) + 1
-                todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority, sortOrder = nextOrder))
+                val todoId = todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority, sortOrder = nextOrder))
+                subtaskTitles.filter { it.isNotBlank() }.forEach { subTitle ->
+                    todoRepository.insertTodo(
+                        TodoEntity(
+                            title = subTitle.trim(),
+                            description = "",
+                            priority = priority,
+                            parentTodoId = todoId,
+                            status = "PENDING",
+                            sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
+                        )
+                    )
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add todo", e)
             }
@@ -2306,6 +2318,30 @@ class MainViewModel(
                 todoRepository.updateTodo(todo)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update todo", e)
+            }
+        }
+    }
+
+    fun updateTodoWithSubtodos(todo: TodoEntity, subtaskTitles: List<String>) {
+        viewModelScope.launch {
+            try {
+                todoRepository.updateTodo(todo)
+                val existingSubTodos = todoRepository.getSubTodosSync(todo.id)
+                existingSubTodos.forEach { todoRepository.deleteTodo(it) }
+                subtaskTitles.filter { it.isNotBlank() }.forEach { subTitle ->
+                    todoRepository.insertTodo(
+                        TodoEntity(
+                            title = subTitle.trim(),
+                            description = "",
+                            priority = todo.priority,
+                            parentTodoId = todo.id,
+                            status = "PENDING",
+                            sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update todo with subtodos", e)
             }
         }
     }
@@ -2411,6 +2447,10 @@ class MainViewModel(
     }
 
     fun linkTodoToTask(todo: TodoEntity, targetDate: String) {
+        if (todo.linkedTaskId != null) {
+            Log.w(TAG, "linkTodoToTask: todo ${todo.id} already linked to task ${todo.linkedTaskId}")
+            return
+        }
         viewModelScope.launch {
             try {
                 val subTodos = allTodos.value.filter { it.parentTodoId == todo.id }
@@ -2451,7 +2491,9 @@ class MainViewModel(
         viewModelScope.launch {
             try {
                 if (todo.linkedTaskId != null) {
-                    taskRepository.deleteTaskById(todo.linkedTaskId)
+                    taskRepository.getTaskById(todo.linkedTaskId)?.let { linkedTask ->
+                        taskRepository.deleteTaskAndSubtasks(linkedTask)
+                    }
                     todoRepository.updateTodo(todo.copy(linkedTaskId = null))
                 }
             } catch (e: Exception) {
@@ -2463,31 +2505,45 @@ class MainViewModel(
     fun moveTaskToTodo(task: TaskEntity, subtasks: List<TaskEntity>) {
         viewModelScope.launch {
             try {
-                val todoId = todoRepository.insertTodo(
-                    TodoEntity(
-                        title = task.title,
-                        description = task.description,
-                        priority = task.priorityLevel,
-                        status = "PENDING"
-                    )
-                )
-                subtasks.forEach { subtask ->
-                    todoRepository.insertTodo(
+                val linkedTodoId = task.linkedTodoId
+
+                if (linkedTodoId == null) {
+                    val todoId = todoRepository.insertTodo(
                         TodoEntity(
-                            title = subtask.title,
-                            description = "",
+                            title = task.title,
+                            description = task.description,
                             priority = task.priorityLevel,
-                            status = "PENDING",
-                            parentTodoId = todoId
+                            status = if (task.status == "COMPLETED") "DONE" else "PENDING",
+                            createdAt = task.createdAt
                         )
                     )
-                }
-                task.linkedTodoId?.let { linkedTodoId ->
+                    subtasks.forEach { subtask ->
+                        todoRepository.insertTodo(
+                            TodoEntity(
+                                title = subtask.title,
+                                description = "",
+                                priority = subtask.priorityLevel,
+                                status = if (subtask.status == "COMPLETED") "DONE" else "PENDING",
+                                parentTodoId = todoId,
+                                createdAt = subtask.createdAt
+                            )
+                        )
+                    }
+                } else {
                     todoRepository.getTodoById(linkedTodoId)?.let { linkedTodo ->
                         todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = null))
                     }
                 }
+
+                if (task.type == "EVENT") {
+                    com.example.core.manager.ReminderManager.cancelReminders(context, task)
+                }
                 taskRepository.deleteTaskAndSubtasks(task)
+
+                pushUndo(
+                    UndoSnapshot.TaskSnapshot(task, subtasks, linkedTodoId),
+                    task.title
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to move task to todo", e)
             }
@@ -2497,6 +2553,8 @@ class MainViewModel(
     fun turnNoteIntoIdea(task: TaskEntity, subtasks: List<TaskEntity>) {
         viewModelScope.launch {
             try {
+                val linkedTodoId = task.linkedTodoId
+
                 val ideaId = ideaRepository.insertIdea(
                     IdeaEntity(title = task.title, description = task.description)
                 )
@@ -2516,8 +2574,58 @@ class MainViewModel(
                     }
                 }
                 taskRepository.deleteTaskAndSubtasks(task)
+
+                pushUndo(
+                    UndoSnapshot.TaskSnapshot(task, subtasks, linkedTodoId),
+                    task.title
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to turn note into idea", e)
+            }
+        }
+    }
+
+    fun moveTodoToTask(todo: TodoEntity, targetDate: String, subTodos: List<TodoEntity> = emptyList()) {
+        if (todo.linkedTaskId != null) {
+            Log.w(TAG, "moveTodoToTask: todo ${todo.id} already linked to task ${todo.linkedTaskId}")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val taskId = taskRepository.insertTask(
+                    TaskEntity(
+                        title = todo.title,
+                        description = todo.description,
+                        date = targetDate,
+                        type = "TASK",
+                        label = "TODO",
+                        priorityLevel = todo.priority,
+                        priority = dailyTasks.value.size + 1,
+                        createdAt = todo.createdAt
+                    )
+                )
+                subTodos.forEach { subTodo ->
+                    taskRepository.insertTask(
+                        TaskEntity(
+                            title = subTodo.title,
+                            description = "",
+                            date = targetDate,
+                            type = "TASK",
+                            label = "TODO",
+                            parentTaskId = taskId,
+                            priorityLevel = subTodo.priority,
+                            priority = 0,
+                            createdAt = subTodo.createdAt
+                        )
+                    )
+                }
+                todoRepository.deleteTodoAndSubTodos(todo)
+                pushUndo(
+                    UndoSnapshot.TodoSnapshot(todo, null, emptyList(), subTodos),
+                    todo.title
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to move todo to task", e)
             }
         }
     }

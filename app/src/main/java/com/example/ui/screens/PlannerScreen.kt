@@ -1881,14 +1881,16 @@ fun BulletTaskItem(
                         expandedMenu = false
                     }
                 )
-                DropdownMenuItem(
-                    text = { Text("Move to To-Do") },
-                    leadingIcon = { Icon(Icons.Default.Checklist, contentDescription = null) },
-                    onClick = {
-                        onMoveToTodo()
-                        expandedMenu = false
-                    }
-                )
+                if (task.type == "TASK") {
+                    DropdownMenuItem(
+                        text = { Text("Move to To-Do") },
+                        leadingIcon = { Icon(Icons.Default.Checklist, contentDescription = null) },
+                        onClick = {
+                            onMoveToTodo()
+                            expandedMenu = false
+                        }
+                    )
+                }
                 if (task.type == "NOTE") {
                     DropdownMenuItem(
                         text = { Text("Turn into Idea") },
@@ -3665,6 +3667,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
+    var todoForMovingToPlanner by remember { mutableStateOf<TodoEntity?>(null) }
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
     var expandAllDescriptions by remember { mutableStateOf(false) }
@@ -4023,7 +4026,8 @@ private fun TodoTab(viewModel: MainViewModel) {
                                     onEdit = { editingTodo = it },
                                     onDelete = { showDeleteConfirm = it },
                                     onLink = { todoForLinking = it },
-                                    onUnlink = { showUnlinkConfirm = it }
+                                    onUnlink = { showUnlinkConfirm = it },
+                                    onMoveToPlanner = { todoForMovingToPlanner = it }
                                 )
                             }
                         }
@@ -4063,6 +4067,13 @@ private fun TodoTab(viewModel: MainViewModel) {
             todo = todo,
             viewModel = viewModel,
             onDismiss = { todoForLinking = null }
+        )
+    }
+    todoForMovingToPlanner?.let { todo ->
+        MoveToPlannerDialog(
+            todo = todo,
+            viewModel = viewModel,
+            onDismiss = { todoForMovingToPlanner = null }
         )
     }
     showUnlinkConfirm?.let { todo ->
@@ -4123,7 +4134,8 @@ private fun TodoItem(
     onEdit: (TodoEntity) -> Unit,
     onDelete: (TodoEntity) -> Unit,
     onLink: (TodoEntity) -> Unit,
-    onUnlink: (TodoEntity) -> Unit
+    onUnlink: (TodoEntity) -> Unit,
+    onMoveToPlanner: (TodoEntity) -> Unit = {}
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var addSubTodoText by remember { mutableStateOf("") }
@@ -4256,6 +4268,9 @@ private fun TodoItem(
                             DropdownMenuItem(text = { Text("Unlink") }, onClick = { showMenu = false; onUnlink(todo) })
                         } else {
                             DropdownMenuItem(text = { Text("Schedule") }, onClick = { showMenu = false; onLink(todo) })
+                        }
+                        if (todo.linkedTaskId == null) {
+                            DropdownMenuItem(text = { Text("Move to Planner") }, onClick = { showMenu = false; onMoveToPlanner(todo) })
                         }
                         DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                             onClick = { showMenu = false; onDelete(todo) })
@@ -4557,6 +4572,87 @@ private fun LinkToPlannerDialog(
                 viewModel.linkTodoToTask(todo, date)
                 onDismiss()
             }) { Text("Schedule") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoveToPlannerDialog(
+    todo: TodoEntity,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val currentDate by viewModel.selectedDate.collectAsState()
+    var date by remember { mutableStateOf(currentDate) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val subTodos = viewModel.allTodos.collectAsState().value.filter { it.parentTodoId == todo.id }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
+                    ?: System.currentTimeMillis()
+            } catch (_: Exception) { System.currentTimeMillis() }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Move to Planner", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("\"${todo.title}\"", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (subTodos.isNotEmpty()) {
+                    Text("${subTodos.size} sub-todo(s) will also be moved.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Date:", fontSize = 14.sp, modifier = Modifier.width(60.dp))
+                    OutlinedTextField(
+                        value = date,
+                        onValueChange = { date = it },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(Icons.Default.DateRange, contentDescription = "Pick date", modifier = Modifier.size(18.dp))
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                viewModel.moveTodoToTask(todo, date, subTodos)
+                onDismiss()
+            }) { Text("Move") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

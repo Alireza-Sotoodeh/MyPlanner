@@ -785,7 +785,7 @@ fun TaskManagerDialog(
                                 }
                                 
                                 AnimatedVisibility(
-                                    visible = !showSubtasks && type in listOf("TASK", "EVENT", "NOTE"),
+                                    visible = !showSubtasks && type in listOf("TASK", "EVENT", "NOTE", "TODO"),
                                     enter = fadeIn() + expandHorizontally(),
                                     exit = fadeOut() + shrinkHorizontally()
                                 ) {
@@ -813,7 +813,7 @@ fun TaskManagerDialog(
                         }
                         
                         HardwareAcceleratedVisibility(
-                            visible = showSubtasks && type in listOf("TASK", "EVENT", "NOTE")
+                            visible = showSubtasks && type in listOf("TASK", "EVENT", "NOTE", "TODO")
                         ) {
                             Column {
                                 Text("Subtasks:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -1143,7 +1143,7 @@ fun TaskManagerDialog(
                             priorityLevel = priorityLevel
                         )
                     } else if (todoToEdit != null) {
-                        viewModel.updateTodo(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel))
+                        viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel), subtasks.toList().map { it.first })
                     } else if (ideaToEdit != null) {
                         val mutableStages = stages.toMutableList()
                         if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
@@ -1155,7 +1155,7 @@ fun TaskManagerDialog(
                         viewModel.updateIdea(ideaToEdit.copy(groupId = selectedGroupId, title = title.trim(), description = description.trim(), priority = priorityLevel), mutableStages)
                     } else {
                         when (type) {
-                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel)
+                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList().map { it.first })
                             "IDEA" -> {
                                 val mutableStages = stages.toMutableList()
                                 if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
