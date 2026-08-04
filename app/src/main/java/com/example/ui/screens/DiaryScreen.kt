@@ -247,39 +247,24 @@ fun DiaryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // Row 1: Label + actions
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(end = 4.dp, top = 12.dp, bottom = 12.dp),
-verticalAlignment = Alignment.Top
+                .padding(end = 4.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { saveNow(); onBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "DIARY",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.5.sp
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { navigateDate(-1) }) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        if (currentDate in dateSet) {
-                            Text("\u25CF", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    IconButton(onClick = { navigateDate(1) }) {
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
-                    }
-                }
-            }
-            // Undo/Redo buttons
+            Text(
+                text = "DIARY",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.weight(1f)
+            )
             val canUndo = when (lastModifiedField) {
                 Field.TITLE -> titleHistory.canUndo
                 Field.CONTENT -> contentHistory.canUndo
@@ -322,10 +307,31 @@ verticalAlignment = Alignment.Top
             ) {
                 Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
             }
-            if (entry != null || content.isNotBlank() || title.isNotBlank()) {
-                IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+            IconButton(
+                onClick = { showDeleteConfirm = true },
+                enabled = entry != null || content.isNotBlank() || title.isNotBlank()
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+            }
+        }
+
+        // Row 2: Centered date navigation
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            IconButton(onClick = { navigateDate(-1) }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                if (currentDate in dateSet) {
+                    Text("\u25CF", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary)
                 }
+            }
+            IconButton(onClick = { navigateDate(1) }) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
             }
         }
 

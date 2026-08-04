@@ -50,7 +50,7 @@ fun ShopListScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(end = 16.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

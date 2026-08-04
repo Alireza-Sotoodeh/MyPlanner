@@ -1385,3 +1385,89 @@ Tapping "Create New Group..." → overlay:
 
 ### Build Verification
 `.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
+
+---
+
+## DiaryScreen Header Redesign: Split Label + Centered Date Navigation
+
+### Motivation
+The DiaryScreen header was a single `Row` with the "DIARY" label, date chevrons, undo/redo, and delete all crammed together. The date navigation was visually buried under the "DIARY" label in a nested `Column`, and the delete button's conditional rendering caused layout shifts.
+
+### Changes
+
+**File:** `app/src/main/java/com/example/ui/screens/DiaryScreen.kt`
+
+#### Before (lines 250–330)
+```kotlin
+Row(modifier = ... padding(end = 4.dp, top = 12.dp, bottom = 12.dp)) {
+    IconButton(ArrowBack)
+    Column(weight(1f)) {
+        Text("DIARY")
+        Row { ◀ date ▶ }                     // date buried under label
+    }
+    // undo/redo here
+    if (entry != null) IconButton(Delete)   // ← conditional → layout shift
+}
+```
+
+```
+┌──────────────────────────────────────────┐
+│ ←  DIARY                                 │
+│     ◀  Jan 15, 2026  ▶   [↶][↷][🗑]    │
+└──────────────────────────────────────────┘
+```
+
+#### After — Two-row header
+
+**Row 1: Back + label + actions (always visible)**
+```kotlin
+Row(modifier = ... padding(end = 4.dp, top = 12.dp)) {
+    IconButton(ArrowBack, onClick = { saveNow(); onBack() })
+    Text("DIARY", modifier = Modifier.weight(1f))
+    IconButton(Undo, enabled = canUndo)
+    IconButton(Redo, enabled = canRedo)
+    IconButton(Delete, enabled = entry != null || ...)  // ← always shown, disabled when empty
+}
+```
+
+**Row 2: Centered date navigation**
+```kotlin
+Row(
+    modifier = ... padding(bottom = 8.dp),
+    horizontalArrangement = Alignment.CenterHorizontally
+) {
+    IconButton(ChevronLeft, onClick = { navigateDate(-1) })
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(formatDisplayDate(currentDate), ...)
+        if (currentDate in dateSet) { Text(dot, ...) }
+    }
+    IconButton(ChevronRight, onClick = { navigateDate(1) })
+}
+```
+
+```
+┌──────────────────────────────────────────┐
+│ ←  DIARY                 [↶] [↷] [🗑]   │
+│          ◀  Jan 15, 2026  ▶             │
+├──────────────────────────────────────────┤
+│ ┌──────────────────────────────────────┐ │
+│ │ Title                                │ │
+│ └──────────────────────────────────────┘ │
+```
+
+### Key improvements
+- **No layout shift** — Delete button always rendered; `enabled` param dims it when empty
+- **Clean visual hierarchy** — "DIARY" label on its own row with actions; date navigation centered below
+- **Symmetrical date nav** — chevrons frame the centered date evenly
+- **Consistent with other screens** — matches the two-line header pattern used elsewhere
+
+### Edge Cases
+
+| Edge Case | Handling |
+|-----------|----------|
+| No content — Delete disabled | Icon rendered at reduced opacity via `enabled = false`, no layout shift |
+| No entry loaded | HistoryStack empty, Undo/Redo disabled |
+| All actions disabled | Icons render dimmed — visual consistency |
+
+### Build Verification
+`.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
