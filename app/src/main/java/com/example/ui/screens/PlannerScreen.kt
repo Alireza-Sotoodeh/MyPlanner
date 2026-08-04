@@ -2173,17 +2173,11 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
         getDaysOfWeek(weekAnchorDate)
     }
 
-    val displayDays = remember(weekDays, usePersianCalendar) {
+    val displayDays = remember(weekAnchorDate, usePersianCalendar) {
         if (usePersianCalendar) {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val satIndex = weekDays.indexOfFirst { day ->
-                val date = sdf.parse(day) ?: return@remember weekDays
-                Calendar.getInstance().apply { time = date }.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY
-            }
-            if (satIndex > 0) weekDays.subList(satIndex, weekDays.size) + weekDays.subList(0, satIndex)
-            else weekDays
+            getDaysOfWeek(weekAnchorDate, Calendar.SATURDAY)
         } else {
-            weekDays
+            getDaysOfWeek(weekAnchorDate)
         }
     }
 
@@ -3483,12 +3477,15 @@ fun getOffsetMonthString(monthStr: String, offsetMonths: Int): String {
     return sdf.format(cal.time)
 }
 
-fun getDaysOfWeek(dateStr: String): List<String> {
+fun getDaysOfWeek(dateStr: String, firstDayOfWeek: Int? = null): List<String> {
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val date = sdf.parse(dateStr) ?: Date()
     val cal = Calendar.getInstance()
     cal.time = date
-    cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+    val target = firstDayOfWeek ?: cal.firstDayOfWeek
+    var diff = cal.get(Calendar.DAY_OF_WEEK) - target
+    if (diff < 0) diff += 7
+    cal.add(Calendar.DAY_OF_YEAR, -diff)
 
     val list = mutableListOf<String>()
     for (i in 0..6) {
