@@ -3005,14 +3005,14 @@ fun MonthlyPlannerView(
                                     .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                             )
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("$completedCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = Color(0xFF43A047))
-                                Text("DONE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047), letterSpacing = 0.5.sp)
+                                Text("$completedCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
+                                Text("DONE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
                             }
                         }
                         if (totalCount > 0) {
                             androidx.compose.material3.LinearProgressIndicator(
                                 progress = { completionProgress },
-                                color = Color(0xFF43A047),
+                                color = MaterialTheme.colorScheme.primary,
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape)
                             )
