@@ -1,10 +1,12 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -12,23 +14,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.ceil
 
 @Composable
 fun UndoBar(
@@ -39,16 +40,31 @@ fun UndoBar(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val progress by animateFloatAsState(
-        targetValue = if (totalSeconds > 0) {
-            countdownSeconds.toFloat() / totalSeconds.toFloat()
-        } else 0f,
-        animationSpec = tween(durationMillis = 1000, easing = LinearEasing)
-    )
+    val startFraction = remember {
+        (countdownSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
+    }
+    val progress = remember { Animatable(startFraction) }
+    val progressValue by progress.asState()
+
+    LaunchedEffect(startFraction) {
+        val remainingMs = (startFraction * totalSeconds * 1000).toInt().coerceAtLeast(0)
+        if (remainingMs > 0) {
+            progress.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = remainingMs,
+                    easing = LinearEasing
+                )
+            )
+        }
+        onDismiss()
+    }
+
+    val displaySeconds = ceil((progressValue * totalSeconds).toDouble()).toInt().coerceIn(0, totalSeconds)
 
     Card(
         modifier = modifier
-            .widthIn(max = 260.dp)
+            .widthIn(max = 140.dp)
             .padding(start = 16.dp, bottom = 4.dp)
             .navigationBarsPadding(),
         shape = RoundedCornerShape(14.dp),
@@ -59,33 +75,28 @@ fun UndoBar(
     ) {
         Row(
             modifier = Modifier
-                .padding(start = 10.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
+                .padding(start = 8.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Box(
+                modifier = Modifier.size(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    progress = { progressValue },
+                    modifier = Modifier.fillMaxSize(),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+                Text(
+                    text = "$displaySeconds",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             Spacer(Modifier.width(6.dp))
-            Text(
-                text = message,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 140.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            CircularProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
             TextButton(
                 onClick = onRestore,
                 modifier = Modifier.height(28.dp)
