@@ -81,12 +81,19 @@ class ReminderReceiver : BroadcastReceiver() {
                                 context, cfg.requestCode, remIntent,
                                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                             )
-                            alarmManager.setRepeating(
-                                AlarmManager.RTC_WAKEUP,
-                                calendar.timeInMillis,
-                                AlarmManager.INTERVAL_DAY,
-                                remPendingIntent
-                            )
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                alarmManager.setExactAndAllowWhileIdle(
+                                    AlarmManager.RTC_WAKEUP,
+                                    calendar.timeInMillis,
+                                    remPendingIntent
+                                )
+                            } else {
+                                alarmManager.setExact(
+                                    AlarmManager.RTC_WAKEUP,
+                                    calendar.timeInMillis,
+                                    remPendingIntent
+                                )
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -99,13 +106,41 @@ class ReminderReceiver : BroadcastReceiver() {
         }
 
         when (action) {
-            "com.example.action.DAY_REVIEW" -> { handleDayReview(context); return }
-            "com.example.action.SLEEP_REMINDER" -> { handleSleepReminder(context); return }
-            "com.example.action.DIARY_REMINDER" -> { handleDiaryReminder(context); return }
-            "com.example.action.PLANNER_REMINDER" -> { handlePlannerReminder(context); return }
-            "com.example.action.HABITS_REMINDER" -> { handleHabitsReminder(context); return }
-            "com.example.action.TOMORROW_PLANNER_REMINDER" -> { handleTomorrowPlannerReminder(context); return }
-            "com.example.action.LEARN_REVIEW_REMINDER" -> { handleLearnReviewReminder(context); return }
+            "com.example.action.DAY_REVIEW" -> {
+                handleDayReview(context)
+                rescheduleDailyReminder(context, action, 5000)
+                return
+            }
+            "com.example.action.SLEEP_REMINDER" -> {
+                handleSleepReminder(context)
+                rescheduleDailyReminder(context, action, 6000)
+                return
+            }
+            "com.example.action.DIARY_REMINDER" -> {
+                handleDiaryReminder(context)
+                rescheduleDailyReminder(context, action, 7000)
+                return
+            }
+            "com.example.action.PLANNER_REMINDER" -> {
+                handlePlannerReminder(context)
+                rescheduleDailyReminder(context, action, 8000)
+                return
+            }
+            "com.example.action.HABITS_REMINDER" -> {
+                handleHabitsReminder(context)
+                rescheduleDailyReminder(context, action, 9000)
+                return
+            }
+            "com.example.action.TOMORROW_PLANNER_REMINDER" -> {
+                handleTomorrowPlannerReminder(context)
+                rescheduleDailyReminder(context, action, 10000)
+                return
+            }
+            "com.example.action.LEARN_REVIEW_REMINDER" -> {
+                handleLearnReviewReminder(context)
+                rescheduleDailyReminder(context, action, 11000)
+                return
+            }
             "com.example.action.SNOOZE_ALARM" -> { showSnoozedAlarm(context, intent); return }
         }
 
@@ -630,6 +665,52 @@ class ReminderReceiver : BroadcastReceiver() {
         try {
             pendingIntent.send()
         } catch (e: PendingIntent.CanceledException) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun rescheduleDailyReminder(context: Context, action: String, requestCode: Int) {
+        try {
+            val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+            val configMap = mapOf(
+                "com.example.action.DAY_REVIEW" to Triple("review_reminder_enabled", "review_reminder_time", "21:00"),
+                "com.example.action.SLEEP_REMINDER" to Triple("sleep_reminder_enabled", "sleep_reminder_time", "09:00"),
+                "com.example.action.DIARY_REMINDER" to Triple("diary_reminder_enabled", "diary_reminder_time", "20:00"),
+                "com.example.action.PLANNER_REMINDER" to Triple("planner_reminder_enabled", "planner_reminder_time", "07:00"),
+                "com.example.action.HABITS_REMINDER" to Triple("habits_reminder_enabled", "habits_reminder_time", "21:00"),
+                "com.example.action.TOMORROW_PLANNER_REMINDER" to Triple("tomorrow_planner_reminder_enabled", "tomorrow_planner_reminder_time", "20:00"),
+                "com.example.action.LEARN_REVIEW_REMINDER" to Triple("learn_review_reminder_enabled", "learn_review_reminder_time", "19:00")
+            )
+            val (enabledKey, timeKey, defaultTime) = configMap[action] ?: return
+            if (!prefs.getBoolean(enabledKey, false)) return
+
+            val timeStr = prefs.getString(timeKey, defaultTime) ?: defaultTime
+            val timeParts = timeStr.split(":")
+            val hour = timeParts[0].toIntOrNull() ?: 9
+            val minute = timeParts[1].toIntOrNull() ?: 0
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, minute)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val remIntent = Intent(context, ReminderReceiver::class.java).apply { this.action = action }
+            val remPendingIntent = PendingIntent.getBroadcast(
+                context, requestCode, remIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, calendar.timeInMillis, remPendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP, calendar.timeInMillis, remPendingIntent
+                )
+            }
+        } catch (e: Exception) {
             e.printStackTrace()
         }
     }
