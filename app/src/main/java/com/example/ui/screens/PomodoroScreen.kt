@@ -104,7 +104,10 @@ fun PomodoroScreen(viewModel: MainViewModel) {
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
                 // Session counter chips
                 Surface(
                     shape = RoundedCornerShape(12.dp),

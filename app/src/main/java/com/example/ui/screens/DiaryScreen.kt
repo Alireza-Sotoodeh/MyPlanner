@@ -116,7 +116,7 @@ fun DiaryScreen(
                 Icon(Icons.Default.Delete, contentDescription = "Delete entry")
             }
             IconButton(onClick = { showSettingsDialog = true }) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
         }
 
@@ -134,7 +134,7 @@ fun DiaryScreen(
                 enabled = currentDate != todayDate
             ) {
                 Icon(Icons.Default.Home, contentDescription = "Go to today",
-                    tint = MaterialTheme.colorScheme.primary)
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
             Text(
                 formatDisplayDate(currentDate),
