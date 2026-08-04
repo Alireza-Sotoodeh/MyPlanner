@@ -2467,10 +2467,15 @@ private fun GregorianYearOverviewView(
         yearTasks.filter { it.parentTaskId == null }
     }
 
-    val tasksByMonth = remember(topLevelTasks) {
+    val monthStats = remember(topLevelTasks) {
         topLevelTasks.groupBy { task ->
             if (task.date.length >= 7) task.date.substring(0, 7) else task.date
-        }.mapValues { it.value.size }
+        }.mapValues { entries ->
+            val tasks = entries.value
+            val completed = tasks.count { it.status == "COMPLETED" }
+            val pending = tasks.size - completed
+            Triple(completed, pending, tasks.size)
+        }
     }
 
     Column(
@@ -2565,7 +2570,7 @@ private fun GregorianYearOverviewView(
 
                 items(12) { index ->
                     val monthStr = String.format("%s-%02d", selectedYear, index + 1)
-                    val count = tasksByMonth[monthStr] ?: 0
+                    val (completedCount, pendingCount, totalCount) = monthStats[monthStr] ?: Triple(0, 0, 0)
 
                     Card(
                         onClick = {
@@ -2579,7 +2584,7 @@ private fun GregorianYearOverviewView(
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(
                             1.dp,
-                            if (count > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            if (totalCount > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                             else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                         ),
                         colors = CardDefaults.cardColors(
@@ -2591,7 +2596,8 @@ private fun GregorianYearOverviewView(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
                                     text = monthNames[index],
@@ -2599,14 +2605,51 @@ private fun GregorianYearOverviewView(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = count.toString(),
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (count > 0) MaterialTheme.colorScheme.onSurface
-                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                if (totalCount > 0) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "$pendingCount",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "PEND",
+                                                fontSize = 7.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "$completedCount",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF43A047)
+                                            )
+                                            Text(
+                                                text = "DONE",
+                                                fontSize = 7.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF43A047),
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = "0",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -2628,10 +2671,15 @@ private fun PersianYearOverviewView(
         persianYearTasks.filter { it.parentTaskId == null }
     }
 
-    val tasksByPersianMonth = remember(topLevelTasks) {
+    val persianMonthStats = remember(topLevelTasks) {
         topLevelTasks.groupBy { task ->
             PersianCalendarHelper.getPersianDateParts(task.date).second
-        }.mapValues { it.value.size }
+        }.mapValues { entries ->
+            val tasks = entries.value
+            val completed = tasks.count { it.status == "COMPLETED" }
+            val pending = tasks.size - completed
+            Triple(completed, pending, tasks.size)
+        }
     }
 
     Column(
@@ -2710,7 +2758,7 @@ private fun PersianYearOverviewView(
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(12) { index ->
-                    val count = tasksByPersianMonth[index + 1] ?: 0
+                    val (completedCount, pendingCount, totalCount) = persianMonthStats[index + 1] ?: Triple(0, 0, 0)
 
                     Card(
                         onClick = {
@@ -2723,7 +2771,7 @@ private fun PersianYearOverviewView(
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(
                             1.dp,
-                            if (count > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            if (totalCount > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                             else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                         ),
                         colors = CardDefaults.cardColors(
@@ -2735,7 +2783,8 @@ private fun PersianYearOverviewView(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
                                     text = PersianCalendarHelper.monthAbbreviations[index],
@@ -2743,14 +2792,51 @@ private fun PersianYearOverviewView(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = count.toString(),
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (count > 0) MaterialTheme.colorScheme.onSurface
-                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                if (totalCount > 0) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "$pendingCount",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "PEND",
+                                                fontSize = 7.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "$completedCount",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF43A047)
+                                            )
+                                            Text(
+                                                text = "DONE",
+                                                fontSize = 7.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF43A047),
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = "0",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                }
                             }
                         }
                     }
