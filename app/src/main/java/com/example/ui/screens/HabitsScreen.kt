@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -34,6 +38,9 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -66,9 +73,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.HabitEntity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.core.database.entity.SleepLogEntity
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
@@ -84,6 +95,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
     var editingHabit by remember { mutableStateOf<HabitEntity?>(null) }
     var showLogSleepDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showManageHabitsDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -118,7 +130,8 @@ fun HabitsScreen(viewModel: MainViewModel) {
                     }
                     HeaderActions(
                         onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
-                        onSettingsClick = { showSettingsDialog = true }
+                        onSettingsClick = { showSettingsDialog = true },
+                        onManageHabits = { showManageHabitsDialog = true }
                     )
                 }
             }
@@ -360,6 +373,19 @@ fun HabitsScreen(viewModel: MainViewModel) {
     }
     if (showSettingsDialog) {
         SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
+    }
+    if (showManageHabitsDialog) {
+        ManageHabitsDialog(
+            habits = habits,
+            onEdit = { habit ->
+                showManageHabitsDialog = false
+                editingHabit = habit
+            },
+            onDelete = { habit ->
+                viewModel.deleteHabit(habit)
+            },
+            onDismiss = { showManageHabitsDialog = false }
+        )
     }
 }
 
@@ -933,5 +959,232 @@ fun HabitDialog(
                 TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+@Composable
+fun ManageHabitsDialog(
+    habits: List<HabitEntity>,
+    onEdit: (HabitEntity) -> Unit,
+    onDelete: (HabitEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(0.92f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "ALL HABITS",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.5.sp
+                        )
+                        Text(
+                            text = "${habits.size} defined",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (habits.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "No habits defined yet.",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Tap + on the main screen to create one.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        habits.forEach { habit ->
+                            ManageHabitCard(
+                                habit = habit,
+                                onEdit = { onEdit(habit) },
+                                onDelete = { onDelete(habit) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManageHabitCard(
+    habit: HabitEntity,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+    val createdDate = remember(habit.createdAt) { dateFormat.format(Date(habit.createdAt)) }
+    val recurrenceText = remember(habit) {
+        when (habit.recurrenceMode) {
+            "WEEKLY" -> {
+                val interval = habit.recurrenceInterval
+                val base = if (interval > 1) "Every $interval weeks" else "Every week"
+                if (habit.recurrenceDaysOfWeek.isNotBlank()) {
+                    val dayLabels = habit.recurrenceDaysOfWeek.split(",").mapNotNull { d ->
+                        when (d) {
+                            "1" -> "Sun"; "2" -> "Mon"; "3" -> "Tue"; "4" -> "Wed"
+                            "5" -> "Thu"; "6" -> "Fri"; "7" -> "Sat"; else -> null
+                        }
+                    }
+                    "$base (${dayLabels.joinToString(", ")})"
+                } else base
+            }
+            else -> "Every day"
+        }
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = habit.name,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                        IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color(0xFF79747E), modifier = Modifier.size(16.dp))
+                        }
+                        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFF79747E), modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider()
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (habit.type == "BINARY") MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.tertiaryContainer
+                        ) {
+                            Text(
+                                text = habit.type,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (habit.type == "BINARY") MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                        Text(
+                            text = "${habit.target.toInt()} ${habit.unit}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Text(
+                        text = "Repeats: $recurrenceText",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(
+                            imageVector = if (habit.reminderEnabled) Icons.Default.Notifications else Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = if (habit.reminderEnabled) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = if (habit.reminderEnabled && !habit.habitTime.isNullOrBlank()) "Reminder: ${habit.habitTime}"
+                                   else if (habit.reminderEnabled) "Reminder: (no time set)"
+                                   else "Reminder off",
+                            fontSize = 11.sp,
+                            color = if (habit.reminderEnabled) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    Text(
+                        text = "Created: $createdDate",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
     }
 }
