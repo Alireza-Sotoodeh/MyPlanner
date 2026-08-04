@@ -1463,12 +1463,32 @@ class MainViewModel(
         viewModelScope.launch { ideaRepository.deleteGroup(group) }
     }
 
-    fun addIdea(groupId: Long?, title: String, description: String) {
-        viewModelScope.launch { ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title, description = description)) }
+    fun addIdea(groupId: Long?, title: String, description: String, stages: List<IdeaStageEntity> = emptyList()) {
+        viewModelScope.launch {
+            val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title, description = description))
+            stages.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
+                ideaRepository.insertStage(s.copy(ideaId = ideaId, orderIndex = i))
+            }
+        }
     }
 
-    fun updateIdea(idea: IdeaEntity) {
-        viewModelScope.launch { ideaRepository.updateIdea(idea) }
+    fun updateIdea(idea: IdeaEntity, stages: List<IdeaStageEntity> = emptyList()) {
+        viewModelScope.launch {
+            ideaRepository.updateIdea(idea)
+            val existingStages = ideaRepository.getStagesForIdeaSync(idea.id)
+            existingStages.forEach { existing ->
+                if (stages.none { it.id == existing.id }) {
+                    ideaRepository.deleteStage(existing)
+                }
+            }
+            stages.filter { it.title.isNotBlank() }.forEachIndexed { i, stage ->
+                if (stage.id == 0L) {
+                    ideaRepository.insertStage(stage.copy(ideaId = idea.id, orderIndex = i))
+                } else {
+                    ideaRepository.updateStage(stage.copy(orderIndex = i))
+                }
+            }
+        }
     }
 
     fun deleteIdea(idea: IdeaEntity) {

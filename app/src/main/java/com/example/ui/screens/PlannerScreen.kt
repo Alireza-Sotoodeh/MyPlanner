@@ -4321,18 +4321,20 @@ private fun IdeasTab(viewModel: MainViewModel) {
         CreateIdeaDialog(
             groups = groups,
             onDismiss = { showCreateIdeaDialog = false },
-            onConfirm = { groupId, title, description -> viewModel.addIdea(groupId, title, description); showCreateIdeaDialog = false },
+            onConfirm = { groupId, title, description, stages -> viewModel.addIdea(groupId, title, description, stages); showCreateIdeaDialog = false },
             onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
         )
     }
     editingIdea?.let { idea ->
+        val ideaStages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
         CreateIdeaDialog(
             groups = groups,
             initialTitle = idea.title,
             initialDescription = idea.description,
             initialGroupId = idea.groupId,
+            initialStages = ideaStages,
             onDismiss = { editingIdea = null },
-            onConfirm = { groupId, title, description -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description)); editingIdea = null },
+            onConfirm = { groupId, title, description, stages -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description), stages); editingIdea = null },
             onShowCreateGroup = { showCreateGroupFromIdeaDialog = true }
         )
     }
@@ -4656,14 +4658,19 @@ private fun CreateIdeaDialog(
     initialTitle: String = "",
     initialDescription: String = "",
     initialGroupId: Long? = null,
+    initialStages: List<IdeaStageEntity> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String) -> Unit,
+    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit,
     onShowCreateGroup: () -> Unit
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var description by remember { mutableStateOf(initialDescription) }
     var selectedGroupId by remember { mutableStateOf(initialGroupId) }
+    var stages by remember { mutableStateOf(initialStages) }
     var expanded by remember { mutableStateOf(false) }
+    var newStageTitle by remember { mutableStateOf("") }
+    var editingStageIndex by remember { mutableStateOf(-1) }
+    var editingStageText by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -4671,7 +4678,10 @@ private fun CreateIdeaDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(if (initialTitle.isNotEmpty()) "Edit Idea" else "New Idea", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -4726,11 +4736,89 @@ private fun CreateIdeaDialog(
                         )
                     }
                 }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                Text("STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+
+                stages.forEachIndexed { index, stage ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (editingStageIndex == index) {
+                            OutlinedTextField(
+                                value = editingStageText,
+                                onValueChange = { editingStageText = it },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+                            )
+                            IconButton(onClick = {
+                                if (editingStageText.isNotBlank()) {
+                                    stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim()) }
+                                }
+                                editingStageIndex = -1
+                                editingStageText = ""
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(16.dp))
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.weight(1f).clickable {
+                                    editingStageIndex = index
+                                    editingStageText = stage.title
+                                }
+                            ) {
+                                Text(
+                                    stage.title,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            IconButton(onClick = {
+                                stages = stages.toMutableList().also { it.removeAt(index) }
+                                if (editingStageIndex == index) { editingStageIndex = -1; editingStageText = "" }
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newStageTitle,
+                        onValueChange = { newStageTitle = it },
+                        placeholder = { Text("Add stage", fontSize = 13.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    FilledTonalButton(
+                        onClick = {
+                            if (newStageTitle.isNotBlank()) {
+                                stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim())
+                                newStageTitle = ""
+                            }
+                        },
+                        modifier = Modifier.height(40.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Add", fontSize = 12.sp)
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim()) },
+                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim(), stages) },
                 enabled = title.isNotBlank()
             ) { Text(if (initialTitle.isNotEmpty()) "Save" else "Create") }
         },

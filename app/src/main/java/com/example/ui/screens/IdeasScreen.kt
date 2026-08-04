@@ -176,17 +176,19 @@ fun IdeasScreen(
     }
     if (showCreateIdeaDialog || editingIdea != null) {
         val existing = editingIdea
+        val existingStages by viewModel.stagesForIdea(existing?.id ?: -1L).collectAsState(initial = emptyList())
         CreateIdeaDialog(
             groups = groups,
             initialTitle = existing?.title ?: "",
             initialDescription = existing?.description ?: "",
             initialGroupId = existing?.groupId,
+            initialStages = existingStages,
             onDismiss = { showCreateIdeaDialog = false; editingIdea = null },
-            onConfirm = { groupId, title, description ->
+            onConfirm = { groupId, title, description, stages ->
                 if (existing != null) {
-                    viewModel.updateIdea(existing.copy(groupId = groupId, title = title, description = description))
+                    viewModel.updateIdea(existing.copy(groupId = groupId, title = title, description = description), stages)
                 } else {
-                    viewModel.addIdea(groupId, title, description)
+                    viewModel.addIdea(groupId, title, description, stages)
                 }
                 showCreateIdeaDialog = false; editingIdea = null
             },
@@ -511,14 +513,19 @@ private fun CreateIdeaDialog(
     initialTitle: String,
     initialDescription: String,
     initialGroupId: Long?,
+    initialStages: List<IdeaStageEntity> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String) -> Unit,
+    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit,
     onShowCreateGroup: () -> Unit = {}
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var description by remember { mutableStateOf(initialDescription) }
     var selectedGroupId by remember { mutableStateOf(initialGroupId) }
+    var stages by remember { mutableStateOf(initialStages) }
     var expanded by remember { mutableStateOf(false) }
+    var newStageTitle by remember { mutableStateOf("") }
+    var editingStageIndex by remember { mutableStateOf(-1) }
+    var editingStageText by remember { mutableStateOf("") }
 
     val selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "None"
 
@@ -528,7 +535,10 @@ private fun CreateIdeaDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(if (initialTitle.isNotEmpty()) "Edit Idea" else "New Idea", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -596,11 +606,89 @@ private fun CreateIdeaDialog(
                         }
                     }
                 }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                Text("STAGES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+
+                stages.forEachIndexed { index, stage ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (editingStageIndex == index) {
+                            OutlinedTextField(
+                                value = editingStageText,
+                                onValueChange = { editingStageText = it },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+                            )
+                            IconButton(onClick = {
+                                if (editingStageText.isNotBlank()) {
+                                    stages = stages.toMutableList().also { it[index] = stage.copy(title = editingStageText.trim()) }
+                                }
+                                editingStageIndex = -1
+                                editingStageText = ""
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(16.dp))
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.weight(1f).clickable {
+                                    editingStageIndex = index
+                                    editingStageText = stage.title
+                                }
+                            ) {
+                                Text(
+                                    stage.title,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            IconButton(onClick = {
+                                stages = stages.toMutableList().also { it.removeAt(index) }
+                                if (editingStageIndex == index) { editingStageIndex = -1; editingStageText = "" }
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newStageTitle,
+                        onValueChange = { newStageTitle = it },
+                        placeholder = { Text("Add stage", fontSize = 13.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    FilledTonalButton(
+                        onClick = {
+                            if (newStageTitle.isNotBlank()) {
+                                stages = stages + IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim())
+                                newStageTitle = ""
+                            }
+                        },
+                        modifier = Modifier.height(40.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Add", fontSize = 12.sp)
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim()) },
+                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim(), stages) },
                 enabled = title.isNotBlank()
             ) { Text("Save") }
         },
