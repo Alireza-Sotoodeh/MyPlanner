@@ -326,11 +326,13 @@ fun PlannerScreen(viewModel: MainViewModel) {
                     },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 16.dp),
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.background
+                    contentColor = MaterialTheme.colorScheme.background,
+                    shape = CircleShape
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Create"
+                        contentDescription = "Add Task",
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
