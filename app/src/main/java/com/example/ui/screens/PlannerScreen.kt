@@ -132,6 +132,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -3488,6 +3489,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
+    var showPendingDetailsDialog by remember { mutableStateOf(false) }
 
     var showFilterChips by remember { mutableStateOf(true) }
     val filterChipScrollConnection = remember {
@@ -3556,11 +3558,108 @@ private fun TodoTab(viewModel: MainViewModel) {
                         color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 1.5.sp
                     )
-                    Text(
-                        "${displayTodos.size} items",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    val pendingTodos = allTodos.filter { it.status == "PENDING" }
+                    val pendingCount = pendingTodos.size
+                    Box {
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { showPendingDetailsDialog = !showPendingDetailsDialog }
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .padding(horizontal = 10.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "$pendingCount PENDING",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        if (showPendingDetailsDialog) {
+                            val highCount = pendingTodos.count { it.priority.equals("High", ignoreCase = true) }
+                            val mediumCount = pendingTodos.count { it.priority.equals("Medium", ignoreCase = true) }
+                            val lowCount = pendingTodos.count { it.priority.equals("Low", ignoreCase = true) }
+
+                            val density = LocalDensity.current
+                            val offsetY = with(density) { 32.dp.roundToPx() }
+
+                            Popup(
+                                alignment = Alignment.TopEnd,
+                                offset = IntOffset(x = 0, y = offsetY),
+                                onDismissRequest = { showPendingDetailsDialog = false },
+                                properties = PopupProperties(focusable = true)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 8.dp,
+                                    shadowElevation = 8.dp,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                                    modifier = Modifier
+                                        .width(280.dp)
+                                        .padding(4.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Pending To-Dos",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFFE53935).copy(alpha = 0.1f))
+                                                    .padding(vertical = 6.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text("🔴 High", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
+                                                    Text("$highCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE53935))
+                                                }
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFFFB8C00).copy(alpha = 0.1f))
+                                                    .padding(vertical = 6.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text("🟡 Med", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFB8C00))
+                                                    Text("$mediumCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFB8C00))
+                                                }
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFF43A047).copy(alpha = 0.1f))
+                                                    .padding(vertical = 6.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text("🟢 Low", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047))
+                                                    Text("$lowCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF43A047))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
