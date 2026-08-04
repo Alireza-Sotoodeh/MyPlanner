@@ -5219,7 +5219,18 @@ private fun CreateIdeaDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim(), stages) },
+                onClick = {
+                    if (title.isNotBlank()) {
+                        val mutableStages = stages.toMutableList()
+                        if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
+                            mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
+                        }
+                        if (newStageTitle.isNotBlank()) {
+                            mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
+                        }
+                        onConfirm(selectedGroupId, title.trim(), description.trim(), mutableStages)
+                    }
+                },
                 enabled = title.isNotBlank()
             ) { Text(if (initialTitle.isNotEmpty()) "Save" else "Create") }
         },
