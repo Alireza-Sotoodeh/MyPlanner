@@ -300,6 +300,7 @@ private fun PomodoroTab(
 
     val availableTasks = remember(tasks, selectedCategory) {
         val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
+        val parentPriority = tasks.associate { it.id to it.priority }
         tasks.filter { t ->
             t.status != "COMPLETED" && when (selectedCategory) {
                 "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
@@ -309,7 +310,14 @@ private fun PomodoroTab(
                 "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
                 else -> false
             }
-        }.sortedBy { it.priority }
+        }.sortedWith(compareBy<TaskEntity> {
+            if (it.parentTaskId != null)
+                parentPriority[it.parentTaskId] ?: it.priority
+            else
+                it.priority
+        }.thenBy {
+            if (it.parentTaskId != null) it.priority else -1
+        })
     }
     val selectedTask = remember(selectedTaskId, tasks) {
         tasks.find { it.id == selectedTaskId }
@@ -557,6 +565,7 @@ private fun CronometerTab(
 
     val availableTasks = remember(tasks, selectedCategory) {
         val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
+        val parentPriority = tasks.associate { it.id to it.priority }
         tasks.filter { t ->
             t.status != "COMPLETED" && when (selectedCategory) {
                 "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
@@ -566,7 +575,14 @@ private fun CronometerTab(
                 "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
                 else -> false
             }
-        }.sortedBy { it.priority }
+        }.sortedWith(compareBy<TaskEntity> {
+            if (it.parentTaskId != null)
+                parentPriority[it.parentTaskId] ?: it.priority
+            else
+                it.priority
+        }.thenBy {
+            if (it.parentTaskId != null) it.priority else -1
+        })
     }
 
     var chronoNote by remember { mutableStateOf("") }
