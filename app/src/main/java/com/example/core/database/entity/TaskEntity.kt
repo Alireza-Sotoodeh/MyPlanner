@@ -31,5 +31,6 @@ data class TaskEntity(
     val targetSessions: Int? = null,
     val breakMinutes: Int? = 5,
     val linkedTodoId: Long? = null,
+    val linkedIdeaId: Long? = null,
     val postponed: Boolean = false
 )

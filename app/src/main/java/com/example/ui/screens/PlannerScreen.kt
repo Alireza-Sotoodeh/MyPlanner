@@ -1932,16 +1932,14 @@ fun BulletTaskItem(
                         }
                     )
                 }
-                if (task.type == "NOTE") {
-                    DropdownMenuItem(
-                        text = { Text("Turn into Idea") },
-                        leadingIcon = { Icon(Icons.Default.Lightbulb, contentDescription = null) },
-                        onClick = {
-                            onTurnIntoIdea()
-                            expandedMenu = false
-                        }
-                    )
-                }
+                DropdownMenuItem(
+                    text = { Text("Turn into Idea") },
+                    leadingIcon = { Icon(Icons.Default.Lightbulb, contentDescription = null) },
+                    onClick = {
+                        onTurnIntoIdea()
+                        expandedMenu = false
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Delete Intention") },
                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
@@ -5427,6 +5425,7 @@ private fun AddToPlannerDialog(
     var selectedMode by remember { mutableStateOf("entire") }
     var selectedStageId by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var duration by remember { mutableStateOf("25") }
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
@@ -5490,6 +5489,14 @@ private fun AddToPlannerDialog(
                         )
                     }
                 }
+                Text("Duration (min)", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    value = duration,
+                    onValueChange = { duration = it.filter { c -> c.isDigit() }.take(3) },
+                    modifier = Modifier.width(80.dp).height(48.dp),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                    singleLine = true
+                )
                 Text("Stage", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -5523,11 +5530,12 @@ private fun AddToPlannerDialog(
         },
         confirmButton = {
             TextButton(onClick = {
+                val durationMinutes = duration.toIntOrNull()?.coerceIn(1, 999) ?: 25
                 if (selectedMode == "single" && selectedStageId != null) {
                     val stage = stages.find { it.id == selectedStageId }
-                    if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType)
+                    if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType, durationMinutes)
                 } else {
-                    viewModel.addIdeaToPlanner(idea, date, selectedType)
+                    viewModel.addIdeaToPlanner(idea, date, selectedType, durationMinutes)
                 }
                 onDismiss()
             }) { Text("Add") }

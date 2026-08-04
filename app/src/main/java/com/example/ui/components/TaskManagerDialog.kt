@@ -1146,7 +1146,7 @@ fun TaskManagerDialog(
                         viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel), subtasks.toList().map { it.first })
                     } else if (ideaToEdit != null) {
                         val mutableStages = stages.toMutableList()
-                        if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
+                        if (editingStageIndex != -1 && editingStageIndex < mutableStages.size && editingStageText.isNotBlank()) {
                             mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
                         }
                         if (newStageTitle.isNotBlank()) {
@@ -1158,7 +1158,7 @@ fun TaskManagerDialog(
                             "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList().map { it.first })
                             "IDEA" -> {
                                 val mutableStages = stages.toMutableList()
-                                if (editingStageIndex != -1 && editingStageText.isNotBlank()) {
+                                if (editingStageIndex != -1 && editingStageIndex < mutableStages.size && editingStageText.isNotBlank()) {
                                     mutableStages[editingStageIndex] = mutableStages[editingStageIndex].copy(title = editingStageText.trim())
                                 }
                                 if (newStageTitle.isNotBlank()) {

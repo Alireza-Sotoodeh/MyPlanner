@@ -93,6 +93,12 @@ sealed class UndoSnapshot(val typeLabel: String) {
         val idea: IdeaEntity,
         val stages: List<IdeaStageEntity>,
     ) : UndoSnapshot("Idea")
+    data class IdeaToTaskSnapshot(
+        val idea: IdeaEntity,
+        val stages: List<IdeaStageEntity>,
+        val parentTaskId: Long,
+        val subtaskIds: List<Long>,
+    ) : UndoSnapshot("Idea in Planner")
 }
 
 data class UndoEntry(
@@ -2196,7 +2202,7 @@ class MainViewModel(
         }
     }
 
-    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String) {
+    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String, durationMinutes: Int = 25) {
         viewModelScope.launch {
             try {
                 val parentId = taskRepository.insertTask(
@@ -2206,41 +2212,54 @@ class MainViewModel(
                         date = date,
                         type = type,
                         label = "IDEA",
-                        durationMinutes = 25,
-                        priority = dailyTasks.value.size + 1
+                        linkedIdeaId = idea.id,
+                        durationMinutes = durationMinutes,
+                        priority = dailyTasks.value.size + 1,
+                        priorityLevel = idea.priority,
+                        createdAt = idea.createdAt
                     )
                 )
                 val stages = ideaRepository.getStagesForIdeaSync(idea.id)
+                val subtaskIds = mutableListOf<Long>()
                 stages.filter { it.title.isNotBlank() }.forEach { stage ->
-                    taskRepository.insertTask(
+                    val subtaskId = taskRepository.insertTask(
                         TaskEntity(
                             title = stage.title,
                             date = date,
-                            type = "TASK",
+                            type = type,
                             parentTaskId = parentId,
                             subtaskImportance = "OPTIONAL",
                             label = "IDEA",
-                            priority = 0
+                            linkedIdeaId = idea.id,
+                            priority = stage.orderIndex
                         )
                     )
+                    subtaskIds.add(subtaskId)
                 }
+                val stagesForUndo = ideaRepository.getStagesForIdeaSync(idea.id)
+                deleteIdea(idea)
+                pushUndo(
+                    UndoSnapshot.IdeaToTaskSnapshot(idea, stagesForUndo, parentId, subtaskIds),
+                    idea.title
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add idea to planner", e)
             }
         }
     }
 
-    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String) {
+    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String, durationMinutes: Int = 25) {
         viewModelScope.launch {
             try {
-                taskRepository.insertTask(
+                val taskId = taskRepository.insertTask(
                     TaskEntity(
                         title = stage.title,
                         date = date,
                         type = type,
                         label = "IDEA",
                         durationMinutes = 25,
-                        priority = dailyTasks.value.size + 1
+                        priority = dailyTasks.value.size + 1,
+                        priorityLevel = "Medium"
                     )
                 )
             } catch (e: Exception) {
@@ -2797,6 +2816,16 @@ class MainViewModel(
                         }
                     }
                     is UndoSnapshot.IdeaSnapshot -> {
+                        val newIdeaId = ideaRepository.insertIdea(snap.idea.copy(id = 0))
+                        for (stage in snap.stages) {
+                            ideaRepository.insertStage(stage.copy(id = 0, ideaId = newIdeaId))
+                        }
+                    }
+                    is UndoSnapshot.IdeaToTaskSnapshot -> {
+                        taskRepository.deleteTaskById(snap.parentTaskId)
+                        for (subtaskId in snap.subtaskIds) {
+                            taskRepository.deleteTaskById(subtaskId)
+                        }
                         val newIdeaId = ideaRepository.insertIdea(snap.idea.copy(id = 0))
                         for (stage in snap.stages) {
                             ideaRepository.insertStage(stage.copy(id = 0, ideaId = newIdeaId))

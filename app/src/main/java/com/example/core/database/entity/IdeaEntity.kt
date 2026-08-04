@@ -22,5 +22,6 @@ data class IdeaEntity(
     val description: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val sortOrder: Int = 0,
-    val priority: String = "Medium"
+    val priority: String = "Medium",
+    val linkedTaskId: Long? = null
 )
