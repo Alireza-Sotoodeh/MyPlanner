@@ -58,6 +58,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import android.app.PendingIntent
+import kotlinx.coroutines.Dispatchers
 
 data class AppUsageItem(
     val appName: String,
@@ -320,6 +322,12 @@ class MainViewModel(
                     _selectedMonth.value = newMonth
                 }
             }
+
+            // Reset reviewed_today prefs cache on date change
+            val cachedDate = prefs.getString("reviewed_today_date", null)
+            if (cachedDate != null && cachedDate != newToday) {
+                prefs.edit().remove("reviewed_today").remove("reviewed_today_date").apply()
+            }
         }
     }
 
@@ -440,6 +448,133 @@ class MainViewModel(
 
     private val _reviewReminderEnabled = MutableStateFlow(prefs.getBoolean("review_reminder_enabled", false))
     val reviewReminderEnabled: StateFlow<Boolean> = _reviewReminderEnabled.asStateFlow()
+
+    // === Day Review Prompt State ===
+    private val _showDayReviewPrompt = MutableStateFlow(false)
+    val showDayReviewPrompt: StateFlow<Boolean> = _showDayReviewPrompt.asStateFlow()
+
+    @Volatile
+    private var _isCheckingPrompt = false
+
+    private fun createDayReviewChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "day_review_reminder",
+                "Day Review Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Daily reminder to review your day"
+            }
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun getImmutableFlag(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_IMMUTABLE
+        } else {
+            0
+        }
+    }
+
+    fun scheduleDayReviewAlarm(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
+            action = "com.example.action.DAY_REVIEW"
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            5000,
+            intent,
+            getImmutableFlag() or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val timeParts = _reviewReminderTime.value.split(":")
+        val hour = timeParts[0].toInt()
+        val minute = timeParts[1].toInt()
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (before(Calendar.getInstance())) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+        alarmManager.setRepeating(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis,
+            AlarmManager.INTERVAL_DAY,
+            pendingIntent
+        )
+    }
+
+    fun cancelDayReviewAlarm(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
+            action = "com.example.action.DAY_REVIEW"
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            5000,
+            intent,
+            getImmutableFlag() or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    fun sendImmediateDayReviewNotification(context: Context) {
+        createDayReviewChannel(context)
+        val intent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("open_day_review", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(context, 5001, intent, getImmutableFlag())
+        val notification = NotificationCompat.Builder(context, "day_review_reminder")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Day Review Reminder")
+            .setContentText("Time to review your day!")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(5000, notification)
+    }
+
+    fun dismissDayReviewPrompt() {
+        _showDayReviewPrompt.value = false
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(5000)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cancel day review notification", e)
+        }
+    }
+
+    fun checkAndTriggerDayReviewPrompt() {
+        if (_isCheckingPrompt) return
+        if (!_reviewReminderEnabled.value) return
+        if (prefs.getBoolean("reviewed_today", false)) return
+        val today = getTodayDateString()
+        val reminderTime = _reviewReminderTime.value
+        val now = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        if (now < reminderTime) return
+        _isCheckingPrompt = true
+        viewModelScope.launch {
+            try {
+                val existing = dayReviewRepository.getReviewForDate(today).first()
+                if (existing != null) {
+                    prefs.edit().putBoolean("reviewed_today", true).apply()
+                    return@launch
+                }
+                _showDayReviewPrompt.value = true
+            } finally {
+                _isCheckingPrompt = false
+            }
+        }
+    }
 
     init {
         // Register BroadcastReceiver for date, time, and timezone changes
@@ -1457,6 +1592,8 @@ class MainViewModel(
             } else {
                 dayReviewRepository.insertReview(DayReviewEntity(date = date, good = good, bad = bad, improve = improve, gratitude = gratitude, moodRating = moodRating, score = score, notes = notes))
             }
+            prefs.edit().putBoolean("reviewed_today", true).putString("reviewed_today_date", date).apply()
+            dismissDayReviewPrompt()
         }
     }
 
@@ -1467,11 +1604,20 @@ class MainViewModel(
     fun updateReviewReminderTime(time: String) {
         prefs.edit().putString("review_reminder_time", time).apply()
         _reviewReminderTime.value = time
+        if (_reviewReminderEnabled.value) {
+            cancelDayReviewAlarm(context)
+            scheduleDayReviewAlarm(context)
+        }
     }
 
     fun updateReviewReminderEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("review_reminder_enabled", enabled).apply()
         _reviewReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleDayReviewAlarm(context)
+        } else {
+            cancelDayReviewAlarm(context)
+        }
     }
 
     // Helper utilities for date
