@@ -51,19 +51,7 @@ fun MoreScreen(
     var currentScreen by remember { mutableStateOf<MoreSubScreen>(MoreSubScreen.None) }
 
     if (currentScreen !is MoreSubScreen.None) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            TopAppBar(
-                title = { Text(currentScreen.label) },
-                navigationIcon = {
-                    IconButton(onClick = { currentScreen = MoreSubScreen.None }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-            when (currentScreen) {
+        when (currentScreen) {
                 is MoreSubScreen.Ideas -> IdeasScreen(
                     viewModel = viewModel,
                     onBack = { currentScreen = MoreSubScreen.None }
@@ -90,7 +78,6 @@ fun MoreScreen(
                 )
                 else -> {}
             }
-        }
     } else {
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(

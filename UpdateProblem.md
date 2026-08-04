@@ -635,66 +635,140 @@ DAY AFTER REVIEW:
 ## Implementation Stages (Execution Order)
 
 ### Stage 1: `PlannerScreen.kt` — Cleanup + SettingsDialog Permissions
-- [ ] Remove `import com.example.ui.components.DayReviewCard`
-- [ ] Remove `DayReviewCard` composable + `reviewForDate()` flow collection from Column
-- [ ] Remove `showDayReviewDialog` state + `DayReviewScreen` dialog
-- [ ] Add `POST_NOTIFICATIONS` permission launcher inside SettingsDialog composable (`rememberLauncherForActivityResult`, triggered on enable toggle, not on composition)
-- [ ] Add `SCHEDULE_EXACT_ALARM` settings redirect inside SettingsDialog enable toggle (API 31-32)
-- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+- [x] Remove `import com.example.ui.components.DayReviewCard`
+- [x] Remove `DayReviewCard` composable + `reviewForDate()` flow collection from Column
+- [x] Remove `showDayReviewDialog` state + `DayReviewScreen` dialog
+- [x] Add `POST_NOTIFICATIONS` permission launcher inside SettingsDialog composable (`rememberLauncherForActivityResult`, triggered on enable toggle, not on composition)
+- [x] Add `SCHEDULE_EXACT_ALARM` settings redirect inside SettingsDialog enable toggle (API 31-32)
+- [x] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
 
 ### Stage 2: `MainViewModel.kt` — Shared Helpers + Alarm + Prompt State
-- [ ] Add `createDayReviewChannel(context)` — idempotent notification channel helper
-- [ ] Add `getImmutableFlag()` — version-safe `PendingIntent.FLAG_IMMUTABLE` (returns 0 on API < 31)
-- [ ] Add `scheduleDayReviewAlarm(context)` — `AlarmManager.setRepeating()` with `RTC_WAKEUP`, 24h interval, PendingIntent → `ReminderReceiver` (requestCode=5000)
-- [ ] Add `cancelDayReviewAlarm(context)` — cancel alarm + cancel PendingIntent
-- [ ] Add `sendImmediateDayReviewNotification(context)` — one-shot notification (ID=5000) via `LocalBroadcastManager`, uses `createDayReviewChannel()` + `getImmutableFlag()` + properly declares `notificationManager`
-- [ ] Add `_showDayReviewPrompt: MutableStateFlow<Boolean>` — exposed as `showDayReviewPrompt: StateFlow<Boolean>`
-- [ ] Add `checkAndTriggerDayReviewPrompt()` — enabled guard, prefs cache fast-path, time-past check, DB query for today's review
-- [ ] Add `dismissDayReviewPrompt()` — sets `_showDayReviewPrompt = false` + `notificationManager.cancel(5000)`
-- [ ] Modify `saveDayReview()` — after DB upsert, cache `reviewed_today=true` in prefs, call `dismissDayReviewPrompt()`
-- [ ] Modify `refreshSystemDate()` — on date change, reset `reviewed_today=false` in prefs
-- [ ] Modify `updateReviewReminderEnabled(true)` → calls `scheduleDayReviewAlarm()`
-- [ ] Modify `updateReviewReminderEnabled(false)` → calls `cancelDayReviewAlarm()`
-- [ ] Modify `updateReviewReminderTime()` → calls `cancelDayReviewAlarm()` + `scheduleDayReviewAlarm()`
-- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+- [x] Add `createDayReviewChannel(context)` — idempotent notification channel helper
+- [x] Add `getImmutableFlag()` — version-safe `PendingIntent.FLAG_IMMUTABLE` (returns 0 on API < 31)
+- [x] Add `scheduleDayReviewAlarm(context)` — `AlarmManager.setRepeating()` with `RTC_WAKEUP`, 24h interval, PendingIntent → `ReminderReceiver` (requestCode=5000)
+- [x] Add `cancelDayReviewAlarm(context)` — cancel alarm + cancel PendingIntent
+- [x] Add `sendImmediateDayReviewNotification(context)` — one-shot notification (ID=5000), uses `createDayReviewChannel()` + `getImmutableFlag()` + properly declares `notificationManager`
+- [x] Add `_showDayReviewPrompt: MutableStateFlow<Boolean>` — exposed as `showDayReviewPrompt: StateFlow<Boolean>`
+- [x] Add `checkAndTriggerDayReviewPrompt()` — enabled guard, prefs cache fast-path, time-past check, DB query for today's review
+- [x] Add `dismissDayReviewPrompt()` — sets `_showDayReviewPrompt = false` + `notificationManager.cancel(5000)`
+- [x] Modify `saveDayReview()` — after DB upsert, cache `reviewed_today=true` in prefs, call `dismissDayReviewPrompt()`
+- [x] Modify `refreshSystemDate()` — on date change, reset `reviewed_today=false` in prefs
+- [x] Modify `updateReviewReminderEnabled(true)` → calls `scheduleDayReviewAlarm()`
+- [x] Modify `updateReviewReminderEnabled(false)` → calls `cancelDayReviewAlarm()`
+- [x] Modify `updateReviewReminderTime()` → calls `cancelDayReviewAlarm()` + `scheduleDayReviewAlarm()`
+- [x] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
 
 ### Stage 3: `ReminderReceiver.kt` — DAY_REVIEW Handler
-- [ ] In `onReceive()`, add `action == "com.example.action.DAY_REVIEW"` check BEFORE existing event reminder logic → `handleDayReview(context); return`
-- [ ] Add `handleDayReview(context)`:
+- [x] In `onReceive()`, add `action == "com.example.action.DAY_REVIEW"` check BEFORE existing event reminder logic → `handleDayReview(context); return`
+- [x] Add `handleDayReview(context)`:
   - `goAsync()` → `CoroutineScope(Dispatchers.IO).launch`
   - `createDayReviewChannel(context)`
-  - Query DB: `AppDatabase.getDatabase(context).dayReviewDao().getReviewForDateSync(todayStr)`
-  - If review exists → `pendingResult.finish(); return`
+  - Query DB: `AppDatabase.getDatabase(context).dayReviewDao().getReviewForDate(todayStr).first()`
+  - If review exists → `return@launch`
   - Build notification with PendingIntent → `MainActivity` + `open_day_review=true`
-  - `LocalBroadcastManager.getInstance(context).sendBroadcast(Intent("com.example.action.DAY_REVIEW_TRIGGERED"))`
+  - `context.sendBroadcast(Intent("com.example.action.DAY_REVIEW_TRIGGERED"))`
   - `notificationManager.notify(5000, builder.build())`
   - `finally { pendingResult.finish() }`
-- [ ] Extend boot/time-change/timezone-change block: if `review_reminder_enabled` prefs → reschedule alarm
-- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+- [x] Extend boot/time-change/timezone-change block: if `review_reminder_enabled` prefs → reschedule alarm
+- [x] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
 
-### Stage 4: `MainActivity.kt` — Snackbar + Overlay + LocalBroadcast + Intent
-- [ ] Add `SnackbarHostState` + `SnackbarHost(snackbarHostState)` to existing Scaffold
-- [ ] Add `dayReviewTriggeredReceiver` — `BroadcastReceiver` that calls `viewModel.checkAndTriggerDayReviewPrompt()` when action is `DAY_REVIEW_TRIGGERED`
-- [ ] Modify `onResume()` — register `dayReviewTriggeredReceiver` via `LocalBroadcastManager.getInstance(this).registerReceiver(...)`, add `viewModel.refreshSystemDate()` + `viewModel.checkAndTriggerDayReviewPrompt()`
-- [ ] Add `override fun onPause()` — `LocalBroadcastManager.getInstance(this).unregisterReceiver(dayReviewTriggeredReceiver)`
-- [ ] Add `showDayReviewOverlay: Boolean` state (`rememberSaveable { mutableStateOf(false) }`)
-- [ ] Add single consolidated `LaunchedEffect(showPrompt)`:
+### Stage 4: `MainActivity.kt` — Snackbar + Overlay + Broadcast + Intent
+- [x] Add `SnackbarHostState` + `SnackbarHost(snackbarHostState)` to existing Scaffold
+- [x] Add `dayReviewTriggeredReceiver` — `BroadcastReceiver` that calls `viewModel.checkAndTriggerDayReviewPrompt()` when action is `DAY_REVIEW_TRIGGERED`
+- [x] Modify `onResume()` — register `dayReviewTriggeredReceiver` via `registerReceiver(...)`, add `viewModel.refreshSystemDate()` + `viewModel.checkAndTriggerDayReviewPrompt()`
+- [x] Add `override fun onPause()` — `unregisterReceiver(dayReviewTriggeredReceiver)`
+- [x] Add `showDayReviewOverlay: Boolean` state (`remember { mutableStateOf(false) }`)
+- [x] Add single consolidated `LaunchedEffect(showPrompt)`:
   - If `true`: show Snackbar ("Time to review your day!" / "Review" action) → on action → `showDayReviewOverlay = true`
   - If `false`: `showDayReviewOverlay = false` + dismiss Snackbar
-- [ ] Add overlay rendering below Scaffold: `if (showDayReviewOverlay) { Box + DayReviewScreen(...) }`
+- [x] Add overlay rendering below Scaffold: `if (showDayReviewOverlay) { Box + DayReviewScreen(...) }`
   - `DayReviewScreen(viewModel, todayDate, onBack = { showDayReviewOverlay = false; viewModel.dismissDayReviewPrompt() })`
-- [ ] Override `onNewIntent(intent)` — if `open_day_review` extra → call `viewModel.checkAndTriggerDayReviewPrompt()`
-- [ ] In `onCreate()` after ViewModel init — check `intent.getBooleanExtra("open_day_review", false)` → call `viewModel.checkAndTriggerDayReviewPrompt()`
-- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+- [x] Override `onNewIntent(intent)` — if `open_day_review` extra → call `viewModel.checkAndTriggerDayReviewPrompt()`
+- [x] In `onCreate()` after ViewModel init — check `intent.getBooleanExtra("open_day_review", false)` → call `viewModel.checkAndTriggerDayReviewPrompt()`
+- [x] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
 
 ### Stage 5: `AndroidManifest.xml` — Permissions
-- [ ] Add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` inside `<manifest>`
-- [ ] Add `<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />` inside `<manifest>`
-- [ ] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
+- [x] Add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` inside `<manifest>`
+- [x] Add `<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />` inside `<manifest>`
+- [x] **VERIFY**: `.\gradlew.bat assembleDebug` — builds successfully
 
 ### Stage 6: Final Build & Cross-Check
-- [ ] Full build: `.\gradlew.bat assembleDebug` — **BUILD SUCCESSFUL**
-- [ ] Verify DayReviewCard is gone from DailyPlannerView
-- [ ] Verify SettingsDialog has Day Review Reminder section with enable switch and time picker
-- [ ] Verify all edge cases from table are covered by the implementation
-- [ ] Confirm no dead code or orphaned imports
+- [x] Full build: `.\gradlew.bat assembleDebug` — **BUILD SUCCESSFUL**
+- [x] Verify DayReviewCard is gone from DailyPlannerView
+- [x] Verify SettingsDialog has Day Review Reminder section with enable switch and time picker
+- [x] Verify all edge cases from table are covered by the implementation
+- [x] Confirm no dead code or orphaned imports
+
+---
+
+## MoreScreen Double TopAppBar Fix
+
+### Issue
+When navigating to any sub-screen in the More tab (To-Do, Ideas, Diary, etc.), the screen title appears **twice** because:
+1. `MoreScreen.kt` wraps each sub-screen in a `Column` with its own `TopAppBar` showing `currentScreen.label` (lines 55-65)
+2. Every sub-screen (`TodoScreen`, `IdeasScreen`, `DiaryScreen`, `ShopListScreen`, `MottoManagementScreen`, `DayReviewScreen`) **already has its own** `TopAppBar` with title + back button
+
+**Before fix UI:**
+```
+┌─ TopAppBar (MoreScreen wrapper) ──┐
+│  ←  To-Do                         │
+├───────────────────────────────────┤
+│  ┌─ TopAppBar (TodoScreen) ────┐  │
+│  │  ←  To-Do List              │  │
+│  └─────────────────────────────┘  │
+│  [actual content...]              │
+└───────────────────────────────────┘
+```
+
+### Fix
+Remove the wrapper `TopAppBar` and its enclosing `Column` from `MoreScreen.kt`'s sub-screen branch. Render sub-screens directly — each already provides its own `TopAppBar` with back navigation.
+
+**File:** `app/src/main/java/com/example/ui/screens/MoreScreen.kt`
+
+**Change:**
+```kotlin
+// BEFORE (lines 53-93)
+if (currentScreen !is MoreSubScreen.None) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(                            // ← REMOVE this entire TopAppBar
+            title = { Text(currentScreen.label) },
+            navigationIcon = {
+                IconButton(onClick = { currentScreen = MoreSubScreen.None }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+        when (currentScreen) { ... sub-screens ... }
+    }
+}
+
+// AFTER
+if (currentScreen !is MoreSubScreen.None) {
+    when (currentScreen) {                    // ← Directly render sub-screens
+        is MoreSubScreen.Ideas -> IdeasScreen(viewModel, onBack = { currentScreen = MoreSubScreen.None })
+        is MoreSubScreen.Todo -> TodoScreen(viewModel, onBack = { currentScreen = MoreSubScreen.None })
+        is MoreSubScreen.Diary -> DiaryScreen(viewModel, onBack = { currentScreen = MoreSubScreen.None })
+        is MoreSubScreen.ShopList -> ShopListScreen(viewModel, onBack = { currentScreen = MoreSubScreen.None })
+        is MoreSubScreen.Mottos -> MottoManagementScreen(viewModel, onBack = { currentScreen = MoreSubScreen.None })
+        is MoreSubScreen.DayReview -> DayReviewScreen(viewModel, onBack = { currentScreen = MoreSubScreen.None })
+        else -> {}
+    }
+}
+```
+
+**After fix UI:**
+```
+┌─ TopAppBar (TodoScreen) ──────────┐
+│  ←  To-Do List                    │
+├───────────────────────────────────┤
+│  [actual content...]              │
+└───────────────────────────────────┘
+```
+
+### Dev Notes
+- `currentScreen` state reset is still handled by each sub-screen's `onBack` callback
+- No sub-screen references are broken — they all accept `viewModel` and `onBack`
+- Build verification: `.\gradlew.bat assembleDebug`
