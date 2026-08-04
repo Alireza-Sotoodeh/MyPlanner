@@ -192,20 +192,12 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
   // Return true if authenticated
   ```
 
-### 4.3 — Rotation logic (#66)
+### 4.3 — Rotation logic (#66) `[x] DONE`
 
-- [ ] In `uploadBackup()`, after successful upload:
-  
-  ```kotlin
-  val backups = listBackups(context)
-  if (backups.size >= MAX_BACKUPS) {
-      // Sort by createdTime ascending, delete oldest ones beyond MAX_BACKUPS
-      val toDelete = backups.sortedBy { it.createdTime }.take(backups.size - MAX_BACKUPS + 1)
-      toDelete.forEach { deleteBackup(context, it.id) }
-  }
-  ```
-- [ ] **Local rotation:** Same logic applied to local `bulletcoach_backup_*.json.gz` files
-- [ ] **Edge case:** Deletion fails silently — log warning, don't block the backup
+- [x] `uploadBackup()` calls `rotateBackups(context)` after successful upload — keeps max 3 Drive backups, deletes oldest extras
+- [x] Added `rotateLocalBackups(context)` — keeps max 3 local `bulletcoach_backup_*.json.gz` files
+- [x] **Edge case:** Deletion fails silently — `catch (e: Exception) { Log.w(...) }`, doesn't block the backup
+- [x] **Verify:** `assembleDebug` succeeds
 
 ### 4.4 — Wire DriveManager into MainViewModel
 

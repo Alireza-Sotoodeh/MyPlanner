@@ -143,7 +143,12 @@ object DriveManager {
 
             val response = client.newCall(request).execute()
             val respBody = response.body?.string() ?: return null
-            JSONObject(respBody).optString("id", null)
+            val fileId = JSONObject(respBody).optString("id", null)
+            if (fileId != null) {
+                rotateBackups(context)
+                rotateLocalBackups(context)
+            }
+            fileId
         } catch (e: Exception) {
             Log.e(TAG, "Upload failed", e)
             null
@@ -226,6 +231,20 @@ object DriveManager {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Rotation failed", e)
+        }
+    }
+
+    fun rotateLocalBackups(context: Context) {
+        try {
+            val backupDir = context.filesDir
+            val files = backupDir.listFiles { f -> f.name.startsWith("bulletcoach_backup_") && f.name.endsWith(".json.gz") }
+                ?.sortedBy { it.lastModified() } ?: return
+            if (files.size >= MAX_BACKUPS) {
+                val toDelete = files.take(files.size - MAX_BACKUPS + 1)
+                toDelete.forEach { if (it.delete()) Log.d(TAG, "Deleted old local backup: ${it.name}") }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Local rotation failed", e)
         }
     }
 }
