@@ -1555,19 +1555,29 @@ class MainViewModel(
         }
     }
 
-    fun logHabit(habitId: Long, value: Float, notes: String = "") {
+    fun logHabit(habitId: Long, value: Float, notes: String = "", date: String? = null) {
         viewModelScope.launch {
-            val today = _selectedDate.value
-            val currentLog = habitLogs.value.find { it.habitId == habitId }
+            val targetDate = date ?: _selectedDate.value
+            val currentLog = if (date != null) {
+                habitRepository.getLogsForDate(targetDate).first().find { it.habitId == habitId }
+            } else {
+                habitLogs.value.find { it.habitId == habitId }
+            }
             if (currentLog != null) {
                 if (value <= 0f) {
-                    habitRepository.deleteLogForDate(habitId, today)
+                    habitRepository.deleteLogForDate(habitId, targetDate)
                 } else {
                     habitRepository.insertLog(currentLog.copy(value = value, notes = notes))
                 }
             } else {
-                habitRepository.insertLog(HabitLogEntity(habitId = habitId, date = today, value = value, notes = notes))
+                habitRepository.insertLog(HabitLogEntity(habitId = habitId, date = targetDate, value = value, notes = notes))
             }
+        }
+    }
+
+    fun deleteHabitLog(logId: Long) {
+        viewModelScope.launch {
+            habitRepository.deleteLogById(logId)
         }
     }
 

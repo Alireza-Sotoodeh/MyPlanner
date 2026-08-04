@@ -29,4 +29,6 @@ class HabitRepository(private val habitDao: HabitDao) {
     suspend fun deleteLogForDate(habitId: Long, date: String) = habitDao.deleteLogForDate(habitId, date)
 
     suspend fun deleteLogsForHabit(habitId: Long) = habitDao.deleteLogsForHabit(habitId)
+
+    suspend fun deleteLogById(id: Long) = habitDao.deleteLogById(id)
 }

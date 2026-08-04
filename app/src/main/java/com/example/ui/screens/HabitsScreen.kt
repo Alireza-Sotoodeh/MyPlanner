@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -56,6 +59,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -77,12 +82,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.HabitEntity
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.example.core.database.entity.HabitLogEntity
 import com.example.core.database.entity.SleepLogEntity
+import com.example.ui.components.CalendarDatePickerDialog
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun HabitsScreen(viewModel: MainViewModel) {
@@ -90,53 +98,76 @@ fun HabitsScreen(viewModel: MainViewModel) {
     val logs by viewModel.habitLogs.collectAsState()
     val sleepLog by viewModel.sleepLog.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
+    val allHabitLogs by viewModel.allHabitLogs.collectAsState()
 
+    var tabIndex by remember { mutableIntStateOf(0) }
     var showCreateHabitDialog by remember { mutableStateOf(false) }
     var editingHabit by remember { mutableStateOf<HabitEntity?>(null) }
     var showLogSleepDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showManageHabitsDialog by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Tracker Section Title
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
+            Column {
+                Text(
+                    text = "TRACKERS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.5.sp
+                )
+                Text(
+                    text = "Habit & Sleep",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Light,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            HeaderActions(
+                onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
+                onSettingsClick = { showSettingsDialog = true },
+                onManageHabits = { showManageHabitsDialog = true }
+            )
+        }
+
+        // Tabs
+        TabRow(
+            selectedTabIndex = tabIndex,
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
+            listOf("Habits", "History").forEachIndexed { index, title ->
+                Tab(
+                    selected = tabIndex == index,
+                    onClick = { tabIndex = index },
+                    text = {
                         Text(
-                            text = "TRACKERS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            letterSpacing = 1.5.sp
-                        )
-                        Text(
-                            text = "Habit & Sleep",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Light,
-                            color = MaterialTheme.colorScheme.onBackground
+                            text = title,
+                            fontWeight = if (tabIndex == index) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp
                         )
                     }
-                    HeaderActions(
-                        onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
-                        onSettingsClick = { showSettingsDialog = true },
-                        onManageHabits = { showManageHabitsDialog = true }
-                    )
-                }
+                )
             }
+        }
 
-            // 1. Sleep Tracker Summary Card
+        // Tab content
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            if (tabIndex == 0) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 88.dp)
+                ) {
+                    // 1. Sleep Tracker Summary Card
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -317,20 +348,28 @@ fun HabitsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // FAB for adding habits
-        FloatingActionButton(
-            onClick = { showCreateHabitDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 24.dp, bottom = 16.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.background,
-            shape = CircleShape
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "New Habit"
-            )
+            // FAB for adding habits
+                FloatingActionButton(
+                    onClick = { showCreateHabitDialog = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 24.dp, bottom = 16.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.background,
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "New Habit"
+                    )
+                }
+            } else {
+                HabitsHistoryTab(
+                    habits = habits,
+                    allLogs = allHabitLogs,
+                    viewModel = viewModel
+                )
+            }
         }
     }
 
@@ -1186,5 +1225,229 @@ private fun ManageHabitCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HabitsHistoryTab(
+    habits: List<HabitEntity>,
+    allLogs: List<HabitLogEntity>,
+    viewModel: MainViewModel
+) {
+    val todayStr = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+    val yesterdayStr = remember {
+        val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(c.time)
+    }
+
+    var selectedDate by remember { mutableStateOf(todayStr) }
+    var dateChip by remember { mutableStateOf("today") }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val dateLogs = remember(allLogs, selectedDate) {
+        allLogs.filter { it.date == selectedDate }
+    }
+    val highlightedDates = remember(allLogs) {
+        allLogs.map { it.date }.toSet()
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Date chips
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            listOf("today" to "Today", "yesterday" to "Yesterday").forEach { (key, label) ->
+                FilterChip(
+                    selected = dateChip == key,
+                    onClick = {
+                        dateChip = key
+                        selectedDate = if (key == "today") todayStr else yesterdayStr
+                    },
+                    label = { Text(label, fontSize = 12.sp) }
+                )
+            }
+
+            if (dateChip == "custom") {
+                FilterChip(
+                    selected = true,
+                    onClick = {
+                        dateChip = "today"
+                        selectedDate = todayStr
+                    },
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(formatLogDate(selectedDate), fontSize = 12.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                        }
+                    }
+                )
+            }
+
+            IconButton(
+                onClick = { showDatePicker = true },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(Icons.Default.DateRange, contentDescription = "Pick date", modifier = Modifier.size(20.dp))
+            }
+        }
+
+        // Summary
+        Text(
+            text = "${dateLogs.size} logs · ${habits.size} habits",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // Log list
+        if (habits.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No habits defined.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Create habits in the Habits tab.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(habits, key = { it.id }) { habit ->
+                    val log = dateLogs.find { it.habitId == habit.id }
+                    HistoryHabitRowItem(
+                        habit = habit,
+                        logValue = log?.value ?: 0f,
+                        onLog = { value -> viewModel.logHabit(habit.id, value, date = selectedDate) },
+                        onDelete = { log?.let { viewModel.deleteHabitLog(it.id) } }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        CalendarDatePickerDialog(
+            highlightedDates = highlightedDates,
+            initialUsePersian = false,
+            initialSelectedDate = if (dateChip == "custom") selectedDate else null,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { gregorianDate ->
+                selectedDate = gregorianDate
+                dateChip = "custom"
+                showDatePicker = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun HistoryHabitRowItem(
+    habit: HabitEntity,
+    logValue: Float,
+    onLog: (Float) -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = habit.name,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "Goal: ${habit.target.toInt()} ${habit.unit}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            if (habit.type == "BINARY") {
+                val isDone = logValue >= 1f
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)
+                        .background(if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { onLog(if (isDone) 0f else 1f) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isDone) {
+                        Icon(Icons.Default.Check, contentDescription = "Completed", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp))
+                    }
+                }
+            } else {
+                val goalReached = logValue >= habit.target
+                if (goalReached) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onLog(0f) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "Completed", tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp))
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        IconButton(onClick = { if (logValue > 0f) onLog(logValue - 1f) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        }
+                        Text(text = "${logValue.toInt()}", fontSize = 18.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                        Text(text = "/ ${habit.target.toInt()}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        IconButton(onClick = { onLog(logValue + 1f) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp), enabled = logValue > 0f) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete log", tint = if (logValue > 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+private fun formatLogDate(dateStr: String): String {
+    return try {
+        val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateStr)
+        val cal = Calendar.getInstance()
+        val currentYear = SimpleDateFormat("yyyy", Locale.getDefault()).format(cal.time)
+        val dateYear = SimpleDateFormat("yyyy", Locale.getDefault()).format(parsed!!)
+        val fmt = if (dateYear == currentYear) "MMM d" else "MMM d, yyyy"
+        SimpleDateFormat(fmt, Locale.getDefault()).format(parsed)
+    } catch (_: Exception) {
+        dateStr
     }
 }
