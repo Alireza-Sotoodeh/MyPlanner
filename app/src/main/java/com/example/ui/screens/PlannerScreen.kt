@@ -3636,6 +3636,14 @@ fun SettingsDialog(
         )
     }
     var notificationPermanentlyDenied by remember { mutableStateOf(false) }
+    var permHasBatteryOpt by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+                pm.isIgnoringBatteryOptimizations(context.packageName)
+            } else true
+        )
+    }
 
     var showRestoreMonthPicker by remember { mutableStateOf(false) }
     var restoreMonths by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -3669,6 +3677,16 @@ fun SettingsDialog(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.refreshBackupWritable()
+    }
+
+    // Launcher for battery optimization settings
+    val batteryOptLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            permHasBatteryOpt = pm.isIgnoringBatteryOptimizations(context.packageName)
+        }
     }
 
     // Permission launchers for the Permissions card
@@ -4389,6 +4407,27 @@ fun SettingsDialog(
                                 } catch (_: Exception) { }
                             },
                             buttonText = "GRANT"
+                        )
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        PermissionItem(
+                            title = "Battery Optimization (Recommended)",
+                            description = "Stops system from killing timer in background",
+                            icon = Icons.Default.Settings,
+                            isGranted = permHasBatteryOpt,
+                            onClick = {
+                                try {
+                                    val intent = Intent(
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                                    ).apply {
+                                        data = android.net.Uri.parse("package:${context.packageName}")
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    batteryOptLauncher.launch(intent)
+                                } catch (_: Exception) { }
+                            },
+                            buttonText = if (permHasBatteryOpt) "OK" else "WHITELIST"
                         )
                     }
                 }
