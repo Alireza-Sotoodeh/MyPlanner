@@ -5768,18 +5768,50 @@ private fun LearnGroupChipRow(
     selectedGroupId: Long?,
     onGroupSelected: (Long?) -> Unit,
     onEditGroup: (LearnGroupEntity) -> Unit,
-    onDeleteGroup: (LearnGroupEntity) -> Unit
+    onDeleteGroup: (LearnGroupEntity) -> Unit,
+    statusFilter: String,
+    onStatusFilterChange: (String) -> Unit
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         item {
-            FilterChip(
-                selected = selectedGroupId == null,
-                onClick = { onGroupSelected(null) },
-                label = { Text("All", fontSize = 12.sp) }
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = statusFilter == "in_progress",
+                    onClick = { onStatusFilterChange("in_progress") },
+                    label = { Text("In Progress", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = statusFilter == "planned",
+                    onClick = { onStatusFilterChange("planned") },
+                    label = { Text("Planned", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = statusFilter == "completed",
+                    onClick = { onStatusFilterChange("completed") },
+                    label = { Text("Completed", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = statusFilter == "all",
+                    onClick = { onStatusFilterChange("all") },
+                    label = { Text("All", fontSize = 12.sp) }
+                )
+            }
+        }
+        if (groups.isNotEmpty()) {
+            item {
+                Box(modifier = Modifier.width(1.dp).height(24.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
+            }
+            item {
+                FilterChip(
+                    selected = selectedGroupId == null,
+                    onClick = { onGroupSelected(null) },
+                    label = { Text("All", fontSize = 12.sp) }
+                )
+            }
         }
         items(groups, key = { it.id }) { group ->
             FilterChip(
@@ -6298,6 +6330,7 @@ fun LearnTab(viewModel: MainViewModel) {
     var showDeleteGroupConfirm by remember { mutableStateOf<LearnGroupEntity?>(null) }
     var showGroupChips by remember { mutableStateOf(true) }
     var showLearnBreakdown by remember { mutableStateOf(false) }
+    var statusFilter by remember { mutableStateOf("planned") }
 
     val groupChipScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
@@ -6309,15 +6342,21 @@ fun LearnTab(viewModel: MainViewModel) {
         }
     }
 
-    val filteredItems = if (selectedGroupId == null) learnItems
-    else learnItems.filter { it.groupId == selectedGroupId }
+    val statusFiltered = when (statusFilter) {
+        "in_progress" -> learnItems.filter { it.status == "ACTIVE" || it.status == "PAUSED" }
+        "planned" -> learnItems.filter { it.status == "NOT_STARTED" }
+        "completed" -> learnItems.filter { it.status == "COMPLETED" }
+        else -> learnItems
+    }
+    val filteredItems = if (selectedGroupId == null) statusFiltered
+    else statusFiltered.filter { it.groupId == selectedGroupId }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).nestedScroll(groupChipScrollConnection)
         ) {
             AnimatedVisibility(
-                visible = showGroupChips && learnGroups.isNotEmpty(),
+                visible = showGroupChips,
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
@@ -6326,7 +6365,9 @@ fun LearnTab(viewModel: MainViewModel) {
                     selectedGroupId = selectedGroupId,
                     onGroupSelected = { selectedGroupId = it },
                     onEditGroup = { editingGroup = it },
-                    onDeleteGroup = { showDeleteGroupConfirm = it }
+                    onDeleteGroup = { showDeleteGroupConfirm = it },
+                    statusFilter = statusFilter,
+                    onStatusFilterChange = { statusFilter = it }
                 )
             }
 
