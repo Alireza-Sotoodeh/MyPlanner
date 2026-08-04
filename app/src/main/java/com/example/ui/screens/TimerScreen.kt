@@ -1142,7 +1142,7 @@ private fun HistoryCalendarGrid(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = 32.dp)
+        modifier = Modifier.padding(top = 42.dp)
     ) {
         val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
