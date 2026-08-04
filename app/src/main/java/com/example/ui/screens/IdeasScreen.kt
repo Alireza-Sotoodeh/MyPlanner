@@ -77,12 +77,6 @@ fun IdeasScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { showCreateGroupDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Group")
-            }
         }
 
         GroupChipRow(
