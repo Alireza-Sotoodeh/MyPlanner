@@ -3723,41 +3723,33 @@ private fun TodoTab(viewModel: MainViewModel) {
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TodoTabFilter.entries.forEach { f ->
-                        FilterChip(
-                            selected = filter == f,
-                            onClick = { filter = f },
-                            label = { Text(f.name, fontSize = 12.sp) },
-                            modifier = Modifier.height(32.dp)
-                        )
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TodoTabFilter.entries.forEach { f ->
+                    FilterChip(
+                        selected = filter == f,
+                        onClick = { filter = f },
+                        label = { Text(f.name, fontSize = 10.sp) },
+                        modifier = Modifier.height(26.dp)
+                    )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LinkFilter.entries.forEach { f ->
-                        FilterChip(
-                            selected = linkFilter == f,
-                            onClick = {
-                                linkFilter = if (linkFilter == f) LinkFilter.UNLINKED else f
-                            },
-                            label = {
-                                Text(
-                                    if (f == LinkFilter.LINKED) "Linked" else "Unlinked",
-                                    fontSize = 12.sp
-                                )
-                            },
-                            modifier = Modifier.height(32.dp)
-                        )
-                    }
+                LinkFilter.entries.forEach { f ->
+                    FilterChip(
+                        selected = linkFilter == f,
+                        onClick = {
+                            linkFilter = if (linkFilter == f) LinkFilter.UNLINKED else f
+                        },
+                        label = {
+                            Text(
+                                if (f == LinkFilter.LINKED) "Linked" else "Unlinked",
+                                fontSize = 10.sp
+                            )
+                        },
+                        modifier = Modifier.height(26.dp)
+                    )
                 }
             }
         }
