@@ -95,6 +95,9 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -107,10 +110,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.TaskEntity
@@ -190,7 +197,10 @@ fun PlannerScreen(viewModel: MainViewModel) {
         Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
                 0 -> DailyPlannerView(viewModel, selectedFilterLabel, uniqueLabels) { selectedFilterLabel = it }
-                1 -> WeeklyPlannerView(viewModel, null)
+                1 -> WeeklyPlannerView(viewModel, null) { date ->
+    selectedTab = 0
+    viewModel.selectDate(date)
+}
                 2 -> MonthlyPlannerView(viewModel, null)
             }
         }
@@ -1161,7 +1171,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
 
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BulletTaskItem(
     task: TaskEntity,
@@ -1205,6 +1215,12 @@ fun BulletTaskItem(
     var draggedSubtasks by remember(subtasks) { mutableStateOf<List<TaskEntity>?>(null) }
     val subtaskItemHeights = remember { androidx.compose.runtime.mutableStateMapOf<Long, Int>() }
     var showSubtaskSelectorDialog by remember { mutableStateOf(false) }
+    var showRescheduleDialog by remember { mutableStateOf(false) }
+    var isReschedulePersian by remember { mutableStateOf(false) }
+    var rescheduleDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var reschedulePYear by remember { mutableIntStateOf(0) }
+    var reschedulePMonth by remember { mutableIntStateOf(0) }
+    var reschedulePDay by remember { mutableIntStateOf(0) }
 
     val actualIsDragging = if (onDragStart != null) isDragging else isDraggingInternal
     val actualOffsetX = if (onDragStart != null) dragOffsetX else offsetXInternal
@@ -1912,11 +1928,13 @@ fun BulletTaskItem(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Reschedule to Next Week") },
+                    text = { Text("Reschedule...") },
                     leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
                     onClick = {
-                        val nextWeek = getOffsetDateString(task.date, 7)
-                        onMigrate(nextWeek)
+                        isReschedulePersian = false
+                        rescheduleDateMillis = System.currentTimeMillis()
+                        reschedulePYear = 0; reschedulePMonth = 0; reschedulePDay = 0
+                        showRescheduleDialog = true
                         expandedMenu = false
                     }
                 )
@@ -1962,18 +1980,136 @@ fun BulletTaskItem(
             trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
         )
     }
+    if (showRescheduleDialog) {
+        if (!isReschedulePersian) {
+            val dpState = rememberDatePickerState(
+                initialSelectedDateMillis = rescheduleDateMillis
+            )
+            DatePickerDialog(
+                onDismissRequest = { showRescheduleDialog = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        dpState.selectedDateMillis?.let { millis ->
+                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                            val todayNorm = Calendar.getInstance().apply {
+                                set(Calendar.HOUR_OF_DAY, 0)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }.timeInMillis
+                            if (millis >= todayNorm) {
+                                onMigrate(sdf.format(Date(millis)))
+                                showRescheduleDialog = false
+                            }
+                        }
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRescheduleDialog = false }) { Text("Cancel") }
+                }
+            ) {
+                Column {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = {
+                            val parts = com.example.core.utils.PersianCalendarHelper.getPersianDateParts(
+                                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(rescheduleDateMillis))
+                            )
+                            reschedulePYear = parts.first; reschedulePMonth = parts.second; reschedulePDay = parts.third
+                            isReschedulePersian = true
+                        }) { Text("Switch to Persian Calendar") }
+                    }
+                    DatePicker(state = dpState)
+                }
+            }
+        } else {
+            AlertDialog(
+                onDismissRequest = { showRescheduleDialog = false },
+                title = { Text("Select Persian Date") },
+                text = {
+                    Column {
+                        Row(
+                            Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { isReschedulePersian = false }) {
+                                Text("Switch to Western Calendar")
+                            }
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = if (reschedulePYear > 0) reschedulePYear.toString() else "",
+                                onValueChange = { reschedulePYear = it.toIntOrNull() ?: 0 },
+                                label = { Text("Year") },
+                                modifier = Modifier.weight(1.2f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = if (reschedulePMonth > 0) reschedulePMonth.toString() else "",
+                                onValueChange = { reschedulePMonth = (it.toIntOrNull() ?: 0).coerceIn(0, 12) },
+                                label = { Text("Month") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = if (reschedulePDay > 0) reschedulePDay.toString() else "",
+                                onValueChange = { reschedulePDay = (it.toIntOrNull() ?: 0).coerceIn(0, 31) },
+                                label = { Text("Day") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (reschedulePYear > 0 && reschedulePMonth in 1..12 && reschedulePDay in 1..31) {
+                            val greg = com.example.core.utils.PersianCalendarHelper.getGregorianDateString(
+                                reschedulePYear, reschedulePMonth, reschedulePDay
+                            )
+                            if (greg.isNotBlank()) {
+                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                val selected = sdf.parse(greg)?.time ?: 0L
+                                val todayNorm = Calendar.getInstance().apply {
+                                    set(Calendar.HOUR_OF_DAY, 0)
+                                    set(Calendar.MINUTE, 0)
+                                    set(Calendar.SECOND, 0)
+                                    set(Calendar.MILLISECOND, 0)
+                                }.timeInMillis
+                                if (selected >= todayNorm) {
+                                    onMigrate(greg)
+                                    showRescheduleDialog = false
+                                }
+                            }
+                        }
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRescheduleDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+    }
 }
 }
 
 @Composable
-fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
+fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onNavigateToDaily: (String) -> Unit = {}) {
     val selectedDate by viewModel.selectedDate.collectAsState()
     val todayDate by viewModel.todayDate.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
 
-    // Get days of selected week
-    val weekDays = remember(selectedDate) {
-        getDaysOfWeek(selectedDate)
+    // Local week anchor — decouples week scrolling from selectedDate.
+    // Initializes from selectedDate each time WeeklyPlannerView enters composition.
+    var weekAnchorDate by remember { mutableStateOf(selectedDate) }
+
+    val weekDays = remember(weekAnchorDate) {
+        getDaysOfWeek(weekAnchorDate)
     }
 
     val isCurrentWeek = remember(weekDays, todayDate) {
@@ -2025,7 +2161,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = {
-                viewModel.selectDate(getOffsetDateString(selectedDate, -7))
+                weekAnchorDate = getOffsetDateString(weekAnchorDate, -7)
             }) {
                 Icon(
                     imageVector = Icons.Default.ArrowBackIosNew,
@@ -2036,7 +2172,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
             }
 
             TextButton(
-                onClick = { viewModel.selectDate(todayDate) },
+                onClick = { weekAnchorDate = todayDate },
                 enabled = !isCurrentWeek
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2060,7 +2196,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
             }
 
             IconButton(onClick = {
-                viewModel.selectDate(getOffsetDateString(selectedDate, 7))
+                weekAnchorDate = getOffsetDateString(weekAnchorDate, 7)
             }) {
                 Icon(
                     imageVector = Icons.Default.ArrowForwardIos,
@@ -2079,7 +2215,7 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)
         ) {
             items(weekDays) { dayDate ->
-            val tasksForDay = allTasks.filter { it.date == dayDate && (filterLabel == null || it.label == filterLabel) }
+            val topLevelTasks = allTasks.filter { it.date == dayDate && it.parentTaskId == null && (filterLabel == null || it.label == filterLabel) }
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val dateObj = sdf.parse(dayDate)
             val gregorianDayLabel = SimpleDateFormat("EEEE", Locale.getDefault()).format(dateObj ?: Date())
@@ -2090,10 +2226,19 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
             val dateLabel = "$dateLabelGreg ($persianStr)"
 
             val isSelectedDay = dayDate == selectedDate
+            val isPast = try {
+                val dayMillis = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dayDate)?.time ?: 0L
+                dayMillis < SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(todayDate)?.time ?: 0L
+            } catch (e: Exception) { false }
+            val isToday = dayDate == todayDate
 
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isSelectedDay) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+                    containerColor = when {
+                        isSelectedDay -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        isToday -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
+                        else -> MaterialTheme.colorScheme.surface
+                    }
                 ),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
@@ -2103,92 +2248,124 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null) {
                         color = if (isSelectedDay) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                         shape = RoundedCornerShape(16.dp)
                     )
-                    .clickable { viewModel.selectDate(dayDate) }
+                    .clickable { onNavigateToDaily(dayDate) }
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = dayLabel.uppercase(),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = dateLabel,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .alpha(if (isPast) 0.5f else 1f)
+                ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = dayLabel.uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Bold,
+                                color = if (isPast) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = dateLabel,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                                    isPast -> MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                    else -> MaterialTheme.colorScheme.onBackground
+                                }
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    if (tasksForDay.isEmpty()) {
-                        Text(
-                            text = "No planned intentions.",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                    } else {
-                        tasksForDay.take(3).forEach { task ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(10.dp),
-                                    contentAlignment = Alignment.Center
+                        if (topLevelTasks.isEmpty()) {
+                            Text(
+                                text = "No planned intentions.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        } else {
+                            topLevelTasks.forEach { task ->
+                                val subtaskCount = allTasks.count { it.parentTaskId == task.id }
+                                val isCompletedTask = task.status == "COMPLETED"
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    if (task.type == "EVENT") {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .border(1.2.dp, MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.CircleShape)
+                                    Box(
+                                        modifier = Modifier.size(10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (task.type == "EVENT") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .border(1.2.dp, MaterialTheme.colorScheme.primary, shape = CircleShape)
+                                            )
+                                        } else if (task.type == "NOTE") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(width = 6.dp, height = 1.5.dp)
+                                                    .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(0.5.dp))
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(4.5.dp)
+                                                    .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = task.title,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isCompletedTask) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textDecoration = if (isCompletedTask) TextDecoration.LineThrough else TextDecoration.None
                                         )
-                                    } else if (task.type == "NOTE") {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(width = 6.dp, height = 1.5.dp)
-                                                .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(0.5.dp))
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(4.5.dp)
-                                                .background(MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.CircleShape)
-                                        )
+                                        if (subtaskCount > 0) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "+ $subtaskCount ${if (subtaskCount == 1) "subtask" else "subtasks"}",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    if (isToday) {
+                                        IconButton(
+                                            onClick = { onNavigateToDaily(task.date) },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowForwardIos,
+                                                contentDescription = "View details",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = task.title,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
                             }
-                        }
-                        if (tasksForDay.size > 3) {
-                            Text(
-                                text = "+ ${tasksForDay.size - 3} more intentions",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
                         }
                     }
                 }
             }
         }
     }
-}
 }
 
 @Composable
