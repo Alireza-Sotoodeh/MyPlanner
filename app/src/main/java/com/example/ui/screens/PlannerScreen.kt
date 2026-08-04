@@ -5552,8 +5552,6 @@ private fun AddToPlannerDialog(
     var selectedMode by remember { mutableStateOf("entire") }
     var selectedStageId by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var duration by remember { mutableStateOf("0") }
-
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = try {
@@ -5616,14 +5614,6 @@ private fun AddToPlannerDialog(
                         )
                     }
                 }
-                Text("Duration (min)", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(
-                    value = duration,
-                    onValueChange = { duration = it.filter { c -> c.isDigit() }.take(3) },
-                    modifier = Modifier.width(80.dp).height(48.dp),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
-                    singleLine = true
-                )
                 Text("Stage", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
@@ -5657,12 +5647,11 @@ private fun AddToPlannerDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val durationMinutes = duration.toIntOrNull()?.coerceIn(0, 999) ?: 0
                 if (selectedMode == "single" && selectedStageId != null) {
                     val stage = stages.find { it.id == selectedStageId }
-                    if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType, durationMinutes)
+                    if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType)
                 } else {
-                    viewModel.addIdeaToPlanner(idea, date, selectedType, durationMinutes)
+                    viewModel.addIdeaToPlanner(idea, date, selectedType)
                 }
                 onDismiss()
             }) { Text("Add") }

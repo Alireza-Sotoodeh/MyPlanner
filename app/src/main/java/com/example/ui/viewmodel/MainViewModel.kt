@@ -2292,7 +2292,7 @@ class MainViewModel(
         }
     }
 
-    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String, durationMinutes: Int = 0) {
+    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String) {
         viewModelScope.launch {
             try {
                 val parentId = taskRepository.insertTask(
@@ -2303,7 +2303,6 @@ class MainViewModel(
                         type = type,
                         label = "IDEA",
                         linkedIdeaId = idea.id,
-                        durationMinutes = durationMinutes,
                         priority = dailyTasks.value.size + 1,
                         priorityLevel = idea.priority,
                         createdAt = idea.createdAt
@@ -2337,7 +2336,7 @@ class MainViewModel(
         }
     }
 
-    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String, durationMinutes: Int = 0) {
+    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String) {
         viewModelScope.launch {
             try {
                 val taskId = taskRepository.insertTask(
@@ -2346,7 +2345,6 @@ class MainViewModel(
                         date = date,
                         type = type,
                         label = "IDEA",
-                        durationMinutes = durationMinutes,
                         priority = dailyTasks.value.size + 1,
                         priorityLevel = "Medium"
                     )
