@@ -584,7 +584,8 @@ fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeC
 
             HeaderActions(
                 onHomeClick = onHomeClick,
-                onSettingsClick = onSettingsClick
+                onSettingsClick = onSettingsClick,
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
 }

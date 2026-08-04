@@ -120,7 +120,8 @@ fun PomodoroScreen(viewModel: MainViewModel) {
 
             HeaderActions(
                 onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
-                onSettingsClick = { showSettingsDialog = true }
+                onSettingsClick = { showSettingsDialog = true },
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
 
