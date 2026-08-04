@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.app.AlarmManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -1560,6 +1561,56 @@ jsonString = backupFile.readText()
 
     private val appLabelCache = ConcurrentHashMap<String, String>()
 
+    // System packages to exclude from screen time (launchers, system UI, settings, etc.)
+    private val excludedSystemPackages = setOf(
+        "com.sec.android.app.launcher",           // Samsung One UI Home
+        "com.samsung.android.app.spage",          // Samsung Page
+        "com.android.launcher3",                  // AOSP Launcher
+        "com.google.android.apps.nexuslauncher",  // Pixel Launcher
+        "com.miui.home",                          // MIUI Launcher
+        "com.oppo.launcher",                      // ColorOS Launcher
+        "com.vivo.launcher",                      // Funtouch Launcher
+        "com.oneplus.launcher",                   // OxygenOS Launcher
+        "com.android.systemui",                   // System UI
+        "com.android.settings",                   // Settings
+        "com.android.packageinstaller",           // Package installer
+        "com.android.permissioncontroller",       // Permission controller
+        "com.android.deskclock",                  // Clock
+        "com.android.calendar",                   // Calendar
+        "com.android.contacts",                   // Contacts
+        "com.android.dialer",                     // Phone/Dialer
+        "com.android.mms",                        // Messaging
+        "com.android.email",                      // Email
+        "com.android.browser",                    // Browser
+        "com.android.chrome",                     // Chrome (system component)
+        "com.google.android.gms",                 // Google Play Services
+        "com.google.android.gms.ui",              // Google Play Services UI
+        "com.android.vending",                    // Play Store
+        "com.android.providers.downloads",        // Download manager
+        "com.android.providers.media",            // Media provider
+        "com.android.documentsui",                // Files app
+        "com.android.keychain",                   // Keychain
+        "com.android.certinstaller",              // Cert installer
+        "com.android.pacprocessor",               // Proxy PAC processor
+        "com.android.printspooler",               // Print spooler
+        "com.android.proxyhandler",               // Proxy handler
+        "com.android.sharedstoragebackup",        // Shared storage backup
+        "com.android.traceur",                    // Traceur
+        "com.android.wallpaperbackup",            // Wallpaper backup
+        "com.android.wallpapercropper",           // Wallpaper cropper
+        "com.android.wallpaperpicker",            // Wallpaper picker
+        "com.android.managedprovisioning",        // Managed provisioning
+        "com.android.cts.priv.ctsshim",           // CTS shim
+        "android",                                // Core Android
+        "com.samsung.android.app.cocktailbarservice", // Samsung Edge
+        "com.samsung.android.bixby.agent",        // Bixby
+        "com.samsung.android.app.spage",          // Samsung Page
+        "com.samsung.android.hmt.res",            // Samsung HMT
+        "com.samsung.android.app.omcagent",       // Samsung OMC
+        "com.microsoft.emmx",                     // Microsoft Edge (if pre-installed system)
+        "com.android.cts.priv.ctsshim"
+    )
+
     // === Idea List State ===
     val ideaGroups: StateFlow<List<IdeaGroupEntity>> = ideaRepository.allGroups
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -2208,6 +2259,12 @@ jsonString = backupFile.readText()
         refreshTodayMotto()
 
         collectTimerServiceState()
+
+        // Refresh screen time data on app start (one-time, no background polling)
+        viewModelScope.launch {
+            delay(1000) // let UI settle
+            updateAppUsage(context)
+        }
     }
 
     fun refreshTodayMotto() {
@@ -3414,21 +3471,58 @@ jsonString = backupFile.readText()
                 val midnight = calendar.timeInMillis
                 val now = System.currentTimeMillis()
 
-                val stats = usageStatsManager.queryUsageStats(
-                    UsageStatsManager.INTERVAL_DAILY,
-                    midnight,
-                    now
-                )
+                val appTimeMap = mutableMapOf<String, Long>()
+                var currentApp: String? = null
+                var currentStart: Long = 0L
+
+                val event = UsageEvents.Event()
+                val events = usageStatsManager.queryEvents(midnight, now)
+                while (events.hasNextEvent()) {
+                    events.getNextEvent(event)
+                    if (excludedSystemPackages.contains(event.packageName)) continue
+
+                    when (event.eventType) {
+                        UsageEvents.Event.MOVE_TO_FOREGROUND,
+                        UsageEvents.Event.ACTIVITY_RESUMED -> {
+                            currentApp?.let {
+                                val elapsed = event.timeStamp - currentStart.coerceAtLeast(midnight)
+                                if (elapsed > 0) {
+                                    appTimeMap[it] = (appTimeMap[it] ?: 0) + elapsed
+                                }
+                            }
+                            currentApp = event.packageName
+                            currentStart = event.timeStamp
+                        }
+
+                        UsageEvents.Event.MOVE_TO_BACKGROUND,
+                        UsageEvents.Event.ACTIVITY_PAUSED,
+                        UsageEvents.Event.ACTIVITY_STOPPED -> {
+                            if (event.packageName == currentApp) {
+                                val elapsed = event.timeStamp - currentStart.coerceAtLeast(midnight)
+                                if (elapsed > 0) {
+                                    appTimeMap[event.packageName] =
+                                        (appTimeMap[event.packageName] ?: 0) + elapsed
+                                }
+                                currentApp = null
+                                currentStart = 0L
+                            }
+                        }
+                    }
+                }
+
+                // Still-in-foreground app at query time
+                currentApp?.let {
+                    val elapsed = now - currentStart.coerceAtLeast(midnight)
+                    if (elapsed > 0) {
+                        appTimeMap[it] = (appTimeMap[it] ?: 0) + elapsed
+                    }
+                }
 
                 val packageManager = context.packageManager
 
-                // Group by packageName to avoid double-counting multiple processes of the same app
-                val aggregatedItems = stats
-                    .filter { it.totalTimeInForeground > 0 }
-                    .groupBy { it.packageName }
-                    .mapNotNull { (packageName, entries) ->
-                        val totalTime = entries.sumOf { it.totalTimeInForeground }
-                        val mins = totalTime / (1000 * 60)
+                val aggregatedItems = appTimeMap
+                    .mapNotNull { (packageName, totalTimeMs) ->
+                        val mins = totalTimeMs / (1000 * 60)
                         if (mins <= 0) return@mapNotNull null
                         val label = appLabelCache.getOrPut(packageName) {
                             try {

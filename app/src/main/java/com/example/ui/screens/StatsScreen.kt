@@ -120,6 +120,11 @@ fun StatsScreen(viewModel: MainViewModel) {
     val allHabitLogs by viewModel.allHabitLogs.collectAsState()
     val allSleepLogs by viewModel.allSleepLogs.collectAsState()
 
+    // Refresh screen time when Stats screen becomes visible
+    LaunchedEffect(Unit) {
+        viewModel.updateAppUsage(context)
+    }
+
     var showSettingsDialog by remember { mutableStateOf(false) }
 
     // Line graph state
@@ -223,12 +228,9 @@ fun StatsScreen(viewModel: MainViewModel) {
         finalLogs.groupBy { it.date }.toSortedMap(compareByDescending { it })
     }
 
-    // Trigger update on screen load and refresh every 30s
+    // Initial update on screen visible (no background polling per user preference)
     LaunchedEffect(Unit) {
-        while (true) {
-            viewModel.updateAppUsage(context)
-            delay(30_000)
-        }
+        viewModel.updateAppUsage(context)
     }
 
     val lazyListState = rememberLazyListState()
