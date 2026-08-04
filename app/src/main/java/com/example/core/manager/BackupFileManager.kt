@@ -98,7 +98,7 @@ class BackupFileManager(private val context: Context) {
                 deleteDocument(existing)
             }
 
-            val finalUri = DocumentsContract.renameDocument(contentResolver, tempUri, name.removeSuffix(".json"))
+            val finalUri = DocumentsContract.renameDocument(contentResolver, tempUri, name)
                 ?: throw IOException("Failed to rename temp to final for $name")
         } catch (e: Exception) {
             try { deleteDocument(tempUri) } catch (_: Exception) {}
@@ -122,19 +122,6 @@ class BackupFileManager(private val context: Context) {
             Log.w(TAG, "Read empty list for $name - this may indicate data loss")
         }
         return list
-    }
-
-    fun documentExists(uri: Uri): Boolean {
-        return try {
-            val docId = DocumentsContract.getDocumentId(uri)
-            val docUri = DocumentsContract.buildDocumentUriUsingTree(
-                DocumentsContract.buildTreeDocumentUri(uri.authority ?: return false, docId),
-                docId
-            )
-            val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            contentResolver.query(docUri, projection, null, null, null)?.use { it.moveToFirst() } ?: false
-        } catch (_: Exception) { false
-    }
     }
 
     fun findChildUri(parentUri: Uri, name: String): Uri? {
@@ -217,9 +204,11 @@ class BackupFileManager(private val context: Context) {
     fun getBackupRootDir(): Uri? {
         val uriStr = prefs.getString("backup_location_uri", null) ?: return null
         return try {
-            val uri = Uri.parse(uriStr)
-            if (documentExists(uri)) uri else null
-        } catch (_: Exception) { null }
+            Uri.parse(uriStr)
+        } catch (_: Exception) {
+            Log.w(TAG, "Failed to parse backup location URI: $uriStr")
+            null
+        }
     }
 
     fun clearBackupLocation() {

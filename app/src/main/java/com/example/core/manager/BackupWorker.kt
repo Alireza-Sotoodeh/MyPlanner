@@ -63,7 +63,6 @@ if (!backupFileManager.hasWritePermission(rootUri)) {
                 "Auto-backup skipped",
                 "No write permission for backup location — check Settings"
             )
-            backupFileManager.clearBackupLocation()
             return@withContext Result.retry()
         }
 
