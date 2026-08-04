@@ -453,6 +453,17 @@ private fun PomodoroTab(
                         onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
                         onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
                     )
+
+                    // Reset session
+                    TextButton(
+                        onClick = { viewModel.resetPomodoro() },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reset Session", fontSize = 10.sp)
+                    }
                 }
             }
 
@@ -550,6 +561,17 @@ private fun CronometerTab(
                 onDiscardConfirmDismiss = {},
                 onDiscardConfirmed = {}
             )
+
+            // Reset session
+            TextButton(
+                onClick = { viewModel.resetChronometer() },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.height(28.dp)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Reset Session", fontSize = 10.sp)
+            }
         }
 
         // Task selector at bottom

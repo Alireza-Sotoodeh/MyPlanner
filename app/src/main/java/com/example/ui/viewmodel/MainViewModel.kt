@@ -1347,6 +1347,12 @@ class MainViewModel(
         }
     }
 
+    fun resetPomodoro() {
+        _pomodoroSecondsLeft.value = _pomodoroFocusMinutes.value * 60
+        _pomodoroCurrentSession.value = 1
+        _pomodoroPhase.value = "FOCUS"
+    }
+
     fun adjustPomodoroMinusOne() {
         val current = _pomodoroSecondsLeft.value
         if (current > 0) {
@@ -1517,6 +1523,10 @@ class MainViewModel(
         if (_dndEnabled.value) {
             setDndState(context, originalDndState)
         }
+    }
+
+    fun resetChronometer() {
+        _chronoElapsed.value = 0L
     }
 
     fun adjustChronoMinusOne() {
