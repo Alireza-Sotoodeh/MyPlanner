@@ -105,7 +105,6 @@ fun HabitsScreen(viewModel: MainViewModel) {
     var editingHabit by remember { mutableStateOf<HabitEntity?>(null) }
     var showLogSleepDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var showManageHabitsDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Header
@@ -132,7 +131,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
             HeaderActions(
                 onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) },
                 onSettingsClick = { showSettingsDialog = true },
-                onManageHabits = { showManageHabitsDialog = true }
+                onManageHabits = { tabIndex = 1 }
             )
         }
 
@@ -142,7 +141,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.primary
         ) {
-            listOf("Habits", "History").forEachIndexed { index, title ->
+            listOf("Today", "All Habits", "History").forEachIndexed { index, title ->
                 Tab(
                     selected = tabIndex == index,
                     onClick = { tabIndex = index },
@@ -159,15 +158,16 @@ fun HabitsScreen(viewModel: MainViewModel) {
 
         // Tab content
         Box(modifier = Modifier.fillMaxSize().weight(1f)) {
-            if (tabIndex == 0) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 88.dp)
-                ) {
-                    // 1. Sleep Tracker Summary Card
+            when (tabIndex) {
+                0 -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 88.dp)
+                    ) {
+                        // 1. Sleep Tracker Summary Card
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -348,7 +348,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
             }
         }
 
-            // FAB for adding habits
+                // FAB for adding habits
                 FloatingActionButton(
                     onClick = { showCreateHabitDialog = true },
                     modifier = Modifier
@@ -363,7 +363,16 @@ fun HabitsScreen(viewModel: MainViewModel) {
                         contentDescription = "New Habit"
                     )
                 }
-            } else {
+            }
+            1 -> {
+                AllHabitsTab(
+                    habits = habits,
+                    onEdit = { editingHabit = it },
+                    onDelete = { viewModel.deleteHabit(it) },
+                    onAdd = { showCreateHabitDialog = true }
+                )
+            }
+            2 -> {
                 HabitsHistoryTab(
                     habits = habits,
                     allLogs = allHabitLogs,
@@ -371,6 +380,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
                 )
             }
         }
+    }
     }
 
     if (showLogSleepDialog) {
@@ -412,19 +422,6 @@ fun HabitsScreen(viewModel: MainViewModel) {
     }
     if (showSettingsDialog) {
         SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
-    }
-    if (showManageHabitsDialog) {
-        ManageHabitsDialog(
-            habits = habits,
-            onEdit = { habit ->
-                showManageHabitsDialog = false
-                editingHabit = habit
-            },
-            onDelete = { habit ->
-                viewModel.deleteHabit(habit)
-            },
-            onDismiss = { showManageHabitsDialog = false }
-        )
     }
 }
 
@@ -1002,62 +999,24 @@ fun HabitDialog(
 }
 
 @Composable
-fun ManageHabitsDialog(
+private fun AllHabitsTab(
     habits: List<HabitEntity>,
     onEdit: (HabitEntity) -> Unit,
     onDelete: (HabitEntity) -> Unit,
-    onDismiss: () -> Unit
+    onAdd: () -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.fillMaxWidth(0.92f)
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 88.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "ALL HABITS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            letterSpacing = 1.5.sp
-                        )
-                        Text(
-                            text = "${habits.size} defined",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Light,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (habits.isEmpty()) {
+            if (habits.isEmpty()) {
+                item {
                     Box(
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1069,27 +1028,37 @@ fun ManageHabitsDialog(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Tap + on the main screen to create one.",
+                                text = "Tap + to create one.",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        habits.forEach { habit ->
-                            ManageHabitCard(
-                                habit = habit,
-                                onEdit = { onEdit(habit) },
-                                onDelete = { onDelete(habit) }
-                            )
-                        }
-                    }
+                }
+            } else {
+                items(habits, key = { it.id }) { habit ->
+                    ManageHabitCard(
+                        habit = habit,
+                        onEdit = { onEdit(habit) },
+                        onDelete = { onDelete(habit) }
+                    )
                 }
             }
+        }
+
+        FloatingActionButton(
+            onClick = onAdd,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 24.dp, bottom = 16.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.background,
+            shape = CircleShape
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "New Habit"
+            )
         }
     }
 }
@@ -1245,6 +1214,7 @@ private fun HabitsHistoryTab(
     var selectedDate by remember { mutableStateOf(todayStr) }
     var dateChip by remember { mutableStateOf("today") }
     var showDatePicker by remember { mutableStateOf(false) }
+    var editingLog by remember { mutableStateOf<HabitLogEntity?>(null) }
 
     val dateLogs = remember(allLogs, selectedDate) {
         allLogs.filter { it.date == selectedDate }
@@ -1330,6 +1300,7 @@ private fun HabitsHistoryTab(
                         habit = habit,
                         logValue = log?.value ?: 0f,
                         onLog = { value -> viewModel.logHabit(habit.id, value, date = selectedDate) },
+                        onEdit = { editingLog = log?.copy() },
                         onDelete = { log?.let { viewModel.deleteHabitLog(it.id) } }
                     )
                 }
@@ -1350,6 +1321,25 @@ private fun HabitsHistoryTab(
             }
         )
     }
+
+    if (editingLog != null) {
+        val log = editingLog!!
+        val habit = habits.find { it.id == log.habitId }
+        if (habit != null) {
+            HabitLogEditDialog(
+                habit = habit,
+                currentValue = log.value,
+                currentNotes = log.notes,
+                onDismiss = { editingLog = null },
+                onSave = { value, notes ->
+                    viewModel.logHabit(habit.id, value, notes, selectedDate)
+                    editingLog = null
+                }
+            )
+        } else {
+            editingLog = null
+        }
+    }
 }
 
 @Composable
@@ -1357,6 +1347,7 @@ private fun HistoryHabitRowItem(
     habit: HabitEntity,
     logValue: Float,
     onLog: (Float) -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -1430,13 +1421,116 @@ private fun HistoryHabitRowItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(2.dp))
 
+            IconButton(onClick = onEdit, modifier = Modifier.size(32.dp), enabled = logValue > 0f) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit log", tint = if (logValue > 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), modifier = Modifier.size(16.dp))
+            }
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp), enabled = logValue > 0f) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete log", tint = if (logValue > 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), modifier = Modifier.size(18.dp))
             }
         }
     }
+}
+
+@Composable
+private fun HabitLogEditDialog(
+    habit: HabitEntity,
+    currentValue: Float,
+    currentNotes: String,
+    onDismiss: () -> Unit,
+    onSave: (Float, String) -> Unit
+) {
+    var value by remember { mutableFloatStateOf(currentValue) }
+    var notes by remember { mutableStateOf(currentNotes) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(28.dp),
+        title = {
+            Text(
+                text = habit.name,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (habit.type == "BINARY") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Completed", fontSize = 14.sp)
+                        Checkbox(
+                            checked = value >= 1f,
+                            onCheckedChange = { value = if (it) 1f else 0f }
+                        )
+                    }
+                } else {
+                    Column {
+                        Text(
+                            text = "Value (goal: ${habit.target.toInt()} ${habit.unit})",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            IconButton(
+                                onClick = { if (value > 0f) value -= 1f },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Text(
+                                text = "${value.toInt()}",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(48.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            IconButton(
+                                onClick = { value += 1f },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Increase", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(value, notes) },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("SAVE")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL")
+            }
+        }
+    )
 }
 
 private fun formatLogDate(dateStr: String): String {
