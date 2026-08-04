@@ -120,10 +120,6 @@ class TimerForegroundService : Service() {
                 val seconds = intent.getIntExtra(EXTRA_ADJUST_SECONDS, 60)
                 commandChannel.trySend(ServiceCommand.AdjustPomodoro(seconds))
             }
-            ACTION_SESSION_END -> {
-                serviceScope.launch { handleBackupSessionEnd() }
-                return START_NOT_STICKY
-            }
         }
         return START_STICKY
     }
@@ -324,8 +320,6 @@ class TimerForegroundService : Service() {
 
         val isFg = isAppInForeground
 
-        launchPomodoroFinishActivity(current)
-
         if (!isFg) {
             saveTimerSessionFromCompletion(current)
         }
@@ -336,15 +330,43 @@ class TimerForegroundService : Service() {
             delay(100)
             _state.value = TimerServiceState()
         }
+
+        scheduleImmediateFinishAlarm(current)
         fireCompletionNotification(current)
+        delay(1500)
         stopSelf()
     }
 
-    private fun launchPomodoroFinishActivity(state: TimerServiceState) {
+    private fun scheduleImmediateFinishAlarm(state: TimerServiceState) {
         try {
-            startActivity(buildPomodoroFinishIntent(state))
+            val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+            val intent = buildPomodoroFinishIntent(state)
+            val pendingIntent = PendingIntent.getActivity(
+                this, RC_IMMEDIATE_FINISH, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val info = AlarmManager.AlarmClockInfo(
+                System.currentTimeMillis() + 500L,
+                null
+            )
+            alarmManager.setAlarmClock(info, pendingIntent)
         } catch (e: Exception) {
-            Log.e(TAG, "launchPomodoroFinishActivity failed", e)
+            Log.e(TAG, "scheduleImmediateFinishAlarm failed", e)
+        }
+    }
+
+    private fun cancelImmediateFinishAlarm() {
+        try {
+            val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+            val intent = Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java)
+            val pendingIntent = PendingIntent.getActivity(
+                this, RC_IMMEDIATE_FINISH, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        } catch (e: Exception) {
+            Log.e(TAG, "cancelImmediateFinishAlarm failed", e)
         }
     }
 
@@ -452,7 +474,6 @@ class TimerForegroundService : Service() {
                 .setContentText(message)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .setFullScreenIntent(pendingIntent, true)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .build()
@@ -657,20 +678,13 @@ class TimerForegroundService : Service() {
     private fun scheduleSessionEndAlarm(wallClockEndTime: Long) {
         try {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-            val intent = Intent(this, TimerForegroundService::class.java).apply {
-                action = ACTION_SESSION_END
-            }
-            val pendingIntent = PendingIntent.getService(
+            val intent = buildPomodoroFinishIntent(_state.value)
+            val pendingIntent = PendingIntent.getActivity(
                 this, RC_SESSION_END, intent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, wallClockEndTime, pendingIntent
-                )
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, wallClockEndTime, pendingIntent)
-            }
+            val info = AlarmManager.AlarmClockInfo(wallClockEndTime + 3000L, null)
+            alarmManager.setAlarmClock(info, pendingIntent)
         } catch (e: Exception) {
             Log.e(TAG, "scheduleSessionEndAlarm failed", e)
         }
@@ -679,10 +693,8 @@ class TimerForegroundService : Service() {
     private fun cancelSessionEndAlarm() {
         try {
             val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-            val intent = Intent(this, TimerForegroundService::class.java).apply {
-                action = ACTION_SESSION_END
-            }
-            val pendingIntent = PendingIntent.getService(
+            val intent = Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java)
+            val pendingIntent = PendingIntent.getActivity(
                 this, RC_SESSION_END, intent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
@@ -691,17 +703,6 @@ class TimerForegroundService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "cancelSessionEndAlarm failed", e)
         }
-    }
-
-    private suspend fun handleBackupSessionEnd() {
-        val s = _state.value
-        if (s.completed || s.mode == null) return
-
-        cancelSessionEndAlarm()
-        clearTimerSnapshot()
-        _state.update { it.copy(running = false, completed = true) }
-        fireCompletionNotification(s)
-        stopSelf()
     }
 
     private fun saveTimerSnapshot() {
@@ -734,7 +735,6 @@ companion object {
         const val ACTION_STOP = "com.example.action.STOP"
         const val ACTION_DISCARD = "com.example.action.DISCARD"
         const val ACTION_ADJUST_POMODORO = "com.example.action.ADJUST_POMODORO"
-        const val ACTION_SESSION_END = "com.example.action.SESSION_END"
 
         const val EXTRA_ADJUST_SECONDS = "adjustSeconds"
 
@@ -758,6 +758,7 @@ companion object {
         private const val RC_STOP = 1002
         private const val RC_DISCARD = 1003
         private const val RC_SESSION_END = 1004
+        private const val RC_IMMEDIATE_FINISH = 1005
         private const val TAG = "TimerFgService"
         private const val UPDATE_INTERVAL_MS = 10_000L
 

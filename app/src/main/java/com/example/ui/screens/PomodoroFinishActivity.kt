@@ -53,8 +53,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.core.database.AppDatabase
+import com.example.core.database.entity.TimerSessionEntity
 import com.example.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class PomodoroFinishActivity : ComponentActivity() {
     private var ringtone: Ringtone? = null
@@ -80,6 +88,8 @@ class PomodoroFinishActivity : ComponentActivity() {
 
         val durationMinutes = durationSeconds / 60
         val isTest = phase == "TEST"
+
+        backupSaveSession(phase, sessionNumber, taskTitle, durationMinutes, intent.getLongExtra("taskId", -1L))
 
         // Audio focus (always acquire for vibration timing)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -175,6 +185,37 @@ class PomodoroFinishActivity : ComponentActivity() {
                 runOnUiThread { stopAll(); finish() }
             } catch (e: InterruptedException) { /* stopped by user */ }
         }.apply { isDaemon = true }.start()
+    }
+
+    private fun backupSaveSession(phase: String, sessionNumber: Int, taskTitle: String, minutesElapsed: Int, taskId: Long) {
+        if (minutesElapsed <= 0) return
+        if (phase != "FOCUS") return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getDatabase(this@PomodoroFinishActivity)
+                val allSessions = db.timerSessionDao().getAllSync()
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                val alreadySaved = allSessions.any { s ->
+                    s.type == "POMODORO" && s.date == today &&
+                        s.durationSeconds == minutesElapsed * 60 &&
+                        s.taskId == (if (taskId > 0) taskId else null) &&
+                        s.label == taskTitle
+                }
+                if (!alreadySaved) {
+                    db.timerSessionDao().insert(
+                        TimerSessionEntity(
+                            type = "POMODORO",
+                            taskId = if (taskId > 0) taskId else null,
+                            label = taskTitle,
+                            durationSeconds = minutesElapsed * 60,
+                            date = today
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PomodoroFinishActivity", "backupSaveSession failed", e)
+            }
+        }
     }
 
     private fun sendAction(action: String) {
