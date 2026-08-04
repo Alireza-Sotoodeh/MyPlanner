@@ -424,7 +424,6 @@ class TimerForegroundService : Service() {
             }
         }
 
-        val pauseIcon = if (current.paused) R.drawable.ic_notification_play else R.drawable.ic_notification_pause
         val pauseLabel = if (current.paused) "Resume" else "Pause"
 
         val contentIntent = Intent(this, MainActivity::class.java).apply {
@@ -471,9 +470,9 @@ class TimerForegroundService : Service() {
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(contentPendingIntent)
-            .addAction(pauseIcon, pauseLabel, togglePausePendingIntent)
-            .addAction(R.drawable.ic_notification_stop, "Stop", stopPendingIntent)
-            .addAction(R.drawable.ic_notification_delete, "Discard", discardPendingIntent)
+            .addAction(0, pauseLabel, togglePausePendingIntent)
+            .addAction(0, "Stop", stopPendingIntent)
+            .addAction(0, "Discard", discardPendingIntent)
 
         if (subText.isNotBlank()) {
             builder.setSubText(subText)
