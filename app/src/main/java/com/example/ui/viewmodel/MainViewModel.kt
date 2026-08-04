@@ -363,6 +363,18 @@ class MainViewModel(
         }
     }
 
+    private fun clearDriveConnected() {
+        if (_googleDriveConnected.value) {
+            com.example.core.manager.DriveManager.signOut(context)
+            com.example.core.manager.DriveManager.invalidateToken()
+            prefs.edit().putBoolean("google_drive_connected", false)
+                .putString("google_drive_email", "")
+                .apply()
+            _googleDriveConnected.value = false
+            _googleDriveEmail.value = ""
+        }
+    }
+
     private val _pendingDriveSignInIntent = MutableStateFlow<android.content.Intent?>(null)
     val pendingDriveSignInIntent: StateFlow<android.content.Intent?> = _pendingDriveSignInIntent.asStateFlow()
 
@@ -563,6 +575,7 @@ class MainViewModel(
                     prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
                     onResult(true, "Successfully backed up ${tasksList.size} intentions, ${habitsList.size} habits, and logs to Google Drive!")
                 } else {
+                    if (!com.example.core.manager.DriveManager.isSignedIn(context)) clearDriveConnected()
                     onResult(true, "Saved locally (Drive upload failed). ${tasksList.size} intentions backed up.")
                 }
             } catch (e: Exception) {

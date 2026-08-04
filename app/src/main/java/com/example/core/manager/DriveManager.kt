@@ -3,11 +3,15 @@ package com.example.core.manager
 import android.accounts.AccountManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.util.Log
+import com.google.android.gms.auth.GoogleAuthException
 import com.google.android.gms.auth.GoogleAuthUtil
+import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.Scope
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -76,12 +80,34 @@ object DriveManager {
             cachedToken = token
             tokenExpiry = now + 55 * 60 * 1000L
             token
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to get token", e)
+        } catch (e: UserRecoverableAuthException) {
+            Log.w(TAG, "Recoverable auth error, need user interaction", e)
             cachedToken = null
             tokenExpiry = 0L
             null
+        } catch (e: GoogleAuthException) {
+            Log.e(TAG, "Auth failed (token may be revoked), clearing state", e)
+            cachedToken = null
+            tokenExpiry = 0L
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get token", e)
+            if (cachedToken != null) {
+                cachedToken = null
+                tokenExpiry = 0L
+                return try {
+                    val token = GoogleAuthUtil.getToken(context, account.account!!, SCOPE)
+                    cachedToken = token
+                    tokenExpiry = now + 55 * 60 * 1000L
+                    token
+                } catch (_: Exception) { null }
+            }
+            null
         }
+    }
+
+    fun isPlayServicesAvailable(context: Context): Boolean {
+        return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == com.google.android.gms.common.ConnectionResult.SUCCESS
     }
 
     private fun getFolderId(context: Context, token: String): String? {

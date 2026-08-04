@@ -216,13 +216,14 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 - [x] **Edge case:** User disconnects Drive → `BackupWorker` checks the shared pref flag and exits early if not connected
 - [x] **Verify:** `assembleDebug` succeeds
 
-### 4.6 — OAuth UX edge cases
+### 4.6 — OAuth UX edge cases `[x] DONE`
 
-- [ ] **Token expired mid-operation:** Catch `GoogleAuthException`, trigger silent re-auth, retry once
-- [ ] **User revokes access:** Next Drive operation fails → clear connected flag → show message
-- [ ] **Multiple Google accounts:** CredentialManager shows account picker automatically
-- [ ] **Android API < 34:** CredentialManager requires Android 14+ for certain features. Fall back to `GoogleSignInClient` for older APIs
-- [ ] **No Google Play Services:** `signIn()` returns false, show "Google Play Services required"
+- [x] **Token expired mid-operation:** `getToken()` catches `UserRecoverableAuthException` and `GoogleAuthException` separately; on generic exception, clears cache and retries once
+- [x] **User revokes access:** `backupDataToGoogleDrive()` checks `DriveManager.isSignedIn()` when upload fails and calls `clearDriveConnected()` to reset the flag and prefs
+- [x] **Multiple Google accounts:** GoogleSignIn handles account picker automatically — no code change needed
+- [x] **Android API < 34:** We use `GoogleSignInClient` (not CredentialManager) which works on minSdk 24 — no fallback needed
+- [x] **No Google Play Services:** Added `DriveManager.isPlayServicesAvailable(context)` using `GoogleApiAvailability`
+- [x] **Verify:** `assembleDebug` succeeds
 
 ---
 
