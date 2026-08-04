@@ -101,6 +101,7 @@ import java.util.Locale
 @Composable
 fun HabitsScreen(viewModel: MainViewModel) {
     val habits by viewModel.habits.collectAsState()
+    val todayHabits by viewModel.todayHabits.collectAsState()
     val logs by viewModel.habitLogs.collectAsState()
     val sleepLog by viewModel.sleepLog.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
@@ -312,7 +313,8 @@ fun HabitsScreen(viewModel: MainViewModel) {
             }
 
             // Habits logs lists
-            if (habits.isEmpty()) {
+            val displayHabits = todayHabits
+            if (displayHabits.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
@@ -327,7 +329,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "No habits yet",
+                                text = "No habits due today",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF79747E)
@@ -341,7 +343,7 @@ fun HabitsScreen(viewModel: MainViewModel) {
                     }
                 }
             } else {
-                items(habits) { habit ->
+                items(displayHabits) { habit ->
                     val currentLog = logs.find { it.habitId == habit.id }
                     HabitRowItem(
                         habit = habit,

@@ -964,6 +964,36 @@ private val mottoRepository: MottoRepository,
     val habits: StateFlow<List<HabitEntity>> = habitRepository.allHabits
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Habits filtered by recurrence for the current day
+    val todayHabits: StateFlow<List<HabitEntity>> = combine(habits, _todayDate) { all, date ->
+        if (date.isBlank()) return@combine all
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val parsedDate = sdf.parse(date) ?: return@combine all
+            val cal = Calendar.getInstance().apply { time = parsedDate }
+            val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+            all.filter { habit ->
+                val beforeEnd = if (habit.recurrenceEndDate != null) {
+                    try {
+                        val endDate = sdf.parse(habit.recurrenceEndDate)
+                        !parsedDate.after(endDate)
+                    } catch (_: Exception) { true }
+                } else true
+                beforeEnd && when (habit.recurrenceMode) {
+                    "ALWAYS" -> true
+                    "WEEKLY" -> {
+                        val days = habit.recurrenceDaysOfWeek
+                            .split(",")
+                            .mapNotNull { it.trim().toIntOrNull() }
+                            .toSet()
+                        dayOfWeek in days
+                    }
+                    else -> false
+                }
+            }
+        } catch (_: Exception) { all }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Habit Logs for currently selected date
     val habitLogs: StateFlow<List<HabitLogEntity>> = _selectedDate.flatMapLatest { date ->
         habitRepository.getLogsForDate(date)
@@ -1884,7 +1914,28 @@ private val mottoRepository: MottoRepository,
             val allHabits = habitRepository.allHabits.first()
             if (allHabits.isEmpty()) return@launch
             val logs = habitRepository.getLogsForDate(todayStr).first()
+            val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
             val missed = allHabits.filter { habit ->
+                val applicable = when (habit.recurrenceMode) {
+                    "ALWAYS" -> true
+                    "WEEKLY" -> {
+                        val days = habit.recurrenceDaysOfWeek
+                            .split(",")
+                            .mapNotNull { it.trim().toIntOrNull() }
+                            .toSet()
+                        dayOfWeek in days
+                    }
+                    else -> false
+                }
+                if (!applicable) return@filter false
+                val beforeEnd = if (habit.recurrenceEndDate != null) {
+                    try {
+                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                        val endDate = sdf.parse(habit.recurrenceEndDate)
+                        !sdf.parse(todayStr).after(endDate)
+                    } catch (_: Exception) { true }
+                } else true
+                if (!beforeEnd) return@filter false
                 val log = logs.find { it.habitId == habit.id }
                 log == null || log.value < habit.target
             }

@@ -456,7 +456,28 @@ class ReminderReceiver : BroadcastReceiver() {
                 val allHabits = database.habitDao().getAllHabits().first()
                 if (allHabits.isEmpty()) return@launch
                 val logs = database.habitDao().getLogsForDate(todayStr).first()
+                val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
                 val missed = allHabits.filter { habit ->
+                    val applicable = when (habit.recurrenceMode) {
+                        "ALWAYS" -> true
+                        "WEEKLY" -> {
+                            val days = habit.recurrenceDaysOfWeek
+                                .split(",")
+                                .mapNotNull { it.trim().toIntOrNull() }
+                                .toSet()
+                            dayOfWeek in days
+                        }
+                        else -> false
+                    }
+                    if (!applicable) return@filter false
+                    val beforeEnd = if (habit.recurrenceEndDate != null) {
+                        try {
+                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                            val endDate = sdf.parse(habit.recurrenceEndDate)
+                            !sdf.parse(todayStr).after(endDate)
+                        } catch (_: Exception) { true }
+                    } else true
+                    if (!beforeEnd) return@filter false
                     val log = logs.find { it.habitId == habit.id }
                     log == null || log.value < habit.target
                 }
