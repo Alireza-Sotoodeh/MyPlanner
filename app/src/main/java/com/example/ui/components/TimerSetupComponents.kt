@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,7 +155,9 @@ fun TemplateChip(
 
 @Composable
 fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange: (Int) -> Unit) {
-    var showInputDialog by remember { mutableStateOf(false) }
+    var isEditing by remember { mutableStateOf(false) }
+    var inputText by remember(value) { mutableStateOf(value.toString()) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     Row(
         modifier = Modifier.fillMaxWidth().height(32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -165,8 +172,33 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                 Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(18.dp),
                     tint = if (value > min) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
-            Text(text = "$value min", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { showInputDialog = true })
+            if (isEditing) {
+                BasicTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it.filter { c -> c.isDigit() } },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
+                        val newValue = inputText.toIntOrNull()?.coerceIn(min, max) ?: value
+                        onValueChange(newValue)
+                        isEditing = false
+                        focusManager.clearFocus()
+                    }),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.width(52.dp).onFocusChanged { state ->
+                        if (!state.isFocused && isEditing) {
+                            val newValue = inputText.toIntOrNull()?.coerceIn(min, max) ?: value
+                            onValueChange(newValue)
+                            isEditing = false
+                        }
+                    }
+                )
+            } else {
+                Text(text = "$value min", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { isEditing = true })
+            }
             Box(
                 modifier = Modifier.size(32.dp).clip(CircleShape).clickable(enabled = value < max) { onValueChange(value + 5) },
                 contentAlignment = Alignment.Center
@@ -175,33 +207,6 @@ fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange:
                     tint = if (value < max) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
         }
-    }
-    if (showInputDialog) {
-        var input by remember(value) { mutableStateOf(value.toString()) }
-        AlertDialog(
-            onDismissRequest = { showInputDialog = false },
-            title = { Text("Edit $label") },
-            text = {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it.filter { c -> c.isDigit() } },
-                    label = { Text("Minutes") },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val newValue = input.toIntOrNull()?.coerceIn(min, max) ?: value
-                    onValueChange(newValue)
-                    showInputDialog = false
-                }) { Text("Confirm") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showInputDialog = false }) { Text("Cancel") }
-            }
-        )
     }
 }
 
