@@ -956,132 +956,8 @@ private fun HistoryDatePickerDialog(
         }
     }
 
-    AlertDialog(
+    DatePickerDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = if (usePersian) "Select Persian Date" else "Select Date",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = { usePersian = !usePersian }) {
-                    Text(
-                        text = if (usePersian) "EN" else "FA",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        },
-        text = {
-            if (usePersian) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box {
-                        OutlinedTextField(
-                            value = persianYear.toString(),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Year") },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = false,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        DropdownMenu(
-                            expanded = yearExpanded,
-                            onDismissRequest = { yearExpanded = false }
-                        ) {
-                            (persianParts.first - 10..persianParts.first + 10).forEach { y ->
-                                DropdownMenuItem(
-                                    text = { Text(y.toString()) },
-                                    onClick = { persianYear = y; yearExpanded = false }
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { yearExpanded = true }
-                        )
-                    }
-                    Box {
-                        OutlinedTextField(
-                            value = PersianCalendarHelper.monthNames.getOrElse(persianMonth - 1) { "" },
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Month") },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = false,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        DropdownMenu(
-                            expanded = monthExpanded,
-                            onDismissRequest = { monthExpanded = false }
-                        ) {
-                            PersianCalendarHelper.monthNames.forEachIndexed { index, name ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = { persianMonth = index + 1; monthExpanded = false }
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { monthExpanded = true }
-                        )
-                    }
-                    Box {
-                        OutlinedTextField(
-                            value = persianDay.toString(),
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Day") },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = false,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                        DropdownMenu(
-                            expanded = dayExpanded,
-                            onDismissRequest = { dayExpanded = false }
-                        ) {
-                            (1..maxDay).forEach { d ->
-                                DropdownMenuItem(
-                                    text = { Text(d.toString()) },
-                                    onClick = { persianDay = d; dayExpanded = false }
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { dayExpanded = true }
-                        )
-                    }
-                }
-            } else {
-                DatePicker(state = datePickerState)
-            }
-        },
         confirmButton = {
             TextButton(onClick = {
                 if (usePersian) {
@@ -1097,7 +973,132 @@ private fun HistoryDatePickerDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
-    )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        ) {
+            Text(
+                text = if (usePersian) "Select Persian Date" else "Select Date",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { usePersian = !usePersian }) {
+                Text(
+                    text = if (usePersian) "EN" else "FA",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (usePersian) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box {
+                    OutlinedTextField(
+                        value = persianYear.toString(),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Year") },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                    DropdownMenu(
+                        expanded = yearExpanded,
+                        onDismissRequest = { yearExpanded = false }
+                    ) {
+                        (persianParts.first - 10..persianParts.first + 10).forEach { y ->
+                            DropdownMenuItem(
+                                text = { Text(y.toString()) },
+                                onClick = { persianYear = y; yearExpanded = false }
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { yearExpanded = true }
+                    )
+                }
+                Box {
+                    OutlinedTextField(
+                        value = PersianCalendarHelper.monthNames.getOrElse(persianMonth - 1) { "" },
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Month") },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                    DropdownMenu(
+                        expanded = monthExpanded,
+                        onDismissRequest = { monthExpanded = false }
+                    ) {
+                        PersianCalendarHelper.monthNames.forEachIndexed { index, name ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = { persianMonth = index + 1; monthExpanded = false }
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { monthExpanded = true }
+                    )
+                }
+                Box {
+                    OutlinedTextField(
+                        value = persianDay.toString(),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Day") },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                    DropdownMenu(
+                        expanded = dayExpanded,
+                        onDismissRequest = { dayExpanded = false }
+                    ) {
+                        (1..maxDay).forEach { d ->
+                            DropdownMenuItem(
+                                text = { Text(d.toString()) },
+                                onClick = { persianDay = d; dayExpanded = false }
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { dayExpanded = true }
+                    )
+                }
+            }
+        } else {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 @Composable
