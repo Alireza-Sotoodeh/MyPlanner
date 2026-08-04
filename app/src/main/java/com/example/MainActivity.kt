@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,10 +47,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import com.example.core.database.AppDatabase
+import com.example.core.repository.DayReviewRepository
+import com.example.core.repository.DiaryRepository
 import com.example.core.repository.HabitRepository
+import com.example.core.repository.IdeaRepository
+import com.example.core.repository.MottoRepository
+import com.example.core.repository.ShopItemRepository
 import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
+import com.example.core.repository.TodoRepository
 import com.example.ui.screens.HabitsScreen
+import com.example.ui.screens.MoreScreen
 import com.example.ui.screens.PlannerScreen
 import com.example.ui.screens.StatsScreen
 import com.example.ui.screens.PomodoroScreen
@@ -71,12 +79,24 @@ class MainActivity : ComponentActivity() {
         val taskRepository = TaskRepository(database.taskDao(), database.pomodoroSessionDao())
         val habitRepository = HabitRepository(database.habitDao())
         val sleepLogRepository = SleepLogRepository(database.sleepLogDao())
+        val ideaRepository = IdeaRepository(database.ideaGroupDao(), database.ideaDao(), database.ideaStageDao())
+        val todoRepository = TodoRepository(database.todoDao())
+        val diaryRepository = DiaryRepository(database.diaryDao())
+        val shopItemRepository = ShopItemRepository(database.shopItemDao())
+        val mottoRepository = MottoRepository(database.mottoDao())
+        val dayReviewRepository = DayReviewRepository(database.dayReviewDao())
 
         // 2. Initialize unified MainViewModel
         val viewModelFactory = MainViewModelFactory(
             taskRepository,
             habitRepository,
             sleepLogRepository,
+            ideaRepository,
+            todoRepository,
+            diaryRepository,
+            shopItemRepository,
+            mottoRepository,
+            dayReviewRepository,
             applicationContext
         )
         viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
@@ -104,6 +124,10 @@ class MainActivity : ComponentActivity() {
                             1 -> HabitsScreen(viewModel = viewModel)
                             2 -> PomodoroScreen(viewModel = viewModel)
                             3 -> StatsScreen(viewModel = viewModel)
+                            4 -> MoreScreen(
+                                viewModel = viewModel,
+                                onNavigateToPlanner = { viewModel.selectTab(0) }
+                            )
                         }
                     }
                 }
@@ -145,7 +169,8 @@ fun AestheticNavigationBar(
                 NavigationItem("Planner", Icons.Default.Task, 0),
                 NavigationItem("Habits", Icons.Default.Favorite, 1),
                 NavigationItem("Pomodoro", Icons.Default.Timer, 2),
-                NavigationItem("Stats", Icons.Default.Leaderboard, 3)
+                NavigationItem("Stats", Icons.Default.Leaderboard, 3),
+                NavigationItem("More", Icons.Default.MoreHoriz, 4)
             )
 
             navItems.forEach { item ->

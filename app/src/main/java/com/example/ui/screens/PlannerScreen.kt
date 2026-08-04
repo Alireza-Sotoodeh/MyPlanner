@@ -113,6 +113,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.TaskEntity
 import com.example.ui.components.ActivePomodoroWidget
+import com.example.ui.components.DayReviewCard
+import com.example.ui.components.MottoCard
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -525,19 +527,20 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
     var expandAllItems by remember { mutableStateOf(true) }
     var expandAllSubtasks by remember { mutableStateOf(true) }
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
+    var showDayReviewDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(expandAllSubtasks) {
         expandedSubtasksMap.clear()
     }
     
-    var showLabels by remember { mutableStateOf(true) }
+    var showHeaderExtras by remember { mutableStateOf(true) }
     val nestedScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
                 if (available.y < -15) {
-                    showLabels = false
+                    showHeaderExtras = false
                 } else if (available.y > 15) {
-                    showLabels = true
+                    showHeaderExtras = true
                 }
                 return androidx.compose.ui.geometry.Offset.Zero
             }
@@ -551,7 +554,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
             .nestedScroll(nestedScrollConnection)
     ) {
         androidx.compose.animation.AnimatedVisibility(
-            visible = showLabels && uniqueLabels.isNotEmpty(),
+            visible = showHeaderExtras && uniqueLabels.isNotEmpty(),
             enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
         ) {
@@ -578,6 +581,12 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                 }
             }
         }
+
+        val todayMotto by viewModel.todayMotto.collectAsState()
+        MottoCard(
+            motto = todayMotto,
+            visible = showHeaderExtras
+        )
 
         // Day Navigator Bar
         Row(
@@ -1115,6 +1124,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                         }
                     }
                 }
+
+                val reviewForDate by viewModel.reviewForDate(selectedDate).collectAsState(initial = null)
+                DayReviewCard(
+                    review = reviewForDate,
+                    date = selectedDate,
+                    onClick = { showDayReviewDialog = true }
+                )
             }
 
             // FLOATING ACTION BUTTON inside the container or at bottom right
@@ -1150,6 +1166,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
         )
     }
 
+    if (showDayReviewDialog) {
+        DayReviewScreen(
+            viewModel = viewModel,
+            initialDate = selectedDate,
+            onBack = { showDayReviewDialog = false }
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -2644,6 +2667,11 @@ fun SettingsDialog(
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
 
+    val reviewReminderTime by viewModel.reviewReminderTime.collectAsState()
+    val reviewReminderEnabled by viewModel.reviewReminderEnabled.collectAsState()
+    var enteredReviewTime by remember { mutableStateOf(reviewReminderTime) }
+    var enteredReviewEnabled by remember { mutableStateOf(reviewReminderEnabled) }
+
     val context = LocalContext.current
     val notificationManager = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager }
 
@@ -2857,6 +2885,61 @@ fun SettingsDialog(
                     }
                 }
 
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // Section 6: Day Review Reminder
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "DAY REVIEW REMINDER",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.sp
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Enable Daily Reminder",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Switch(
+                            checked = enteredReviewEnabled,
+                            onCheckedChange = { enteredReviewEnabled = it }
+                        )
+                    }
+                    if (enteredReviewEnabled) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Reminder Time:", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                            TextButton(onClick = {
+                                // Open time picker
+                            }) {
+                                Text(enteredReviewTime, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        TextButton(onClick = {
+                            val intent = android.content.Intent(context, com.example.core.receiver.ReminderReceiver::class.java).apply {
+                                action = "com.example.action.DAY_REVIEW"
+                                putExtra("title", "Day Review Reminder")
+                                putExtra("message", "Time to review your day!")
+                            }
+                            context.sendBroadcast(intent)
+                        }) {
+                            Text("Test Notification", fontSize = 12.sp)
+                        }
+                    }
+                }
+
                 // Status Message display
                 if (statusMessage.isNotEmpty()) {
                     Box(
@@ -2885,6 +2968,8 @@ fun SettingsDialog(
                     viewModel.updateDndEnabled(enteredDndEnabled)
                     viewModel.updateEventReminderVibrate(enteredEventVibrate)
                     viewModel.updateEventReminderSound(enteredEventSound)
+                    viewModel.updateReviewReminderTime(enteredReviewTime)
+                    viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
                     onDismiss()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)

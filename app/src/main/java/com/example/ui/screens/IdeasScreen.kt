@@ -1,0 +1,710 @@
+package com.example.ui.screens
+
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.core.database.entity.IdeaEntity
+import com.example.core.database.entity.IdeaGroupEntity
+import com.example.core.database.entity.IdeaStageEntity
+import com.example.ui.viewmodel.MainViewModel
+
+private val presetColors = listOf(
+    0xFF6750A4, 0xFFB3261E, 0xFF00E676, 0xFF2196F3,
+    0xFFFF7043, 0xFFFFEB3B, 0xFFE91E63, 0xFF00BCD4
+)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+fun IdeasScreen(
+    viewModel: MainViewModel,
+    onBack: () -> Unit
+) {
+    val groups by viewModel.ideaGroups.collectAsState()
+    val ideas by viewModel.allIdeas.collectAsState()
+
+    var selectedGroupId by remember { mutableStateOf<Long?>(null) }
+    var showCreateGroupDialog by remember { mutableStateOf(false) }
+    var showCreateIdeaDialog by remember { mutableStateOf(false) }
+    var editingIdea by remember { mutableStateOf<IdeaEntity?>(null) }
+    var showDeleteIdeaConfirm by remember { mutableStateOf<IdeaEntity?>(null) }
+    var showDeleteGroupConfirm by remember { mutableStateOf<IdeaGroupEntity?>(null) }
+    var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
+    var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
+
+    val filteredIdeas = if (selectedGroupId == null) ideas
+    else ideas.filter { it.groupId == selectedGroupId }
+
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        TopAppBar(
+            title = { Text("Ideas", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                TextButton(onClick = { showCreateGroupDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Group")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+        )
+
+        GroupChipRow(
+            groups = groups,
+            selectedGroupId = selectedGroupId,
+            onSelectGroup = { selectedGroupId = it },
+            onEditGroup = { editingGroup = it },
+            onDeleteGroup = { showDeleteGroupConfirm = it }
+        )
+
+        if (filteredIdeas.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "No ideas yet",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        "Tap + to create your first idea",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filteredIdeas, key = { it.id }) { idea ->
+                    IdeaCard(
+                        idea = idea,
+                        groups = groups,
+                        viewModel = viewModel,
+                        onEdit = { editingIdea = it },
+                        onDelete = { showDeleteIdeaConfirm = it },
+                        onAddToPlanner = { ideaForPlanner = it }
+                    )
+                }
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Button(
+                onClick = { showCreateIdeaDialog = true },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Add Idea")
+            }
+        }
+    }
+
+    if (showCreateGroupDialog) {
+        CreateGroupDialog(
+            initialName = null,
+            initialColor = presetColors[0],
+            onDismiss = { showCreateGroupDialog = false },
+            onConfirm = { name, color -> viewModel.addGroup(name, color); showCreateGroupDialog = false }
+        )
+    }
+    editingGroup?.let { group ->
+        CreateGroupDialog(
+            initialName = group.name,
+            initialColor = group.color,
+            onDismiss = { editingGroup = null },
+            onConfirm = { name, color ->
+                viewModel.updateGroup(group.copy(name = name, color = color))
+                editingGroup = null
+            }
+        )
+    }
+    if (showCreateIdeaDialog || editingIdea != null) {
+        val existing = editingIdea
+        CreateIdeaDialog(
+            groups = groups,
+            initialTitle = existing?.title ?: "",
+            initialDescription = existing?.description ?: "",
+            initialGroupId = existing?.groupId,
+            onDismiss = { showCreateIdeaDialog = false; editingIdea = null },
+            onConfirm = { groupId, title, description ->
+                if (existing != null) {
+                    viewModel.updateIdea(existing.copy(groupId = groupId, title = title, description = description))
+                } else {
+                    viewModel.addIdea(groupId, title, description)
+                }
+                showCreateIdeaDialog = false; editingIdea = null
+            }
+        )
+    }
+    showDeleteIdeaConfirm?.let { idea ->
+        DeleteConfirmDialog(
+            title = "Delete Idea",
+            message = "Delete \"${idea.title}\" and all its stages?",
+            onDismiss = { showDeleteIdeaConfirm = null },
+            onConfirm = { viewModel.deleteIdea(idea); showDeleteIdeaConfirm = null }
+        )
+    }
+    showDeleteGroupConfirm?.let { group ->
+        DeleteConfirmDialog(
+            title = "Delete Group",
+            message = "Delete \"${group.name}\" and all ideas inside it?",
+            onDismiss = { showDeleteGroupConfirm = null },
+            onConfirm = { viewModel.deleteGroup(group); showDeleteGroupConfirm = null }
+        )
+    }
+    ideaForPlanner?.let { idea ->
+        AddToPlannerDialog(
+            idea = idea,
+            viewModel = viewModel,
+            onDismiss = { ideaForPlanner = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GroupChipRow(
+    groups: List<IdeaGroupEntity>,
+    selectedGroupId: Long?,
+    onSelectGroup: (Long?) -> Unit,
+    onEditGroup: (IdeaGroupEntity) -> Unit,
+    onDeleteGroup: (IdeaGroupEntity) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selectedGroupId == null,
+                onClick = { onSelectGroup(null) },
+                label = { Text("All") }
+            )
+        }
+        items(groups, key = { it.id }) { group ->
+            FilterChip(
+                selected = selectedGroupId == group.id,
+                onClick = { onSelectGroup(group.id) },
+                label = { Text(group.name) },
+                trailingIcon = {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(Color(group.color))
+                    )
+                },
+                modifier = Modifier.combinedClickable(
+                    onClick = { onSelectGroup(group.id) },
+                    onLongClick = { onEditGroup(group) }
+                )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun IdeaCard(
+    idea: IdeaEntity,
+    groups: List<IdeaGroupEntity>,
+    viewModel: MainViewModel,
+    onEdit: (IdeaEntity) -> Unit,
+    onDelete: (IdeaEntity) -> Unit,
+    onAddToPlanner: (IdeaEntity) -> Unit
+) {
+    val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
+    var showAddStage by remember { mutableStateOf(false) }
+    var newStageTitle by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var showIdeaMenu by remember { mutableStateOf(false) }
+    var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
+
+    val groupColor = groups.find { it.id == idea.groupId }?.let { Color(it.color) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Lightbulb,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = groupColor ?: MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        idea.title,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (idea.description.isNotBlank()) {
+                        Text(
+                            idea.description,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Box {
+                    IconButton(onClick = { showIdeaMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(20.dp))
+                    }
+                    DropdownMenu(expanded = showIdeaMenu, onDismissRequest = { showIdeaMenu = false }) {
+                        DropdownMenuItem(text = { Text("Edit") }, onClick = { showIdeaMenu = false; onEdit(idea) })
+                        DropdownMenuItem(text = { Text("Add to Planner") }, onClick = { showIdeaMenu = false; onAddToPlanner(idea) })
+                        DropdownMenuItem(text = { Text("Delete") }, onClick = { showIdeaMenu = false; onDelete(idea) })
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            Spacer(Modifier.height(8.dp))
+
+            stages.forEach { stage ->
+                StageRow(
+                    stage = stage,
+                    stages = stages,
+                    viewModel = viewModel,
+                    onDelete = { viewModel.deleteStage(it) }
+                )
+                Spacer(Modifier.height(4.dp))
+            }
+
+            if (showAddStage && addStageIdeaId == idea.id) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = newStageTitle,
+                        onValueChange = { newStageTitle = it },
+                        placeholder = { Text("Stage title...", fontSize = 13.sp) },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(
+                        onClick = {
+                            if (newStageTitle.isNotBlank()) {
+                                viewModel.addStage(idea.id, newStageTitle.trim())
+                                newStageTitle = ""
+                                showAddStage = false
+                                addStageIdeaId = null
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "Add", modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { showAddStage = false; newStageTitle = ""; addStageIdeaId = null }) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(20.dp))
+                    }
+                }
+            } else {
+                TextButton(
+                    onClick = { showAddStage = true; addStageIdeaId = idea.id },
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add Stage", fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(
+                    onClick = { onAddToPlanner(idea) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Planner", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StageRow(
+    stage: IdeaStageEntity,
+    stages: List<IdeaStageEntity>,
+    viewModel: MainViewModel,
+    onDelete: (IdeaStageEntity) -> Unit
+) {
+    val index = stages.indexOf(stage)
+    val previousCompleted = index == 0 || stages.take(index).all { it.isCompleted }
+    val canToggle = previousCompleted
+
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Checkbox(
+            checked = stage.isCompleted,
+            onCheckedChange = { checked ->
+                if (canToggle) {
+                    if (checked) {
+                        viewModel.updateStage(stage.copy(isCompleted = true))
+                    } else {
+                        viewModel.updateStage(stage.copy(isCompleted = false))
+                        stages.drop(index + 1).forEach {
+                            viewModel.updateStage(it.copy(isCompleted = false))
+                        }
+                    }
+                }
+            },
+            enabled = canToggle,
+            modifier = Modifier.size(24.dp),
+            colors = CheckboxDefaults.colors(
+                checkedColor = MaterialTheme.colorScheme.primary,
+                uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            )
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            stage.title,
+            fontSize = 13.sp,
+            color = if (stage.isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (stage.isCompleted) TextDecoration.LineThrough else TextDecoration.None,
+            modifier = Modifier.weight(1f)
+        )
+        if (canToggle) {
+            IconButton(onClick = { onDelete(stage) }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Delete stage", modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateGroupDialog(
+    initialName: String?,
+    initialColor: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Long) -> Unit
+) {
+    var name by remember { mutableStateOf(initialName ?: "") }
+    var selectedColor by remember { mutableStateOf(initialColor) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(if (initialName != null) "Edit Group" else "New Group", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Group name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Color", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    presetColors.forEach { color ->
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(color))
+                                .border(
+                                    if (selectedColor == color) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                    else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                    CircleShape
+                                )
+                                .clickable { selectedColor = color }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank()) onConfirm(name.trim(), selectedColor) },
+                enabled = name.isNotBlank()
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun CreateIdeaDialog(
+    groups: List<IdeaGroupEntity>,
+    initialTitle: String,
+    initialDescription: String,
+    initialGroupId: Long?,
+    onDismiss: () -> Unit,
+    onConfirm: (Long?, String, String) -> Unit
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var description by remember { mutableStateOf(initialDescription) }
+    var selectedGroupId by remember { mutableStateOf(initialGroupId) }
+    var expanded by remember { mutableStateOf(false) }
+
+    val selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "None"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(if (initialTitle.isNotEmpty()) "Edit Idea" else "New Idea", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    maxLines = 4
+                )
+                Box {
+                    OutlinedTextField(
+                        value = selectedGroupName,
+                        onValueChange = {},
+                        label = { Text("Group") },
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) }
+                    )
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("None") },
+                            onClick = { selectedGroupId = null; expanded = false }
+                        )
+                        groups.forEach { group ->
+                            DropdownMenuItem(
+                                text = { Text(group.name) },
+                                onClick = { selectedGroupId = group.id; expanded = false }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (title.isNotBlank()) onConfirm(selectedGroupId, title.trim(), description.trim()) },
+                enabled = title.isNotBlank()
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddToPlannerDialog(
+    idea: IdeaEntity,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    val currentDate by viewModel.selectedDate.collectAsState()
+    val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
+
+    var date by remember { mutableStateOf(currentDate) }
+    var selectedType by remember { mutableStateOf("TASK") }
+    var selectedMode by remember { mutableStateOf("entire") }
+    var selectedStageId by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showStagePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(date)?.time
+                    ?: System.currentTimeMillis()
+            } catch (_: Exception) { System.currentTimeMillis() }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+                        date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Add to Planner", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Date:", fontSize = 14.sp, modifier = Modifier.width(60.dp))
+                    OutlinedTextField(
+                        value = date,
+                        onValueChange = { date = it },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(Icons.Default.DateRange, contentDescription = "Pick date", modifier = Modifier.size(18.dp))
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+
+                Text("Type:", fontSize = 14.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("TASK", "EVENT", "NOTE").forEach { type ->
+                        FilterChip(
+                            selected = selectedType == type,
+                            onClick = { selectedType = type },
+                            label = { Text(type, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = selectedMode == "entire",
+                        onClick = { selectedMode = "entire" }
+                    )
+                    Text("Entire idea (with all stages)", fontSize = 13.sp, modifier = Modifier.clickable { selectedMode = "entire" })
+                }
+                val hasNamedStages = stages.any { it.title.isNotBlank() }
+                if (hasNamedStages) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = selectedMode == "single",
+                            onClick = { selectedMode = "single" }
+                        )
+                        Text("Pick a stage", fontSize = 13.sp, modifier = Modifier.clickable { selectedMode = "single" })
+                    }
+                    if (selectedMode == "single") {
+                        Spacer(Modifier.height(4.dp))
+                        stages.filter { it.title.isNotBlank() }.forEach { stage ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { selectedStageId = stage.id }
+                            ) {
+                                RadioButton(
+                                    selected = selectedStageId == stage.id,
+                                    onClick = { selectedStageId = stage.id }
+                                )
+                                Text(stage.title, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                when (selectedMode) {
+                    "entire" -> viewModel.addIdeaToPlanner(idea, date, selectedType)
+                    "single" -> {
+                        val stage = stages.find { it.id == selectedStageId }
+                        if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType)
+                    }
+                }
+                onDismiss()
+            }) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = { Text(message, fontSize = 14.sp) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}

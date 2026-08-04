@@ -29,5 +29,6 @@ data class TaskEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val parentTaskId: Long? = null, // For subtasks
     val targetSessions: Int? = null,
-    val breakMinutes: Int? = 5
+    val breakMinutes: Int? = 5,
+    val linkedTodoId: Long? = null
 )

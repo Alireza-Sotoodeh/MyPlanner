@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build APK (Debug)",
+            "type": "shell",
+            "command": "gradlew.bat assembleDebug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": {
+                "owner": "java",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):\\s+(error|warning):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "severity": 3,
+                    "message": 4
+                }
+            }
+        },
+        {
+            "label": "Install APK on Running Emulator",
+            "type": "shell",
+            "command": "adb install -r app\\build\\outputs\\apk\\debug\\app-debug.apk",
+            "group": "none",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Launch Emulator",
+            "type": "shell",
+            "command": "emulator -avd Pixel_8_API_35",
+            "group": "none",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
+}

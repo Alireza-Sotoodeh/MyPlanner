@@ -20,13 +20,27 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.core.database.entity.DayReviewEntity
+import com.example.core.database.entity.DiaryEntryEntity
 import com.example.core.database.entity.HabitEntity
 import com.example.core.database.entity.HabitLogEntity
+import com.example.core.database.entity.IdeaEntity
+import com.example.core.database.entity.IdeaGroupEntity
+import com.example.core.database.entity.IdeaStageEntity
+import com.example.core.database.entity.MottoEntity
+import com.example.core.database.entity.ShopItemEntity
 import com.example.core.database.entity.SleepLogEntity
 import com.example.core.database.entity.TaskEntity
+import com.example.core.database.entity.TodoEntity
+import com.example.core.repository.DayReviewRepository
+import com.example.core.repository.DiaryRepository
 import com.example.core.repository.HabitRepository
+import com.example.core.repository.IdeaRepository
+import com.example.core.repository.MottoRepository
+import com.example.core.repository.ShopItemRepository
 import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
+import com.example.core.repository.TodoRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Job
@@ -55,13 +69,27 @@ data class BulletCoachBackup(
     val tasks: List<TaskEntity> = emptyList(),
     val habits: List<HabitEntity> = emptyList(),
     val habitLogs: List<HabitLogEntity> = emptyList(),
-    val sleepLogs: List<SleepLogEntity> = emptyList()
+    val sleepLogs: List<SleepLogEntity> = emptyList(),
+    val ideaGroups: List<IdeaGroupEntity> = emptyList(),
+    val ideas: List<IdeaEntity> = emptyList(),
+    val ideaStages: List<IdeaStageEntity> = emptyList(),
+    val todos: List<TodoEntity> = emptyList(),
+    val diaryEntries: List<DiaryEntryEntity> = emptyList(),
+    val shopItems: List<ShopItemEntity> = emptyList(),
+    val mottos: List<MottoEntity> = emptyList(),
+    val dayReviews: List<DayReviewEntity> = emptyList()
 )
 
 class MainViewModel(
     private val taskRepository: TaskRepository,
     private val habitRepository: HabitRepository,
     private val sleepLogRepository: SleepLogRepository,
+    private val ideaRepository: IdeaRepository,
+    private val todoRepository: TodoRepository,
+    private val diaryRepository: DiaryRepository,
+    private val shopItemRepository: ShopItemRepository,
+    private val mottoRepository: MottoRepository,
+    private val dayReviewRepository: DayReviewRepository,
     private val context: Context
 ) : ViewModel() {
 
@@ -178,11 +206,25 @@ class MainViewModel(
                 val habitsList = habitRepository.allHabits.first()
                 val habitLogsList = habitRepository.getAllLogs().first()
                 val sleepLogsList = sleepLogRepository.allSleepLogs.first()
+                val ideaGroupsList = ideaRepository.allGroups.first()
+                val ideasList = ideaRepository.getAllIdeas().first()
+                val todosList = todoRepository.allTodos.first()
+                val diaryEntriesList = diaryRepository.getAllEntries().first()
+                val shopItemsList = shopItemRepository.allItems.first()
+                val mottosList = mottoRepository.allMottos.first()
+                val dayReviewsList = dayReviewRepository.getAllReviews().first()
                 val backupObj = BulletCoachBackup(
                     tasks = tasksList,
                     habits = habitsList,
                     habitLogs = habitLogsList,
-                    sleepLogs = sleepLogsList
+                    sleepLogs = sleepLogsList,
+                    ideaGroups = ideaGroupsList,
+                    ideas = ideasList,
+                    todos = todosList,
+                    diaryEntries = diaryEntriesList,
+                    shopItems = shopItemsList,
+                    mottos = mottosList,
+                    dayReviews = dayReviewsList
                 )
 
                 val adapter = moshi.adapter(BulletCoachBackup::class.java)
@@ -225,6 +267,14 @@ class MainViewModel(
                 backupObj.habits.forEach { habitRepository.insertHabit(it) }
                 backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
                 backupObj.sleepLogs.forEach { sleepLogRepository.insertSleepLog(it) }
+                backupObj.ideaGroups.forEach { ideaRepository.insertGroup(it) }
+                backupObj.ideas.forEach { ideaRepository.insertIdea(it) }
+                backupObj.ideaStages.forEach { ideaRepository.insertStage(it) }
+                backupObj.todos.forEach { todoRepository.insertTodo(it) }
+                backupObj.diaryEntries.forEach { diaryRepository.insertEntry(it) }
+                backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
+                backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
+                backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
 
                 delay(1500)
                 onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, and logs from Google Drive!")
@@ -349,6 +399,48 @@ class MainViewModel(
     private val _totalScreenTimeMinutes = MutableStateFlow(0L)
     val totalScreenTimeMinutes: StateFlow<Long> = _totalScreenTimeMinutes.asStateFlow()
 
+    // === Idea List State ===
+    val ideaGroups: StateFlow<List<IdeaGroupEntity>> = ideaRepository.allGroups
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allIdeas: StateFlow<List<IdeaEntity>> = ideaRepository.getAllIdeas()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // === To-Do State ===
+    val pendingTodos: StateFlow<List<TodoEntity>> = todoRepository.pendingTodos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allTodos: StateFlow<List<TodoEntity>> = todoRepository.allTodos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // === Diary State ===
+    val diaryDates: StateFlow<List<String>> = diaryRepository.getAllDates()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // === Shop List State ===
+    val unpurchasedItems: StateFlow<List<ShopItemEntity>> = shopItemRepository.unpurchasedItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val purchasedItems: StateFlow<List<ShopItemEntity>> = shopItemRepository.purchasedItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allShopItems: StateFlow<List<ShopItemEntity>> = shopItemRepository.allItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // === Motto State ===
+    private val _todayMotto = MutableStateFlow<MottoEntity?>(null)
+    val todayMotto: StateFlow<MottoEntity?> = _todayMotto.asStateFlow()
+
+    val allMottos: StateFlow<List<MottoEntity>> = mottoRepository.allMottos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // === Day Review State ===
+    private val _reviewReminderTime = MutableStateFlow(prefs.getString("review_reminder_time", "21:00") ?: "21:00")
+    val reviewReminderTime: StateFlow<String> = _reviewReminderTime.asStateFlow()
+
+    private val _reviewReminderEnabled = MutableStateFlow(prefs.getBoolean("review_reminder_enabled", false))
+    val reviewReminderEnabled: StateFlow<Boolean> = _reviewReminderEnabled.asStateFlow()
+
     init {
         // Register BroadcastReceiver for date, time, and timezone changes
         val intentFilter = android.content.IntentFilter().apply {
@@ -387,6 +479,32 @@ class MainViewModel(
                 taskRepository.insertTask(TaskEntity(title = "Sync Google Sheets Context", description = "Review and fetch life coach profile contexts.", date = today, type = "TASK", durationMinutes = 25, priority = 1))
                 taskRepository.insertTask(TaskEntity(title = "Morning Stretch & Meditation", description = "Mindfulness ritual for 15 minutes.", date = today, type = "EVENT", durationMinutes = 15, priority = 2))
                 taskRepository.insertTask(TaskEntity(title = "Refactor Local Room Models", description = "Polish entities and custom DAOs.", date = today, type = "TASK", durationMinutes = 50, priority = 3))
+            }
+        }
+
+        // Initialize today's motto
+        refreshTodayMotto()
+    }
+
+    fun refreshTodayMotto() {
+        viewModelScope.launch {
+            val cachedDate = prefs.getString("today_motto_date", "")
+            val cachedId = prefs.getLong("today_motto_id", -1L)
+            val today = getTodayDateString()
+
+            if (cachedDate != today || cachedId == -1L) {
+                val random = mottoRepository.getRandomMotto()
+                if (random != null) {
+                    prefs.edit()
+                        .putLong("today_motto_id", random.id)
+                        .putString("today_motto_date", today)
+                        .apply()
+                    _todayMotto.value = random
+                } else {
+                    _todayMotto.value = null
+                }
+            } else {
+                _todayMotto.value = allMottos.value.find { it.id == cachedId }
             }
         }
     }
@@ -1121,6 +1239,241 @@ class MainViewModel(
         }
     }
 
+    // === Idea List CRUD ===
+    fun stagesForIdea(ideaId: Long) = ideaRepository.getStagesForIdea(ideaId)
+
+    fun addGroup(name: String, color: Long) {
+        viewModelScope.launch { ideaRepository.insertGroup(IdeaGroupEntity(name = name, color = color)) }
+    }
+
+    fun updateGroup(group: IdeaGroupEntity) {
+        viewModelScope.launch { ideaRepository.updateGroup(group) }
+    }
+
+    fun deleteGroup(group: IdeaGroupEntity) {
+        viewModelScope.launch { ideaRepository.deleteGroup(group) }
+    }
+
+    fun addIdea(groupId: Long?, title: String, description: String) {
+        viewModelScope.launch { ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title, description = description)) }
+    }
+
+    fun updateIdea(idea: IdeaEntity) {
+        viewModelScope.launch { ideaRepository.updateIdea(idea) }
+    }
+
+    fun deleteIdea(idea: IdeaEntity) {
+        viewModelScope.launch { ideaRepository.deleteIdea(idea) }
+    }
+
+    fun moveIdeaToGroup(ideaId: Long, newGroupId: Long?) {
+        viewModelScope.launch { ideaRepository.moveIdeaToGroup(ideaId, newGroupId) }
+    }
+
+    fun addStage(ideaId: Long, title: String) {
+        viewModelScope.launch {
+            val stages = ideaRepository.getStagesForIdeaSync(ideaId)
+            ideaRepository.insertStage(IdeaStageEntity(ideaId = ideaId, title = title, orderIndex = stages.size))
+        }
+    }
+
+    fun updateStage(stage: IdeaStageEntity) {
+        viewModelScope.launch { ideaRepository.updateStage(stage) }
+    }
+
+    fun deleteStage(stage: IdeaStageEntity) {
+        viewModelScope.launch { ideaRepository.deleteStage(stage) }
+    }
+
+    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String) {
+        viewModelScope.launch {
+            val parentId = taskRepository.insertTask(
+                TaskEntity(
+                    title = idea.title,
+                    description = idea.description,
+                    date = date,
+                    type = type,
+                    label = "IDEA",
+                    durationMinutes = 25,
+                    priority = dailyTasks.value.size + 1
+                )
+            )
+            val stages = ideaRepository.getStagesForIdeaSync(idea.id)
+            stages.filter { it.title.isNotBlank() }.forEach { stage ->
+                taskRepository.insertTask(
+                    TaskEntity(
+                        title = stage.title,
+                        date = date,
+                        type = "TASK",
+                        parentTaskId = parentId,
+                        subtaskImportance = "OPTIONAL",
+                        label = "IDEA",
+                        priority = 0
+                    )
+                )
+            }
+        }
+    }
+
+    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String) {
+        viewModelScope.launch {
+            taskRepository.insertTask(
+                TaskEntity(
+                    title = stage.title,
+                    date = date,
+                    type = type,
+                    label = "IDEA",
+                    durationMinutes = 25,
+                    priority = dailyTasks.value.size + 1
+                )
+            )
+        }
+    }
+
+    // === To-Do CRUD ===
+    fun addTodo(title: String, description: String = "", priority: String = "Medium") {
+        viewModelScope.launch { todoRepository.insertTodo(TodoEntity(title = title, description = description, priority = priority)) }
+    }
+
+    fun updateTodo(todo: TodoEntity) {
+        viewModelScope.launch { todoRepository.updateTodo(todo) }
+    }
+
+    fun deleteTodo(todo: TodoEntity) {
+        viewModelScope.launch {
+            if (todo.linkedTaskId != null) {
+                taskRepository.deleteTaskById(todo.linkedTaskId)
+            }
+            todoRepository.deleteTodo(todo)
+        }
+    }
+
+    fun toggleTodoCompletion(todo: TodoEntity) {
+        viewModelScope.launch {
+            val newStatus = if (todo.status == "DONE") "PENDING" else "DONE"
+            todoRepository.updateTodo(todo.copy(status = newStatus))
+
+            if (todo.linkedTaskId != null && newStatus == "DONE") {
+                val linkedTask = taskRepository.getTaskById(todo.linkedTaskId)
+                if (linkedTask != null && linkedTask.status != "COMPLETED") {
+                    taskRepository.updateTask(linkedTask.copy(status = "COMPLETED"))
+                }
+            }
+        }
+    }
+
+    fun linkTodoToTask(todo: TodoEntity, targetDate: String) {
+        viewModelScope.launch {
+            val taskId = taskRepository.insertTask(
+                TaskEntity(
+                    title = todo.title,
+                    description = todo.description,
+                    date = targetDate,
+                    type = "TASK",
+                    label = "TODO",
+                    linkedTodoId = todo.id,
+                    priority = dailyTasks.value.size + 1
+                )
+            )
+            todoRepository.updateTodo(todo.copy(linkedTaskId = taskId))
+        }
+    }
+
+    fun unlinkTodoFromTask(todo: TodoEntity) {
+        viewModelScope.launch {
+            if (todo.linkedTaskId != null) {
+                taskRepository.deleteTaskById(todo.linkedTaskId)
+                todoRepository.updateTodo(todo.copy(linkedTaskId = null))
+            }
+        }
+    }
+
+    // === Diary CRUD ===
+    val diaryAllDates: StateFlow<List<String>> = diaryRepository.getAllDates()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun diaryEntryForDate(date: String) = diaryRepository.getEntryForDate(date)
+
+    fun saveDiaryEntry(date: String, title: String, content: String) {
+        viewModelScope.launch {
+            val existing = diaryRepository.getEntryForDate(date).first()
+            if (existing != null) {
+                diaryRepository.insertEntry(existing.copy(title = title, content = content, updatedAt = System.currentTimeMillis()))
+            } else {
+                diaryRepository.insertEntry(DiaryEntryEntity(date = date, title = title, content = content))
+            }
+        }
+    }
+
+    fun deleteDiaryEntry(date: String) {
+        viewModelScope.launch { diaryRepository.deleteEntryByDate(date) }
+    }
+
+    // === Shop List CRUD ===
+    fun addShopItem(name: String, quantity: Int = 1, price: Float? = null, notes: String = "") {
+        viewModelScope.launch {
+            shopItemRepository.insertItem(ShopItemEntity(name = name, quantity = quantity.coerceAtLeast(1), price = price?.takeIf { it >= 0f }, notes = notes))
+        }
+    }
+
+    fun updateShopItem(item: ShopItemEntity) {
+        viewModelScope.launch { shopItemRepository.updateItem(item) }
+    }
+
+    fun deleteShopItem(item: ShopItemEntity) {
+        viewModelScope.launch { shopItemRepository.deleteItem(item) }
+    }
+
+    fun toggleShopItemPurchased(item: ShopItemEntity) {
+        viewModelScope.launch { shopItemRepository.updateItem(item.copy(isPurchased = !item.isPurchased)) }
+    }
+
+    // === Motto CRUD ===
+    fun addMotto(text: String, author: String = "") {
+        viewModelScope.launch { mottoRepository.insertMotto(MottoEntity(text = text, author = author)) }
+    }
+
+    fun updateMotto(motto: MottoEntity) {
+        viewModelScope.launch { mottoRepository.updateMotto(motto) }
+    }
+
+    fun deleteMotto(motto: MottoEntity) {
+        viewModelScope.launch {
+            mottoRepository.deleteMotto(motto)
+            if (_todayMotto.value?.id == motto.id) {
+                refreshTodayMotto()
+            }
+        }
+    }
+
+    // === Day Review CRUD ===
+    fun reviewForDate(date: String) = dayReviewRepository.getReviewForDate(date)
+
+    fun saveDayReview(date: String, good: String, bad: String, improve: String, gratitude: String, moodRating: Int, score: Int, notes: String) {
+        viewModelScope.launch {
+            val existing = dayReviewRepository.getReviewForDate(date).first()
+            if (existing != null) {
+                dayReviewRepository.insertReview(existing.copy(good = good, bad = bad, improve = improve, gratitude = gratitude, moodRating = moodRating, score = score, notes = notes))
+            } else {
+                dayReviewRepository.insertReview(DayReviewEntity(date = date, good = good, bad = bad, improve = improve, gratitude = gratitude, moodRating = moodRating, score = score, notes = notes))
+            }
+        }
+    }
+
+    fun deleteDayReview(date: String) {
+        viewModelScope.launch { dayReviewRepository.deleteReviewByDate(date) }
+    }
+
+    fun updateReviewReminderTime(time: String) {
+        prefs.edit().putString("review_reminder_time", time).apply()
+        _reviewReminderTime.value = time
+    }
+
+    fun updateReviewReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("review_reminder_enabled", enabled).apply()
+        _reviewReminderEnabled.value = enabled
+    }
+
     // Helper utilities for date
     fun getTodayDateString(): String {
         return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
@@ -1144,12 +1497,23 @@ class MainViewModelFactory(
     private val taskRepository: com.example.core.repository.TaskRepository,
     private val habitRepository: com.example.core.repository.HabitRepository,
     private val sleepLogRepository: com.example.core.repository.SleepLogRepository,
+    private val ideaRepository: com.example.core.repository.IdeaRepository,
+    private val todoRepository: com.example.core.repository.TodoRepository,
+    private val diaryRepository: com.example.core.repository.DiaryRepository,
+    private val shopItemRepository: com.example.core.repository.ShopItemRepository,
+    private val mottoRepository: com.example.core.repository.MottoRepository,
+    private val dayReviewRepository: com.example.core.repository.DayReviewRepository,
     private val context: android.content.Context
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return MainViewModel(taskRepository, habitRepository, sleepLogRepository, context) as T
+            return MainViewModel(
+                taskRepository, habitRepository, sleepLogRepository,
+                ideaRepository, todoRepository, diaryRepository,
+                shopItemRepository, mottoRepository, dayReviewRepository,
+                context
+            ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
