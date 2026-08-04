@@ -70,6 +70,7 @@ class TimerForegroundService : Service() {
         data class AdjustPomodoro(val seconds: Int) : ServiceCommand()
         data object TogglePause : ServiceCommand()
         data object Stop : ServiceCommand()
+        data object Discard : ServiceCommand()
     }
 
     override fun onCreate() {
@@ -93,6 +94,7 @@ class TimerForegroundService : Service() {
             }
             ACTION_TOGGLE_PAUSE -> commandChannel.trySend(ServiceCommand.TogglePause)
             ACTION_STOP -> commandChannel.trySend(ServiceCommand.Stop)
+            ACTION_DISCARD -> commandChannel.trySend(ServiceCommand.Discard)
             ACTION_ADJUST_POMODORO -> {
                 val seconds = intent.getIntExtra(EXTRA_ADJUST_SECONDS, 60)
                 commandChannel.trySend(ServiceCommand.AdjustPomodoro(seconds))
@@ -117,6 +119,7 @@ class TimerForegroundService : Service() {
                 is ServiceCommand.StartChronometer -> handleStartChronometer(cmd)
                 is ServiceCommand.TogglePause -> handleTogglePause()
                 is ServiceCommand.Stop -> handleStop()
+                is ServiceCommand.Discard -> handleDiscard()
                 is ServiceCommand.AdjustPomodoro -> handleAdjustPomodoro(cmd)
             }
         }
@@ -208,6 +211,14 @@ class TimerForegroundService : Service() {
             null -> {}
         }
 
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        _state.value = TimerServiceState()
+        stopSelf()
+    }
+
+    private fun handleDiscard() {
+        tickJob?.cancel()
+        tickJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         _state.value = TimerServiceState()
         stopSelf()
@@ -412,6 +423,14 @@ class TimerForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val discardIntent = Intent(this, TimerForegroundService::class.java).apply {
+            action = ACTION_DISCARD
+        }
+        val discardPendingIntent = PendingIntent.getService(
+            this, RC_DISCARD, discardIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_timer_notification)
             .setContentTitle(title)
@@ -423,6 +442,7 @@ class TimerForegroundService : Service() {
             .setContentIntent(contentPendingIntent)
             .addAction(pauseIcon, pauseLabel, togglePausePendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
+            .addAction(android.R.drawable.ic_menu_delete, "Discard", discardPendingIntent)
             .build()
     }
 
@@ -467,6 +487,7 @@ class TimerForegroundService : Service() {
         const val ACTION_START_CHRONOMETER = "com.example.action.START_CHRONOMETER"
         const val ACTION_TOGGLE_PAUSE = "com.example.action.TOGGLE_PAUSE"
         const val ACTION_STOP = "com.example.action.STOP"
+        const val ACTION_DISCARD = "com.example.action.DISCARD"
         const val ACTION_ADJUST_POMODORO = "com.example.action.ADJUST_POMODORO"
 
         const val EXTRA_ADJUST_SECONDS = "adjustSeconds"
@@ -485,6 +506,7 @@ class TimerForegroundService : Service() {
         private const val RC_CONTENT = 1000
         private const val RC_TOGGLE_PAUSE = 1001
         private const val RC_STOP = 1002
+        private const val RC_DISCARD = 1003
         private const val TAG = "TimerFgService"
         private const val UPDATE_INTERVAL_MS = 10_000L
 
