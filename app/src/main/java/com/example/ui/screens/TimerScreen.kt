@@ -1004,6 +1004,19 @@ private fun HistoryDatePickerDialog(
         selectedDay = null
     }
 
+    fun goToToday() {
+        if (usePersian) {
+            currentYear = PersianCalendarHelper.getCurrentPersianYear()
+            currentMonth = PersianCalendarHelper.getCurrentPersianMonth()
+        } else {
+            val cal = Calendar.getInstance()
+            currentYear = cal.get(Calendar.YEAR)
+            currentMonth = cal.get(Calendar.MONTH) + 1
+        }
+        selectedDay = null
+        editingYear = false
+    }
+
     if (showMonthPicker) {
         HistoryMonthPickerDialog(
             currentMonth = currentMonth,
@@ -1106,6 +1119,10 @@ private fun HistoryDatePickerDialog(
 
             IconButton(onClick = { nextMonth() }) {
                 Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, contentDescription = "Next month")
+            }
+
+            IconButton(onClick = { goToToday() }) {
+                Icon(Icons.Default.Home, contentDescription = "Go to today", modifier = Modifier.size(20.dp))
             }
 
             Spacer(modifier = Modifier.width(4.dp))
