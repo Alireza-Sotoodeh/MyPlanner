@@ -6290,13 +6290,31 @@ fun LearnTab(viewModel: MainViewModel) {
     var itemToStart by remember { mutableStateOf<LearnItemEntity?>(null) }
     var editingGroup by remember { mutableStateOf<LearnGroupEntity?>(null) }
     var showDeleteGroupConfirm by remember { mutableStateOf<LearnGroupEntity?>(null) }
+    var showGroupChips by remember { mutableStateOf(true) }
+    var showLearnBreakdown by remember { mutableStateOf(false) }
+
+    val groupChipScrollConnection = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < -15) showGroupChips = false
+                else if (available.y > 15) showGroupChips = true
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
 
     val filteredItems = if (selectedGroupId == null) learnItems
     else learnItems.filter { it.groupId == selectedGroupId }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (learnGroups.isNotEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).nestedScroll(groupChipScrollConnection)
+        ) {
+            AnimatedVisibility(
+                visible = showGroupChips && learnGroups.isNotEmpty(),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
                 LearnGroupChipRow(
                     groups = learnGroups,
                     selectedGroupId = selectedGroupId,
@@ -6305,28 +6323,175 @@ fun LearnTab(viewModel: MainViewModel) {
                     onDeleteGroup = { showDeleteGroupConfirm = it }
                 )
             }
-            if (filteredItems.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No learn items yet.\nTap + to add a book or course.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    items(filteredItems, key = { it.id }) { item ->
-                        LearnItemCard(
-                            item = item,
-                            viewModel = viewModel,
-                            onEdit = { itemToEdit = item },
-                            onStart = { itemToStart = item },
-                            onDelete = { viewModel.deleteLearnItemWithUndo(item) }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "LEARN",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.5.sp
                         )
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { showLearnBreakdown = !showLearnBreakdown }
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                    .padding(horizontal = 10.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "${filteredItems.size} item${if (filteredItems.size != 1) "s" else ""}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            if (showLearnBreakdown) {
+                                val localDensity = LocalDensity.current
+                                val offsetY = with(localDensity) { 32.dp.roundToPx() }
+                                Popup(
+                                    alignment = Alignment.TopEnd,
+                                    offset = IntOffset(x = 0, y = offsetY),
+                                    onDismissRequest = { showLearnBreakdown = false },
+                                    properties = PopupProperties(focusable = true)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        tonalElevation = 8.dp,
+                                        shadowElevation = 8.dp,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                                        modifier = Modifier.width(280.dp).padding(4.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "Items by Group",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            if (learnItems.isEmpty()) {
+                                                Text(
+                                                    text = "No learn items yet",
+                                                    fontSize = 12.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            } else {
+                                                val itemsByGroup = learnItems.groupBy { it.groupId }
+                                                val groupsWithItems = learnGroups.filter { group ->
+                                                    itemsByGroup[group.id]?.isNotEmpty() == true
+                                                }
+                                                val ungroupedCount = itemsByGroup[null]?.size ?: 0
+                                                groupsWithItems.forEach { group ->
+                                                    val count = itemsByGroup[group.id]?.size ?: 0
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(10.dp)
+                                                                    .background(Color(group.color), CircleShape)
+                                                            )
+                                                            Spacer(Modifier.width(8.dp))
+                                                            Text(
+                                                                text = group.name,
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = MaterialTheme.colorScheme.onSurface
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = "${count} item${if (count != 1) "s" else ""}",
+                                                            fontSize = 12.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                                if (ungroupedCount > 0) {
+                                                    if (groupsWithItems.isNotEmpty()) {
+                                                        HorizontalDivider(
+                                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                        )
+                                                    }
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(
+                                                            text = "No group",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        Text(
+                                                            text = "${ungroupedCount} item${if (ungroupedCount != 1) "s" else ""}",
+                                                            fontSize = 12.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (filteredItems.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No learn items yet.\nTap + to add a book or course.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(filteredItems, key = { it.id }) { item ->
+                                    LearnItemCard(
+                                        item = item,
+                                        viewModel = viewModel,
+                                        onEdit = { itemToEdit = item },
+                                        onStart = { itemToStart = item },
+                                        onDelete = { viewModel.deleteLearnItemWithUndo(item) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -6421,13 +6586,14 @@ fun LearnItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
             .combinedClickable(
                 onClick = {},
                 onLongClick = { showMenu = true }
             ),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = groupColor?.let { BorderStroke(2.dp, it) }
+            ?: BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
