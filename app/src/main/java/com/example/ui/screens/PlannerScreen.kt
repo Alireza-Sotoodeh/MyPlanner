@@ -3548,12 +3548,19 @@ fun SettingsDialog(
 ) {
     val googleDriveConnected by viewModel.googleDriveConnected.collectAsState()
     val googleDriveEmail by viewModel.googleDriveEmail.collectAsState()
+    val backupEnabled by viewModel.backupEnabled.collectAsState()
+    val backupTime by viewModel.backupTime.collectAsState()
+    val backupFailureNotify by viewModel.backupFailureNotify.collectAsState()
     val dndEnabled by viewModel.dndEnabled.collectAsState()
     val eventReminderVibrate by viewModel.eventReminderVibrate.collectAsState()
     val eventReminderSound by viewModel.eventReminderSound.collectAsState()
     val eventReminderEnabled by viewModel.eventReminderEnabled.collectAsState()
 
     var enteredEmail by remember { mutableStateOf(googleDriveEmail) }
+    var enteredBackupEnabled by remember { mutableStateOf(backupEnabled) }
+    var enteredBackupTime by remember { mutableStateOf(backupTime) }
+    var enteredBackupFailureNotify by remember { mutableStateOf(backupFailureNotify) }
+    var showBackupTimePicker by remember { mutableStateOf(false) }
     var enteredDndEnabled by remember { mutableStateOf(dndEnabled) }
     var enteredEventVibrate by remember { mutableStateOf(eventReminderVibrate) }
     var enteredEventSound by remember { mutableStateOf(eventReminderSound) }
@@ -3651,6 +3658,12 @@ fun SettingsDialog(
         is24Hour = true
     )
 
+    val backupTimePickerState = rememberTimePickerState(
+        initialHour = enteredBackupTime.substringBefore(":").toIntOrNull() ?: 23,
+        initialMinute = enteredBackupTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+
     val context = LocalContext.current
     val notificationManager = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager }
 
@@ -3695,6 +3708,9 @@ fun SettingsDialog(
     ModalBottomSheet(
         onDismissRequest = {
             viewModel.updateDndEnabled(enteredDndEnabled)
+            viewModel.updateBackupEnabled(enteredBackupEnabled)
+            viewModel.updateBackupTime(enteredBackupTime)
+            viewModel.updateBackupFailureNotify(enteredBackupFailureNotify)
             viewModel.updateEventReminderVibrate(enteredEventVibrate)
             viewModel.updateEventReminderSound(enteredEventSound)
             viewModel.updateEventReminderEnabled(enteredEventEnabled)
@@ -3831,6 +3847,51 @@ fun SettingsDialog(
                             focusedLabelColor = MaterialTheme.colorScheme.primary
                         )
                     )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Auto Backup", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Daily backup at scheduled time", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = enteredBackupEnabled,
+                        onCheckedChange = { enteredBackupEnabled = it; dirty = true }
+                    )
+                }
+                if (enteredBackupEnabled) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Backup time", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(enteredBackupTime, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        OutlinedButton(onClick = { showBackupTimePicker = true }) {
+                            Text("Change", fontSize = 12.sp)
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Notify on failure", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Switch(
+                            checked = enteredBackupFailureNotify,
+                            onCheckedChange = { enteredBackupFailureNotify = it; dirty = true }
+                        )
+                    }
                 }
             }
 
@@ -4247,6 +4308,9 @@ fun SettingsDialog(
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = {
+                        viewModel.updateBackupEnabled(enteredBackupEnabled)
+                        viewModel.updateBackupTime(enteredBackupTime)
+                        viewModel.updateBackupFailureNotify(enteredBackupFailureNotify)
                         viewModel.updateDndEnabled(enteredDndEnabled)
                         viewModel.updateEventReminderVibrate(enteredEventVibrate)
                         viewModel.updateEventReminderSound(enteredEventSound)
@@ -4407,6 +4471,22 @@ fun SettingsDialog(
                 }) { Text("OK") }
             },
             dismissButton = { TextButton(onClick = { showLearnReviewReminderTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showBackupTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showBackupTimePicker = false },
+            title = { Text("Select Backup Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = backupTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = backupTimePickerState.hour; val min = backupTimePickerState.minute
+                    enteredBackupTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showBackupTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showBackupTimePicker = false }) { Text("Cancel") } }
         )
     }
 }

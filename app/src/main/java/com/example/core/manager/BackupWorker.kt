@@ -1,7 +1,11 @@
 package com.example.core.manager
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.core.database.AppDatabase
@@ -103,13 +107,41 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 prefs.edit().putLong("drive_last_sync_at", System.currentTimeMillis()).apply()
                 Log.d(TAG, "Auto-backup successful")
             } else {
-                Log.w(TAG, "Auto-backup: Drive upload failed, saved locally")
+                Log.w(TAG, "Auto-backup: Drive upload failed")
+                notifyFailure("Upload to Google Drive failed — check connection and sign-in")
             }
 
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Auto-backup failed", e)
+            notifyFailure("Error: ${e.message ?: "Unknown error"}")
             if (runAttemptCount < 3) Result.retry() else Result.failure()
+        }
+    }
+
+    private fun notifyFailure(message: String) {
+        val prefs = applicationContext.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("backup_failure_notify", true)) return
+
+        val channelId = "backup_failures"
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Backup", NotificationManager.IMPORTANCE_DEFAULT)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Auto-backup failed")
+            .setContentText(message)
+            .setAutoCancel(true)
+            .build()
+
+        try {
+            notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send backup failure notification", e)
         }
     }
 }

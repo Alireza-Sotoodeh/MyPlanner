@@ -3509,9 +3509,8 @@ jsonString = backupFile.readText()
     // --- Full-Screen Intent Permission ---
     fun hasFullScreenIntentPermission(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= 34) {
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context, android.Manifest.permission.USE_FULL_SCREEN_INTENT
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.canUseFullScreenIntent()
         } else {
             true
         }
@@ -3525,6 +3524,82 @@ jsonString = backupFile.readText()
             }
             context.startActivity(intent)
         }
+    }
+
+    // --- Permissions Gate Skip ---
+    fun setPermissionsGateSkipped(skipped: Boolean) {
+        prefs.edit().putBoolean("permissions_gate_skipped", skipped).apply()
+    }
+
+    fun hasSkippedPermissionsGate(): Boolean {
+        return prefs.getBoolean("permissions_gate_skipped", false)
+    }
+
+    // --- Auto Backup Schedule ---
+    private val _backupTime = MutableStateFlow(prefs.getString("backup_time", "23:00") ?: "23:00")
+    val backupTime: StateFlow<String> = _backupTime.asStateFlow()
+
+    private val _backupFailureNotify = MutableStateFlow(prefs.getBoolean("backup_failure_notify", true))
+    val backupFailureNotify: StateFlow<Boolean> = _backupFailureNotify.asStateFlow()
+
+    private val _backupEnabled = MutableStateFlow(prefs.getBoolean("backup_enabled", true))
+    val backupEnabled: StateFlow<Boolean> = _backupEnabled.asStateFlow()
+
+    fun updateBackupTime(time: String) {
+        val normalized = time.split(":").let { parts ->
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: 23
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            String.format(Locale.getDefault(), "%02d:%02d", h.coerceIn(0, 23), m.coerceIn(0, 59))
+        }
+        prefs.edit().putString("backup_time", normalized).apply()
+        _backupTime.value = normalized
+        rescheduleAutoBackup(context)
+    }
+
+    fun updateBackupFailureNotify(enabled: Boolean) {
+        prefs.edit().putBoolean("backup_failure_notify", enabled).apply()
+        _backupFailureNotify.value = enabled
+    }
+
+    fun updateBackupEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("backup_enabled", enabled).apply()
+        _backupEnabled.value = enabled
+        if (enabled) {
+            rescheduleAutoBackup(context)
+        } else {
+            androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_drive_backup")
+        }
+    }
+
+    fun rescheduleAutoBackup(context: Context) {
+        val enabled = _backupEnabled.value
+        if (!enabled) return
+        val timeStr = _backupTime.value
+        val hour = timeStr.substringBefore(":").toIntOrNull() ?: 23
+        val minute = timeStr.substringAfter(":").toIntOrNull() ?: 0
+        val now = java.util.Calendar.getInstance()
+        val scheduled = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, hour)
+            set(java.util.Calendar.MINUTE, minute)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+            if (before(now)) add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        val initialDelay = scheduled.timeInMillis - now.timeInMillis
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+            .build()
+        val request = androidx.work.PeriodicWorkRequestBuilder<com.example.core.manager.BackupWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .addTag("daily_drive_backup")
+            .setInitialDelay(initialDelay, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_drive_backup")
+        androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "daily_drive_backup",
+            androidx.work.ExistingPeriodicWorkPolicy.REPLACE,
+            request
+        )
     }
 
     private fun getCurrentInterruptionFilter(context: Context): Int {
