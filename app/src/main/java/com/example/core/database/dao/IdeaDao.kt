@@ -47,6 +47,15 @@ interface IdeaDao {
         ideas.forEach { updateIdea(it) }
     }
 
+    @Query("DELETE FROM idea_stages WHERE ideaId = :ideaId")
+    suspend fun deleteStagesForIdea(ideaId: Long)
+
+    @Transaction
+    suspend fun deleteIdeaWithStages(idea: IdeaEntity) {
+        deleteStagesForIdea(idea.id)
+        deleteIdea(idea)
+    }
+
     @Query("DELETE FROM ideas")
     suspend fun deleteAll()
 }
