@@ -208,33 +208,13 @@ Covers all 24 remaining bugs from `BUG_Sync_plan.md` + full Google Drive sync + 
 - [x] **Edge case:** User signed out → `isSignedIn()` returns false → shows "Not signed in" message
 - [x] **Verify:** `assembleDebug` succeeds
 
-### 4.5 — Auto-backup via WorkManager
+### 4.5 — Auto-backup via WorkManager `[x] DONE`
 
-- [ ] **New file:** `app/src/main/java/com/example/core/manager/BackupWorker.kt`
-  
-  ```kotlin
-  class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-      override suspend fun doWork(): Result {
-          // 1. Check if google_drive_connected
-          // 2. If yes, run backupDataToGoogleDrive
-          // 3. Return Result.success() or Result.retry()
-      }
-  }
-  ```
-- [ ] **Schedule** in `MainActivity.kt` or `Application.onCreate()`:
-  
-  ```kotlin
-  val dailyBackup = PeriodicWorkRequestBuilder<BackupWorker>(24, TimeUnit.HOURS)
-      .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-      .build()
-  WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-      "daily_drive_backup",
-      ExistingPeriodicWorkPolicy.KEEP,
-      dailyBackup
-  )
-  ```
-- [ ] **Edge case:** First run delays by 24h — add initial 1h delay for immediate first backup
-- [ ] **Edge case:** If user disconnects Drive, WorkManager job still runs but checks flag and exits early
+- [x] `BackupWorker.kt` — `CoroutineWorker` checks `google_drive_connected` flag, builds `BulletCoachBackup`, serializes to JSON, saves locally, calls `DriveManager.uploadBackup()`, retries up to 3 times on failure
+- [x] `scheduleDailyBackup()` in `MainActivity.kt` — `PeriodicWorkRequestBuilder(24h)` with `NetworkType.CONNECTED` constraint + `setInitialDelay(1h)` for first early backup
+- [x] **Edge case:** First run delays 24h → mitigated by `setInitialDelay(1, HOURS)` so first backup runs after 1 hour
+- [x] **Edge case:** User disconnects Drive → `BackupWorker` checks the shared pref flag and exits early if not connected
+- [x] **Verify:** `assembleDebug` succeeds
 
 ### 4.6 — OAuth UX edge cases
 

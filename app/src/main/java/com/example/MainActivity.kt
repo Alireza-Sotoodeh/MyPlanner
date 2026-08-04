@@ -298,6 +298,7 @@ class MainActivity : ComponentActivity() {
         val dailyBackup = PeriodicWorkRequestBuilder<BackupWorker>(24, java.util.concurrent.TimeUnit.HOURS)
             .setConstraints(constraints)
             .addTag("daily_drive_backup")
+            .setInitialDelay(1, java.util.concurrent.TimeUnit.HOURS)
             .build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "daily_drive_backup",
