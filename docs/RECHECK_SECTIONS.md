@@ -25,7 +25,7 @@ Use this file to systematically recheck every section of the app. Each checkbox 
 - [x] `PlannerScreen.kt:205-408` — `PlannerScreen`: tab state, 6-tab ScrollableTabRow (DAILY/WEEKLY/MONTHLY/TO-DO/IDEAS/LEARN), ActiveTimerWidget, FAB for tabs 0/3/4, SettingsDialog/FastPomodoroSetupDialog/pending completion AlertDialog/TaskManagerDialog/ReviewRatingSheet overlays, label filter state passing
 
 ### 2.2 Header
-- [ ] `PlannerScreen.kt:398-466` — `HeaderSection`: formatted date (Gregorian + Persian), day-of-week display, HeaderActions (home + settings icons)
+- [x] `PlannerScreen.kt:410-487` — `HeaderSection`: formatted date (Gregorian + Persian), day-of-week display, HeaderActions (home + settings icons)
 
 ### 2.3 Daily Planner View
 - [ ] `PlannerScreen.kt:468-1204` — `DailyPlannerView`: label FilterChip row, day navigator (prev/next), tasks LazyColumn with active+completed tasks, drag-to-reorder with `detectDragGesturesAfterLongPress`, CalendarDatePickerDialog, TaskInteractionDialog, Pending Details Popup (priority/subtask breakdown)

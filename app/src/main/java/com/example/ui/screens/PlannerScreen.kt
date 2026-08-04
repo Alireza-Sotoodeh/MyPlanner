@@ -411,70 +411,79 @@ fun PlannerScreen(viewModel: MainViewModel) {
 fun HeaderSection(viewModel: MainViewModel, onSettingsClick: () -> Unit, onHomeClick: () -> Unit) {
     val selectedDate by viewModel.selectedDate.collectAsState()
 
-    // Formatting date beautifully like the design theme: Thursday, October 24
-    val formattedDate = remember(selectedDate) {
+    val parsedDate = remember(selectedDate) {
         try {
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(selectedDate)
-            if (date != null) {
-                val gregorian = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(date)
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedDate)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    val formattedDate = remember(selectedDate, parsedDate) {
+        val date = parsedDate
+        if (date != null) {
+            try {
+                val gregorian = SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(date)
                 val persian = com.example.core.utils.PersianCalendarHelper.getPersianDateString(date)
                 "$gregorian ($persian)"
-            } else {
+            } catch (e: Exception) {
                 selectedDate
             }
-        } catch (e: Exception) {
+        } else {
             selectedDate
         }
     }
 
-    val formattedDayOfWeek = remember(selectedDate) {
-        try {
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(selectedDate)
-            if (date != null) {
-                val gregorianDay = SimpleDateFormat("EEEE", Locale.getDefault()).format(date).uppercase()
+    val formattedDayOfWeek = remember(selectedDate, parsedDate) {
+        val date = parsedDate
+        if (date != null) {
+            try {
+                val gregorianDay = SimpleDateFormat("EEEE", Locale.US).format(date).uppercase()
                 val persianDay = com.example.core.utils.PersianCalendarHelper.getPersianDayOfWeekName(selectedDate).uppercase()
                 if (persianDay.isNotEmpty()) {
                     "$gregorianDay / $persianDay"
                 } else {
                     gregorianDay
                 }
-            } else {
+            } catch (e: Exception) {
                 "PLANNER"
             }
-        } catch (e: Exception) {
+        } else {
             "PLANNER"
         }
     }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = formattedDayOfWeek,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.5.sp
-                )
-                Text(
-                    text = formattedDate,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Light,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-
-            HeaderActions(
-                onHomeClick = onHomeClick,
-                onSettingsClick = onSettingsClick,
-                modifier = Modifier.padding(top = 2.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = formattedDayOfWeek,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp
+            )
+            Text(
+                text = formattedDate,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
+
+        HeaderActions(
+            onHomeClick = onHomeClick,
+            onSettingsClick = onSettingsClick,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+    }
 }
 
 @Composable
