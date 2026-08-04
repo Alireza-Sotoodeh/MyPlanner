@@ -101,6 +101,12 @@ fun DiaryScreen(
             IconButton(onClick = { saveNow(); onBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
+            IconButton(
+                onClick = { showDeleteConfirm = true },
+                enabled = entry != null || content.isNotBlank() || title.isNotBlank()
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+            }
             Text(
                 text = "DIARY",
                 fontSize = 11.sp,
@@ -109,11 +115,8 @@ fun DiaryScreen(
                 letterSpacing = 1.5.sp,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(
-                onClick = { showDeleteConfirm = true },
-                enabled = entry != null || content.isNotBlank() || title.isNotBlank()
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+            IconButton(onClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }) {
+                Icon(Icons.Default.Home, contentDescription = "Home", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
             IconButton(onClick = { showSettingsDialog = true }) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
