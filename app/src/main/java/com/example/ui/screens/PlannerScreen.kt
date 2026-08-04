@@ -138,6 +138,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,6 +156,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.core.database.entity.TaskEntity
 import com.example.core.database.entity.TodoEntity
 import com.example.core.database.entity.IdeaEntity
@@ -178,6 +182,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.net.Uri
 import android.media.RingtoneManager
+import android.Manifest
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.ColumnScope
@@ -189,6 +194,10 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.DoNotDisturb
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -3612,12 +3621,27 @@ fun SettingsDialog(
 
     var statusMessage by remember { mutableStateOf("") }
     var isSuccessStatus by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+
+    // Permission states for the Permissions card
+    var permHasNotification by remember { mutableStateOf(viewModel.hasNotificationPermission(context)) }
+    var permHasExactAlarm by remember { mutableStateOf(viewModel.hasExactAlarmPermission(context)) }
+    var permHasUsageStats by remember { mutableStateOf(viewModel.hasUsageStatsPermission(context)) }
+    var permHasDndAccess by remember { mutableStateOf(viewModel.checkNotificationPolicyPermission(context)) }
+    var permHasFullScreenIntent by remember { mutableStateOf(viewModel.hasFullScreenIntentPermission(context)) }
+    var permHasManageStorage by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) android.os.Environment.isExternalStorageManager()
+            else true
+        )
+    }
+    var notificationPermanentlyDenied by remember { mutableStateOf(false) }
+
     var showRestoreMonthPicker by remember { mutableStateOf(false) }
     var restoreMonths by remember { mutableStateOf<List<String>>(emptyList()) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var pendingRestoreMonth by remember { mutableStateOf("") }
     val isSyncing by viewModel.isSyncing.collectAsState()
-    val context = LocalContext.current
 
     // Launcher for backup folder picker
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -3645,6 +3669,79 @@ fun SettingsDialog(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.refreshBackupWritable()
+    }
+
+    // Permission launchers for the Permissions card
+    val permNotificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permHasNotification = granted
+            if (!granted) {
+                val activity = context as? android.app.Activity
+                if (activity != null && !androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(
+                        activity, Manifest.permission.POST_NOTIFICATIONS
+                    )
+                ) {
+                    notificationPermanentlyDenied = true
+                }
+            }
+        }
+    }
+
+    val permExactAlarmLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        permHasExactAlarm = viewModel.hasExactAlarmPermission(context)
+    }
+
+    val permUsageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        permHasUsageStats = viewModel.hasUsageStatsPermission(context)
+    }
+
+    val permDndLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        permHasDndAccess = viewModel.checkNotificationPolicyPermission(context)
+    }
+
+    val permFullScreenLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            permHasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
+        }
+    }
+
+    val permManageStorageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        permHasManageStorage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else true
+    }
+
+    // Refresh permission states when returning from settings
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permHasNotification = viewModel.hasNotificationPermission(context)
+                permHasExactAlarm = viewModel.hasExactAlarmPermission(context)
+                permHasUsageStats = viewModel.hasUsageStatsPermission(context)
+                permHasDndAccess = viewModel.checkNotificationPolicyPermission(context)
+                if (Build.VERSION.SDK_INT >= 34) {
+                    permHasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
+                }
+                permHasManageStorage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    android.os.Environment.isExternalStorageManager()
+                } else true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Formatted last backup time
@@ -4146,7 +4243,159 @@ fun SettingsDialog(
                 )
             }
 
-            // 2. Timer & Focus
+            // 2. Permissions status
+            run {
+                val requiredGranted = (if (permHasNotification) 1 else 0) +
+                    (if (permHasExactAlarm) 1 else 0) +
+                    (if (permHasUsageStats) 1 else 0) +
+                    (if (permHasDndAccess) 1 else 0) +
+                    (if (Build.VERSION.SDK_INT >= 34 && permHasFullScreenIntent) 1 else 0)
+                val totalRequired = 4 + if (Build.VERSION.SDK_INT >= 34) 1 else 0
+                val allGranted = requiredGranted == totalRequired
+                val statusColor = if (allGranted) Color(0xFF4CAF50) else Color(0xFFE53935)
+
+                SettingsCard(title = "PERMISSIONS") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (allGranted) Icons.Default.CheckCircle else Icons.Default.Close,
+                            contentDescription = null,
+                            tint = statusColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "$requiredGranted/$totalRequired required permissions granted",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = statusColor
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    PermissionItem(
+                        title = "Notifications",
+                        description = "Task reminders and pomodoro alerts",
+                        icon = Icons.Default.Notifications,
+                        isGranted = permHasNotification,
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                if (notificationPermanentlyDenied) {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = android.net.Uri.parse("package:${context.packageName}")
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                } else {
+                                    permNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
+                        },
+                        buttonText = if (notificationPermanentlyDenied) "SETTINGS" else "GRANT"
+                    )
+
+                    PermissionItem(
+                        title = "Exact Alarms",
+                        description = "Precise timer and event notifications",
+                        icon = Icons.Default.Alarm,
+                        isGranted = permHasExactAlarm,
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                try {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                            data = android.net.Uri.parse("package:${context.packageName}")
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                    )
+                                } catch (_: Exception) { }
+                            }
+                        }
+                    )
+
+                    PermissionItem(
+                        title = "Usage Access",
+                        description = "Screen time tracking in stats",
+                        icon = Icons.Default.Analytics,
+                        isGranted = permHasUsageStats,
+                        onClick = {
+                            try {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                )
+                            } catch (_: Exception) { }
+                        }
+                    )
+
+                    PermissionItem(
+                        title = "Do Not Disturb",
+                        description = "Pomodoro DND management",
+                        icon = Icons.Default.DoNotDisturb,
+                        isGranted = permHasDndAccess,
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                try {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                    )
+                                } catch (_: Exception) { }
+                            }
+                        }
+                    )
+
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        PermissionItem(
+                            title = "Full-Screen Alerts",
+                            description = "Pomodoro completion screen automatically",
+                            icon = Icons.Default.OpenInFull,
+                            isGranted = permHasFullScreenIntent,
+                            onClick = {
+                                try {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                                            data = android.net.Uri.parse("package:${context.packageName}")
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                    )
+                                } catch (_: Exception) { }
+                            }
+                        )
+                    }
+
+                    PermissionItem(
+                        title = "Backup Storage (Optional)",
+                        description = "Folder for automated backups",
+                        icon = Icons.Default.Backup,
+                        isGranted = backupLocationUri != null,
+                        onClick = { folderPickerLauncher.launch(null) },
+                        buttonText = "CHOOSE"
+                    )
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        PermissionItem(
+                            title = "All Files Access (Optional)",
+                            description = "Fallback when SAF is unavailable",
+                            icon = Icons.Default.Folder,
+                            isGranted = permHasManageStorage,
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                }
+                                try {
+                                    permManageStorageLauncher.launch(intent)
+                                } catch (_: Exception) { }
+                            },
+                            buttonText = "GRANT"
+                        )
+                    }
+                }
+            }
+
+            // 3. Timer & Focus
             SettingsCard(title = "TIMER & FOCUS") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
