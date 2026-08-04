@@ -4448,6 +4448,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
     var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
     var expandAllIdeas by remember { mutableStateOf(true) }
+    var showIdeaBreakdown by remember { mutableStateOf(false) }
 
     var draggingIdeaId by remember { mutableStateOf<Long?>(null) }
     var dragOffsetX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
@@ -4528,11 +4529,6 @@ private fun IdeasTab(viewModel: MainViewModel) {
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                        Text(
-                            "${filteredIdeas.size} ideas",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                         IconButton(
                             onClick = { expandAllIdeas = !expandAllIdeas },
                             modifier = Modifier.size(24.dp)
@@ -4543,6 +4539,54 @@ private fun IdeasTab(viewModel: MainViewModel) {
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
+                        }
+                        Box {
+                            Text(
+                                "${filteredIdeas.size} ideas",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.clickable { showIdeaBreakdown = true }
+                            )
+                            DropdownMenu(
+                                expanded = showIdeaBreakdown,
+                                onDismissRequest = { showIdeaBreakdown = false }
+                            ) {
+                                if (ideas.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("No ideas", fontSize = 13.sp) },
+                                        onClick = { showIdeaBreakdown = false }
+                                    )
+                                } else {
+                                    val ideasByGroup = ideas.groupBy { it.groupId }
+                                    val groupsWithIdeas = groups.filter { group ->
+                                        ideasByGroup[group.id]?.isNotEmpty() == true
+                                    }
+                                    val ungroupedCount = ideasByGroup[null]?.size ?: 0
+                                    groupsWithIdeas.forEach { group ->
+                                        val count = ideasByGroup[group.id]?.size ?: 0
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .background(Color(group.color), CircleShape)
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("${group.name} ($count)", fontSize = 13.sp)
+                                                }
+                                            },
+                                            onClick = { showIdeaBreakdown = false }
+                                        )
+                                    }
+                                    if (ungroupedCount > 0) {
+                                        DropdownMenuItem(
+                                            text = { Text("No group ($ungroupedCount)", fontSize = 13.sp) },
+                                            onClick = { showIdeaBreakdown = false }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
