@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -910,57 +911,113 @@ private fun TemplateSelector(
     onSelectedTemplateIdChange: (Long?) -> Unit,
     onManageClick: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedTemplate = templates.find { it.id == selectedTemplateId }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "TEMPLATE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = onManageClick,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier.height(28.dp)
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = "Manage", modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(2.dp))
+                Text("Manage", fontSize = 11.sp)
+            }
+        }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Box(modifier = Modifier.weight(1f)) {
-            OutlinedTextField(
-                value = selectedTemplate?.name ?: "Select template...",
-                onValueChange = {},
-                readOnly = true,
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (templates.isEmpty()) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = true },
-                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                singleLine = true,
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = MaterialTheme.colorScheme.outline,
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
-        }
-            Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onManageClick() },
+                    .height(44.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Manage templates", modifier = Modifier.size(18.dp))
-            }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("Custom (no template)", fontSize = 14.sp) },
-                onClick = {
-                    onSelectedTemplateIdChange(null)
-                    expanded = false
-                }
-            )
-            templates.forEach { template ->
-                DropdownMenuItem(
-                    text = { Text(template.name, fontSize = 14.sp) },
-                    onClick = {
-                        onSelectedTemplateIdChange(template.id)
-                        expanded = false
-                    }
+                Text(
+                    text = "No templates yet — tap Manage to create one",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                // Custom option
+                TemplateChip(
+                    label = "Custom",
+                    subtitle = null,
+                    isSelected = selectedTemplateId == null,
+                    onClick = { onSelectedTemplateIdChange(null) }
+                )
+                templates.forEach { template ->
+                    TemplateChip(
+                        label = template.name,
+                        subtitle = "${template.focusMinutes}m focus",
+                        isSelected = template.id == selectedTemplateId,
+                        onClick = { onSelectedTemplateIdChange(template.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TemplateChip(
+    label: String,
+    subtitle: String?,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+        border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+        else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isSelected) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            Column {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
