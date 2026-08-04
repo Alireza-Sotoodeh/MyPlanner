@@ -3829,7 +3829,7 @@ class MainViewModel(
             try {
                 val section = learnRepository.getSectionById(sectionId) ?: return@launch
                 val task = taskRepository.getTaskById(taskId) ?: return@launch
-                val today = _todayDate.value
+                val completionDate = task.date
 
                 val newStage = if (rating == "HARD") {
                     (section.reviewStage - 1).coerceAtLeast(0)
@@ -3841,12 +3841,12 @@ class MainViewModel(
                     learnRepository.updateSection(section.copy(
                         status = "MASTERED",
                         reviewStage = 5,
-                        lastReviewDate = today,
+                        lastReviewDate = completionDate,
                         nextReviewDate = null,
                         reviewTaskId = null
                     ))
                 } else {
-                    val nextDate = addDays(today, LEITNER_INTERVALS[newStage])
+                    val nextDate = addDays(completionDate, LEITNER_INTERVALS[newStage])
                     val newReviewTaskId = taskRepository.insertTask(TaskEntity(
                         title = task.title.replace("📖", "🔄"),
                         date = nextDate,
@@ -3860,7 +3860,7 @@ class MainViewModel(
                     learnRepository.updateSection(section.copy(
                         status = "IN_REVIEW",
                         reviewStage = newStage,
-                        lastReviewDate = today,
+                        lastReviewDate = completionDate,
                         nextReviewDate = nextDate,
                         reviewTaskId = newReviewTaskId
                     ))
@@ -3908,11 +3908,11 @@ class MainViewModel(
                 }
             }
         } else if (original.status != "COMPLETED" && updated.status == "COMPLETED") {
-            val today = _todayDate.value
+            val completionDate = updated.date
             val learnItem = learnRepository.getItemById(section.learnItemId)
             when (updated.label) {
                 "Study" -> {
-                    val nextDate = addDays(today, LEITNER_INTERVALS[0])
+                    val nextDate = addDays(completionDate, LEITNER_INTERVALS[0])
                     val reviewTaskId = taskRepository.insertTask(TaskEntity(
                         title = updated.title.replace("📖", "🔄"),
                         date = nextDate,
@@ -3926,7 +3926,7 @@ class MainViewModel(
                     learnRepository.updateSection(section.copy(
                         status = "IN_REVIEW",
                         reviewStage = 0,
-                        lastReviewDate = today,
+                        lastReviewDate = completionDate,
                         nextReviewDate = nextDate,
                         reviewTaskId = reviewTaskId
                     ))
