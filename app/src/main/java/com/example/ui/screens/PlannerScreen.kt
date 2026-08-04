@@ -117,6 +117,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -3486,6 +3488,12 @@ fun SettingsDialog(
     val reviewReminderEnabled by viewModel.reviewReminderEnabled.collectAsState()
     var enteredReviewTime by remember { mutableStateOf(reviewReminderTime) }
     var enteredReviewEnabled by remember { mutableStateOf(reviewReminderEnabled) }
+    var showReviewTimePicker by remember { mutableStateOf(false) }
+    val reviewTimePickerState = rememberTimePickerState(
+        initialHour = enteredReviewTime.substringBefore(":").toIntOrNull() ?: 21,
+        initialMinute = enteredReviewTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
 
     val context = LocalContext.current
     val notificationManager = remember { context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager }
@@ -3787,9 +3795,7 @@ fun SettingsDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Reminder Time:", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                            TextButton(onClick = {
-                                // Open time picker
-                            }) {
+                            TextButton(onClick = { showReviewTimePicker = true }) {
                                 Text(enteredReviewTime, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -3850,6 +3856,25 @@ fun SettingsDialog(
         },
         shape = RoundedCornerShape(24.dp)
     )
+
+    if (showReviewTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showReviewTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = reviewTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = reviewTimePickerState.hour
+                    val min = reviewTimePickerState.minute
+                    enteredReviewTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showReviewTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReviewTimePicker = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 private enum class TodoTabFilter { ALL, PENDING, DONE }
