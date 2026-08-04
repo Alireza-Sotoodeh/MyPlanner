@@ -273,6 +273,7 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             ) {
                 Text("Skip, I'll grant later", fontSize = 14.sp)
             }
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

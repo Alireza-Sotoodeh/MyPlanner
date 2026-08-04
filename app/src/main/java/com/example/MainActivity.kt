@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
 
                 val context = LocalContext.current
                 var showPermissions by rememberSaveable { mutableStateOf(
-                    !viewModel.hasSkippedPermissionsGate() && !viewModel.hasAllRequiredPermissions(context)
+                    !viewModel.hasSkippedPermissionsGate()
                 ) }
 
                 val currentUndoEntry = undoStack.lastOrNull()
