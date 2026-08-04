@@ -2203,23 +2203,6 @@ jsonString = backupFile.readText()
             }
         }
 
-        // Prepopulate with a mock habit if empty
-        viewModelScope.launch {
-            val currentHabits = habitRepository.allHabits.first()
-            if (currentHabits.isEmpty()) {
-                habitRepository.insertHabit(HabitEntity(name = "Hydration (Glasses of Water)", type = "QUANTITATIVE", target = 8f, unit = "glasses"))
-                habitRepository.insertHabit(HabitEntity(name = "Morning Meditation (15m)", type = "BINARY", target = 1f, unit = "times"))
-                habitRepository.insertHabit(HabitEntity(name = "Read 10 Pages", type = "BINARY", target = 1f, unit = "times"))
-            }
-
-            val currentTasks = taskRepository.getAllTasks().first()
-            if (currentTasks.isEmpty()) {
-                val today = getTodayDateString()
-                taskRepository.insertTask(TaskEntity(title = "Sync Google Sheets Context", description = "Review and fetch life coach profile contexts.", date = today, type = "TASK", durationMinutes = 25, priority = 1))
-                taskRepository.insertTask(TaskEntity(title = "Morning Stretch & Meditation", description = "Mindfulness ritual for 15 minutes.", date = today, type = "EVENT", durationMinutes = 15, priority = 2))
-                taskRepository.insertTask(TaskEntity(title = "Refactor Local Room Models", description = "Polish entities and custom DAOs.", date = today, type = "TASK", durationMinutes = 50, priority = 3))
-            }
-        }
 
         // Initialize today's motto
         refreshTodayMotto()
