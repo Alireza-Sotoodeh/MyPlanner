@@ -25,6 +25,21 @@
 
 ---
 
+## Installation
+
+[![Latest Release](https://img.shields.io/github/v/release/Alireza-Sotoodeh/MyPlanner?label=Latest%20Release)](https://github.com/Alireza-Sotoodeh/MyPlanner/releases/latest)
+
+Download the latest APK from [GitHub Releases](https://github.com/Alireza-Sotoodeh/MyPlanner/releases/latest):
+
+1. Download `app-release.apk` from the latest release
+2. Open the APK on your Android device
+3. Enable **"Install from unknown sources"** if prompted
+4. Tap **Install**
+
+> **Note:** MyPlanner is not on the Play Store. You will need to enable installation from unknown sources in your device settings.
+
+---
+
 ## Architecture
 
 ### High-Level Flow
