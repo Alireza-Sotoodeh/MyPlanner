@@ -3421,29 +3421,33 @@ jsonString = backupFile.readText()
                 )
 
                 val packageManager = context.packageManager
-                val allItems = stats
+
+                // Group by packageName to avoid double-counting multiple processes of the same app
+                val aggregatedItems = stats
                     .filter { it.totalTimeInForeground > 0 }
-                    .mapNotNull { stat ->
-                        val mins = stat.totalTimeInForeground / (1000 * 60)
+                    .groupBy { it.packageName }
+                    .mapNotNull { (packageName, entries) ->
+                        val totalTime = entries.sumOf { it.totalTimeInForeground }
+                        val mins = totalTime / (1000 * 60)
                         if (mins <= 0) return@mapNotNull null
-                        val label = appLabelCache.getOrPut(stat.packageName) {
+                        val label = appLabelCache.getOrPut(packageName) {
                             try {
-                                val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
+                                val appInfo = packageManager.getApplicationInfo(packageName, 0)
                                 packageManager.getApplicationLabel(appInfo).toString()
                             } catch (_: Exception) {
-                                stat.packageName
+                                packageName
                             }
                         }
                         AppUsageItem(
                             appName = label,
-                            packageName = stat.packageName,
+                            packageName = packageName,
                             durationMinutes = mins
                         )
                     }
                     .sortedByDescending { it.durationMinutes }
 
-                val topItems = allItems.take(6)
-                val total = allItems.sumOf { it.durationMinutes }
+                val topItems = aggregatedItems.take(6)
+                val total = aggregatedItems.sumOf { it.durationMinutes }
 
                 _appUsageItems.value = topItems
                 _totalScreenTimeMinutes.value = total
