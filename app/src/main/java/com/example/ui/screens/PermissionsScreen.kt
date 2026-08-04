@@ -69,11 +69,6 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 hasUsageStats = viewModel.hasUsageStatsPermission(context)
                 hasDndAccess = viewModel.checkNotificationPolicyPermission(context)
                 hasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
-
-                if (hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent) {
-                    continueClicked = true
-                    onAllPermissionsGranted()
-                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

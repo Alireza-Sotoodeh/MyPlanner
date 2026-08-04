@@ -75,11 +75,7 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.MainViewModelFactory
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -142,21 +138,9 @@ class MainActivity : ComponentActivity() {
                 val undoStack by viewModel.undoStack.collectAsState()
 
                 val context = LocalContext.current
-                val lifecycleOwner = LocalLifecycleOwner.current
                 var showPermissions by remember { mutableStateOf(
                     !viewModel.hasSkippedPermissionsGate() && !viewModel.hasAllRequiredPermissions(context)
                 ) }
-
-                DisposableEffect(lifecycleOwner) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) {
-                            val skipped = viewModel.hasSkippedPermissionsGate()
-                            showPermissions = !skipped && !viewModel.hasAllRequiredPermissions(context)
-                        }
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-                }
 
                 val currentUndoEntry = undoStack.lastOrNull()
                 val remaining = currentUndoEntry?.let {
