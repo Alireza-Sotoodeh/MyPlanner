@@ -26,7 +26,7 @@ fun FastPomodoroSetupDialog(
     val templates by viewModel.timerTemplates.collectAsState()
 
     var selectedTemplateId by remember { mutableStateOf<Long?>(null) }
-    var focusMinutes by remember(task) { mutableIntStateOf(task.durationMinutes) }
+    var focusMinutes by remember(task) { mutableIntStateOf(task.durationMinutes.takeIf { it > 0 } ?: 25) }
     var shortBreakMinutes by remember(task) { mutableStateOf<Int?>(task.breakMinutes) }
     var longBreakMinutes by remember(task) { mutableStateOf<Int?>(null) }
     var targetSessions by remember(task) { mutableStateOf<Int?>(task.targetSessions) }

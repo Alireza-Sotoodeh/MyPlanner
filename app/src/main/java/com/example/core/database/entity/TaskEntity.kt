@@ -11,7 +11,7 @@ data class TaskEntity(
     val date: String, // "yyyy-MM-dd" for daily planner, "yyyy-MM" for monthly, "yyyy-Www" for weekly
     val status: String = "PENDING", // PENDING, COMPLETED, MIGRATED, CANCELLED
     val type: String = "TASK", // TASK (•), EVENT (o), NOTE (-)
-    val durationMinutes: Int = 25, // custom Pomodoro duration
+    val durationMinutes: Int = 0, // custom Pomodoro duration (0 = unset, use Pomodoro/Chronometer)
     val pomodorosCompleted: Int = 0,
     val priority: Int = 0, // ordering within the day
     val label: String = "", // labeling system (e.g., Work, Personal, Health, Study, etc.)

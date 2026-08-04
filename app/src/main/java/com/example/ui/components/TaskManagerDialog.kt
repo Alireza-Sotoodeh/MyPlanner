@@ -1298,7 +1298,7 @@ fun TaskManagerDialog(
                                 description = description,
                                 date = selectedDate,
                                 type = type,
-                                duration = 25,
+                                duration = 0,
                                 label = selectedLabel?.first ?: "",
                                 labelColor = selectedLabel?.second,
                                 subtasks = subtasks.toList(),

@@ -1009,8 +1009,8 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                     task = task,
                                     onDismiss = { showInteractDialog = false },
                                     onMarkAsDone = { viewModel.toggleTaskCompletion(task) },
-                                    onMarkAsDoneWithDuration = { duration ->
-                                        viewModel.completeTaskWithManualDuration(task, duration)
+                                    onLogTime = { duration, sh, sm, eh, em ->
+                                        viewModel.completeTaskWithManualDuration(task, duration, sh, sm, eh, em)
                                     },
                                     onStartPomodoro = {
                                         viewModel.setPreSelectedTaskForTimer(task.id)
@@ -1092,8 +1092,8 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                             task = task,
                                             onDismiss = { showInteractDialog = false },
                                             onMarkAsDone = { viewModel.toggleTaskCompletion(task) },
-                                            onMarkAsDoneWithDuration = { duration ->
-                                                viewModel.completeTaskWithManualDuration(task, duration)
+                                            onLogTime = { duration, sh, sm, eh, em ->
+                                                viewModel.completeTaskWithManualDuration(task, duration, sh, sm, eh, em)
                                             },
                                             onStartPomodoro = {
                                                 viewModel.setPreSelectedTaskForTimer(task.id)
@@ -3066,11 +3066,70 @@ fun TaskInteractionDialog(
     task: TaskEntity,
     onDismiss: () -> Unit,
     onMarkAsDone: () -> Unit,
-    onMarkAsDoneWithDuration: (Int) -> Unit,
-    onStartPomodoro: () -> Unit
+    onStartPomodoro: () -> Unit,
+    onLogTime: (durationMinutes: Int, startHour: Int?, startMinute: Int?, endHour: Int?, endMinute: Int?) -> Unit = { _, _, _, _, _ -> }
 ) {
-    var showCustomDurationInput by remember { mutableStateOf(false) }
-    var enteredDuration by remember { mutableStateOf("25") }
+    var showTimeLogInput by remember { mutableStateOf(false) }
+    var enteredDuration by remember { mutableStateOf("0") }
+    var startHour by remember { mutableStateOf<Int?>(null) }
+    var startMinute by remember { mutableStateOf<Int?>(null) }
+    var endHour by remember { mutableStateOf<Int?>(null) }
+    var endMinute by remember { mutableStateOf<Int?>(null) }
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
+
+    val startPickerState = rememberTimePickerState(
+        initialHour = startHour ?: java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY),
+        initialMinute = startMinute ?: java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE),
+        is24Hour = true
+    )
+    val endPickerState = rememberTimePickerState(
+        initialHour = endHour ?: (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) + 1).coerceAtMost(23),
+        initialMinute = startMinute ?: java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE),
+        is24Hour = true
+    )
+
+    val calculatedDuration = remember(startHour, startMinute, endHour, endMinute) {
+        val sh = startHour; val sm = startMinute; val eh = endHour; val em = endMinute
+        if (sh != null && sm != null && eh != null && em != null) {
+            (eh * 60 + em - sh * 60 - sm).coerceAtLeast(0)
+        } else enteredDuration.toIntOrNull() ?: 0
+    }
+
+    if (showStartPicker) {
+        AlertDialog(
+            onDismissRequest = { showStartPicker = false },
+            title = { Text("Start Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = startPickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    startHour = startPickerState.hour
+                    startMinute = startPickerState.minute
+                    showStartPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartPicker = false }) { Text("Cancel") }
+            }
+        )
+    }
+    if (showEndPicker) {
+        AlertDialog(
+            onDismissRequest = { showEndPicker = false },
+            title = { Text("End Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = endPickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    endHour = endPickerState.hour
+                    endMinute = endPickerState.minute
+                    showEndPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndPicker = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -3113,7 +3172,7 @@ fun TaskInteractionDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
-                if (!showCustomDurationInput) {
+                if (!showTimeLogInput) {
                     Text(
                         text = "How would you like to proceed with this intention?",
                         fontSize = 13.sp,
@@ -3123,7 +3182,6 @@ fun TaskInteractionDialog(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Option 1: Mark as Done
                     Button(
                         onClick = {
                             onMarkAsDone()
@@ -3139,10 +3197,14 @@ fun TaskInteractionDialog(
                         }
                     }
 
-                    // Option 2: Complete & Log Duration
                     OutlinedButton(
                         onClick = {
-                            showCustomDurationInput = true
+                            val now = java.util.Calendar.getInstance()
+                            startHour = startHour ?: now.get(java.util.Calendar.HOUR_OF_DAY)
+                            startMinute = startMinute ?: now.get(java.util.Calendar.MINUTE)
+                            endHour = endHour ?: (now.get(java.util.Calendar.HOUR_OF_DAY) + 1).coerceAtMost(23)
+                            endMinute = endMinute ?: now.get(java.util.Calendar.MINUTE)
+                            showTimeLogInput = true
                         },
                         modifier = Modifier.fillMaxWidth(),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
@@ -3150,11 +3212,10 @@ fun TaskInteractionDialog(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Complete & Log Duration")
+                            Text("Complete & Log Time")
                         }
                     }
 
-                    // Option 3: Start Pomodoro Focus
                     if (task.type == "TASK") {
                         FilledTonalButton(
                             onClick = {
@@ -3173,19 +3234,64 @@ fun TaskInteractionDialog(
                     }
 
                 } else {
-                    // Logging custom duration view
                     Text(
-                        text = "Approximate time spent completing this task (minutes):",
+                        text = "Log time spent on this task:",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("From:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Surface(
+                            onClick = { showStartPicker = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = if (startHour != null) String.format("%02d:%02d", startHour, startMinute) else "--:--",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text("To:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Surface(
+                            onClick = { showEndPicker = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = if (endHour != null) String.format("%02d:%02d", endHour, endMinute) else "--:--",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (calculatedDuration > 0) {
+                        Text(
+                            text = "Duration: ${calculatedDuration}m",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     OutlinedTextField(
                         value = enteredDuration,
                         onValueChange = { enteredDuration = it },
-                        label = { Text("Duration in minutes") },
+                        label = { Text("Manual minutes (0 = no log)") },
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             focusedLabelColor = MaterialTheme.colorScheme.primary
@@ -3197,19 +3303,24 @@ fun TaskInteractionDialog(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = { showCustomDurationInput = false }) {
+                        TextButton(onClick = { showTimeLogInput = false }) {
                             Text("BACK", color = MaterialTheme.colorScheme.primary)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                val mins = enteredDuration.toIntOrNull() ?: 25
-                                onMarkAsDoneWithDuration(mins)
+                                val sh = startHour; val sm = startMinute; val eh = endHour; val em = endMinute
+                                val effectiveDuration = if (sh != null && sm != null && eh != null && em != null) {
+                                    (eh * 60 + em - sh * 60 - sm).coerceAtLeast(0)
+                                } else {
+                                    enteredDuration.toIntOrNull() ?: 0
+                                }
+                                onLogTime(effectiveDuration, sh, sm, eh, em)
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Text("DONE & LOG")
+                            Text(if (calculatedDuration > 0) "DONE & LOG" else "MARK COMPLETE")
                         }
                     }
                 }
@@ -3217,7 +3328,7 @@ fun TaskInteractionDialog(
         },
         confirmButton = {},
         dismissButton = {
-            if (!showCustomDurationInput) {
+            if (!showTimeLogInput) {
                 TextButton(onClick = onDismiss) {
                     Text("CLOSE", color = MaterialTheme.colorScheme.primary)
                 }
@@ -5437,7 +5548,7 @@ private fun AddToPlannerDialog(
     var selectedMode by remember { mutableStateOf("entire") }
     var selectedStageId by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var duration by remember { mutableStateOf("25") }
+    var duration by remember { mutableStateOf("0") }
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
@@ -5542,7 +5653,7 @@ private fun AddToPlannerDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val durationMinutes = duration.toIntOrNull()?.coerceIn(1, 999) ?: 25
+                val durationMinutes = duration.toIntOrNull()?.coerceIn(0, 999) ?: 0
                 if (selectedMode == "single" && selectedStageId != null) {
                     val stage = stages.find { it.id == selectedStageId }
                     if (stage != null) viewModel.addStageToPlanner(stage, date, selectedType, durationMinutes)

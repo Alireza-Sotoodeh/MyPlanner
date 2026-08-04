@@ -388,7 +388,7 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 4. Time Spent by Label (Pie Chart)
+        // 4. Time Spent by Label (Pie Chart) — from actual timer sessions
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -408,38 +408,37 @@ fun StatsScreen(viewModel: MainViewModel) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    val completedTasks = allTasks.filter { it.status == "COMPLETED" }
-                    val labelGroups = completedTasks.groupBy { if (it.label.isBlank()) "Unlabeled" else it.label.uppercase() }
-                    
-                    val labelStats = labelGroups.map { entry ->
-                        val duration = entry.value.sumOf { it.durationMinutes }
-                        val colorLong = entry.value.firstNotNullOfOrNull { it.labelColor }
-                        val color = if (colorLong != null) Color(colorLong) else MaterialTheme.colorScheme.primary
-                        Triple(entry.key, duration, color)
+                    val labelGroups = allTimerSessions.groupBy {
+                        if (it.label.isBlank()) "Unlabeled" else it.label.uppercase()
+                    }
+                    val labelStats = labelGroups.map { (label, sessions) ->
+                        val totalSeconds = sessions.sumOf { it.durationSeconds }
+                        val minutes = totalSeconds / 60
+                        label to minutes
                     }.filter { it.second > 0 }.sortedByDescending { it.second }
 
                     if (labelStats.isEmpty()) {
                         Text(
-                            text = "Complete tasks with durations to see label analytics.",
+                            text = "Use the Timer to log Pomodoro and Chronometer sessions.",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         val totalDuration = labelStats.sumOf { it.second }.toFloat()
-                        val defaultColors = listOf(
+                        val pieColors = listOf(
                             Color(0xFF6750A4), Color(0xFFD0BCFF), Color(0xFF381E72),
-                            Color(0xFFEADDFF), Color(0xFF4F378B), Color(0xFF21005D)
+                            Color(0xFFEADDFF), Color(0xFF4F378B), Color(0xFF21005D),
+                            Color(0xFF625B71), Color(0xFF7C5264), Color(0xFF9580B2)
                         )
-                        
+
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
                                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                                     var startAngle = -90f
                                     labelStats.forEachIndexed { index, stat ->
                                         val sweepAngle = (stat.second / totalDuration) * 360f
-                                        val chartColor = if (stat.first == "UNLABELED") defaultColors[index % defaultColors.size] else stat.third
                                         drawArc(
-                                            color = chartColor,
+                                            color = pieColors[index % pieColors.size],
                                             startAngle = startAngle,
                                             sweepAngle = sweepAngle,
                                             useCenter = true
@@ -448,18 +447,17 @@ fun StatsScreen(viewModel: MainViewModel) {
                                     }
                                 }
                             }
-                            
+
                             Spacer(modifier = Modifier.width(24.dp))
-                            
+
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 labelStats.forEachIndexed { index, stat ->
-                                    val chartColor = if (stat.first == "UNLABELED") defaultColors[index % defaultColors.size] else stat.third
                                     val hours = stat.second / 60
                                     val mins = stat.second % 60
                                     val timeString = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
-                                    
+
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(chartColor))
+                                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(pieColors[index % pieColors.size]))
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
                                             Text(
@@ -483,76 +481,8 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 5. Timer Sessions by Label
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "TIMER SESSIONS BY LABEL",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.5.sp
-                    )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    val labelGroups = allTimerSessions.groupBy {
-                        if (it.label.isBlank()) "Unlabeled" else it.label.uppercase()
-                    }
-                    val labelStats = labelGroups.map { (label, sessions) ->
-                        val totalSeconds = sessions.sumOf { it.durationSeconds }
-                        label to totalSeconds
-                    }.filter { it.second > 0 }.sortedByDescending { it.second }
-
-                    if (labelStats.isEmpty()) {
-                        Text(
-                            text = "Use the Timer to log Pomodoro and Chronometer sessions.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        labelStats.forEach { (label, totalSeconds) ->
-                            val hours = totalSeconds / 3600
-                            val minutes = (totalSeconds % 3600) / 60
-                            val timeString = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                                Text(
-                                    text = timeString,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                        }
-                        val totalSeconds = labelStats.sumOf { it.second }
-                        val totalHours = totalSeconds / 3600
-                        val totalMinutes = (totalSeconds % 3600) / 60
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Total: ${totalHours}h ${totalMinutes}m",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
-
-
-        // 6. Activity Time of Day (24h Timeline)
+        // 6. Activity Time of Day (24h Timeline) — from timer sessions
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -587,8 +517,8 @@ fun StatsScreen(viewModel: MainViewModel) {
                         }.timeInMillis
                     }
 
-                    val todaysTasks = allTasks.filter { it.status == "COMPLETED" && it.createdAt >= todayStart }
-                    
+                    val todaysSessions = allTimerSessions.filter { it.timestamp >= todayStart }
+
                     val primaryColor = MaterialTheme.colorScheme.primary
                     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
                     val onSurfaceColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -596,42 +526,40 @@ fun StatsScreen(viewModel: MainViewModel) {
                     androidx.compose.foundation.Canvas(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp) // Total height including text
+                            .height(48.dp)
                     ) {
                         val canvasWidth = size.width
                         val pieceWidth = canvasWidth / 24f
                         val spacing = 2.dp.toPx()
                         val squareWidth = pieceWidth - spacing
                         val squareHeight = 24.dp.toPx()
-                        
+
                         for (i in 0 until 24) {
                             val xOffset = i * pieceWidth
-                            
-                            // Draw empty square
+
                             drawRect(
                                 color = surfaceVariantColor,
                                 topLeft = androidx.compose.ui.geometry.Offset(xOffset, 0f),
                                 size = androidx.compose.ui.geometry.Size(squareWidth, squareHeight),
                             )
-                            
-                            // Find tasks that overlap with hour i
+
                             val hourStartMin = i * 60
                             val hourEndMin = (i + 1) * 60
-                            
-                            todaysTasks.forEach { task ->
-                                val taskStartMin = ((task.createdAt - todayStart) / 60000L).toInt()
-                                val taskEndMin = taskStartMin + task.durationMinutes
-                                
-                                val overlapStart = maxOf(hourStartMin, taskStartMin)
-                                val overlapEnd = minOf(hourEndMin, taskEndMin)
-                                
+
+                            todaysSessions.forEach { session ->
+                                val sessionStartMin = ((session.timestamp - todayStart) / 60000L).toInt()
+                                val sessionEndMin = sessionStartMin + (session.durationSeconds / 60)
+
+                                val overlapStart = maxOf(hourStartMin, sessionStartMin)
+                                val overlapEnd = minOf(hourEndMin, sessionEndMin)
+
                                 if (overlapStart < overlapEnd) {
                                     val startFraction = (overlapStart - hourStartMin) / 60f
                                     val endFraction = (overlapEnd - hourStartMin) / 60f
-                                    
+
                                     val startX = xOffset + startFraction * squareWidth
                                     val fillWidth = (endFraction - startFraction) * squareWidth
-                                    
+
                                     drawRect(
                                         color = primaryColor,
                                         topLeft = androidx.compose.ui.geometry.Offset(startX, 0f),
@@ -641,8 +569,7 @@ fun StatsScreen(viewModel: MainViewModel) {
                             }
                         }
                     }
-                    
-                    // Hour labels
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween

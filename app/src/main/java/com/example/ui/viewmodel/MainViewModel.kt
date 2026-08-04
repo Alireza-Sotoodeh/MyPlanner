@@ -127,7 +127,11 @@ data class PendingTaskCompletion(
     val task: TaskEntity,
     val subtasks: List<TaskEntity>,
     val durationMinutes: Int = 0,
-    val todoId: Long? = null
+    val todoId: Long? = null,
+    val startHour: Int? = null,
+    val startMinute: Int? = null,
+    val endHour: Int? = null,
+    val endMinute: Int? = null
 )
 
 data class PendingSubTodoCompletion(
@@ -180,9 +184,6 @@ class MainViewModel(
 
     private val _eventReminderSound = MutableStateFlow(prefs.getBoolean("event_reminder_sound", true))
     val eventReminderSound: StateFlow<Boolean> = _eventReminderSound.asStateFlow()
-
-    private val _defaultFocusMinutes = MutableStateFlow(prefs.getInt("default_focus_minutes", 25))
-    val defaultFocusMinutes: StateFlow<Int> = _defaultFocusMinutes.asStateFlow()
 
     private val _defaultBreakMinutes = MutableStateFlow(prefs.getInt("default_break_minutes", 5))
     val defaultBreakMinutes: StateFlow<Int> = _defaultBreakMinutes.asStateFlow()
@@ -656,7 +657,7 @@ class MainViewModel(
         val pending = _pendingTaskCompletion.value ?: return
         _pendingTaskCompletion.value = null
         viewModelScope.launch {
-            val (task, subtasks, durationMinutes, todoId) = pending
+            val (task, subtasks, durationMinutes, todoId, startHour, startMinute, endHour, endMinute) = pending
 
             if (completeChildren) {
                 subtasks.filter { it.status != "COMPLETED" }.forEach {
@@ -664,10 +665,16 @@ class MainViewModel(
                 }
             }
 
-            val updated = if (durationMinutes > 0) {
+            val effectiveDuration = if (startHour != null && startMinute != null && endHour != null && endMinute != null) {
+                (endHour * 60 + endMinute - startHour * 60 - startMinute).coerceAtLeast(0)
+            } else {
+                durationMinutes
+            }
+
+            val updated = if (effectiveDuration > 0) {
                 task.copy(
                     status = "COMPLETED",
-                    durationMinutes = durationMinutes,
+                    durationMinutes = effectiveDuration,
                     pomodorosCompleted = task.pomodorosCompleted + 1
                 )
             } else {
@@ -688,14 +695,16 @@ class MainViewModel(
                 }
             }
 
-            if (durationMinutes > 0) {
+            if (effectiveDuration > 0) {
+                val timestamp = computeStartTimestamp(startHour, startMinute)
                 timerRepository.insertSession(
                     TimerSessionEntity(
                         type = "POMODORO",
                         taskId = task.id,
                         label = task.label,
-                        durationSeconds = durationMinutes * 60,
-                        date = getTodayDateString()
+                        durationSeconds = effectiveDuration * 60,
+                        date = getTodayDateString(),
+                        timestamp = timestamp
                     )
                 )
             }
@@ -1095,7 +1104,7 @@ class MainViewModel(
     // --- Task CRUD Operations ---
     fun addTask(
         title: String, description: String, date: String, type: String = "TASK", 
-        duration: Int = 25, label: String = "", 
+        duration: Int = 0, label: String = "", 
         labelColor: Long? = null, subtasks: List<Pair<String, String>> = emptyList(),
         recurrenceMode: String = "NONE", recurrenceInterval: Int = 1,
         recurrenceDaysOfWeek: String = "", recurrenceEndDate: String? = null,
@@ -1379,18 +1388,34 @@ class MainViewModel(
         }
     }
 
-    fun completeTaskWithManualDuration(task: TaskEntity, durationMinutes: Int) {
+    fun completeTaskWithManualDuration(
+        task: TaskEntity,
+        durationMinutes: Int,
+        startHour: Int? = null,
+        startMinute: Int? = null,
+        endHour: Int? = null,
+        endMinute: Int? = null
+    ) {
         viewModelScope.launch {
+            val effectiveDuration = if (startHour != null && startMinute != null && endHour != null && endMinute != null) {
+                (endHour * 60 + endMinute - startHour * 60 - startMinute).coerceAtLeast(0)
+            } else {
+                durationMinutes
+            }
+
             val subtasks = taskRepository.getSubtasks(task.id)
             val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
             if (incompleteSubtasks.isNotEmpty()) {
                 _pendingTaskCompletion.value = PendingTaskCompletion(
-                    task = task, subtasks = subtasks, durationMinutes = durationMinutes
+                    task = task, subtasks = subtasks,
+                    durationMinutes = effectiveDuration,
+                    startHour = startHour, startMinute = startMinute,
+                    endHour = endHour, endMinute = endMinute
                 )
                 return@launch
             }
             val updated = task.copy(
-                durationMinutes = durationMinutes,
+                durationMinutes = effectiveDuration,
                 status = "COMPLETED",
                 pomodorosCompleted = task.pomodorosCompleted + 1
             )
@@ -1403,15 +1428,19 @@ class MainViewModel(
                 }
             }
 
-            timerRepository.insertSession(
-                TimerSessionEntity(
-                    type = "POMODORO",
-                    taskId = task.id,
-                    label = task.label,
-                    durationSeconds = durationMinutes * 60,
-                    date = getTodayDateString()
+            if (effectiveDuration > 0) {
+                val timestamp = computeStartTimestamp(startHour, startMinute)
+                timerRepository.insertSession(
+                    TimerSessionEntity(
+                        type = "POMODORO",
+                        taskId = task.id,
+                        label = task.label,
+                        durationSeconds = effectiveDuration * 60,
+                        date = getTodayDateString(),
+                        timestamp = timestamp
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -2263,7 +2292,7 @@ class MainViewModel(
         }
     }
 
-    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String, durationMinutes: Int = 25) {
+    fun addIdeaToPlanner(idea: IdeaEntity, date: String, type: String, durationMinutes: Int = 0) {
         viewModelScope.launch {
             try {
                 val parentId = taskRepository.insertTask(
@@ -2308,7 +2337,7 @@ class MainViewModel(
         }
     }
 
-    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String, durationMinutes: Int = 25) {
+    fun addStageToPlanner(stage: IdeaStageEntity, date: String, type: String, durationMinutes: Int = 0) {
         viewModelScope.launch {
             try {
                 val taskId = taskRepository.insertTask(
@@ -2317,7 +2346,7 @@ class MainViewModel(
                         date = date,
                         type = type,
                         label = "IDEA",
-                        durationMinutes = 25,
+                        durationMinutes = durationMinutes,
                         priority = dailyTasks.value.size + 1,
                         priorityLevel = "Medium"
                     )
@@ -2868,7 +2897,20 @@ class MainViewModel(
     fun getTodayDateString(): String {
         return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     }
-    
+
+    private fun computeStartTimestamp(hour: Int?, minute: Int?): Long {
+        return if (hour != null && minute != null) {
+            val cal = java.util.Calendar.getInstance()
+            cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+            cal.set(java.util.Calendar.MINUTE, minute)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            cal.timeInMillis
+        } else {
+            System.currentTimeMillis()
+        }
+    }
+
     private fun getTodayMonthString(): String {
         return java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
     }
