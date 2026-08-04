@@ -239,6 +239,7 @@ fun DiaryScreen(
     }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     DisposableEffect(currentDate) {
         onDispose { saveNow() }
@@ -322,7 +323,19 @@ fun DiaryScreen(
             IconButton(onClick = { navigateDate(-1) }) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
             }
-            Text(formatDisplayDate(currentDate), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            IconButton(
+                onClick = { saveNow(); currentDate = todayDate },
+                enabled = currentDate != todayDate
+            ) {
+                Icon(Icons.Default.Home, contentDescription = "Go to today",
+                    tint = MaterialTheme.colorScheme.primary)
+            }
+            Text(
+                formatDisplayDate(currentDate),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable { saveNow(); showDatePicker = true }
+            )
             IconButton(onClick = { navigateDate(1) }) {
                 Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
             }
@@ -390,5 +403,31 @@ fun DiaryScreen(
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             }
         )
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = try {
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(currentDate)?.time
+                    ?: System.currentTimeMillis()
+            } catch (_: Exception) { System.currentTimeMillis() }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val cal = Calendar.getInstance().apply { timeInMillis = millis }
+                        currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 }
