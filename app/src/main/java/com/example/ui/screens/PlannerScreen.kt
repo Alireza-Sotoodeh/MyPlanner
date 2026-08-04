@@ -2284,7 +2284,9 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
             val dayLabel = if (persianDayLabel.isNotEmpty()) "$gregorianDayLabel / $persianDayLabel" else gregorianDayLabel
             val dateLabelGreg = SimpleDateFormat("MMM d", Locale.getDefault()).format(dateObj ?: Date())
             val persianStr = com.example.core.utils.PersianCalendarHelper.getPersianDateString(dayDate)
-            val dateLabel = "$dateLabelGreg ($persianStr)"
+            val persianParts = persianStr.split(" ")
+            val persianDateLabel = if (persianParts.size >= 3) "${persianParts[0]} ${persianParts[1]}" else persianStr
+            val dateLabel = "$dateLabelGreg ($persianDateLabel)"
 
             val isSelectedDay = dayDate == selectedDate
             val isPast = try {
