@@ -84,6 +84,12 @@ fun TimerScreen(viewModel: MainViewModel) {
     var selectedCategory by remember { mutableStateOf("ALL") }
     var hasAutoSwitched by remember { mutableStateOf(false) }
 
+    LaunchedEffect(templates) {
+        if (selectedTemplateId != null && templates.none { it.id == selectedTemplateId }) {
+            selectedTemplateId = null
+        }
+    }
+
     val preferredTab by viewModel.preferredTimerTab.collectAsState()
 
     // Consume pre-selected task from Planner
@@ -148,8 +154,8 @@ fun TimerScreen(viewModel: MainViewModel) {
                 )
             }
             HeaderActions(
-                onSettingsClick = { },
-                onHomeClick = { }
+                onSettingsClick = { showManageTemplates = true },
+                onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }
             )
         }
 
