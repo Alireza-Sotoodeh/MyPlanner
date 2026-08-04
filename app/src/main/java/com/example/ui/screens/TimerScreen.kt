@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -105,20 +106,29 @@ fun TimerScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
+        // Header (matching other screens: label + title)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Timer",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Column {
+                Text(
+                    text = "TIMER",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.5.sp
+                )
+                Text(
+                    text = "Timer",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Light,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
             HeaderActions(
                 onSettingsClick = { },
                 onHomeClick = { }
@@ -251,120 +261,88 @@ private fun PomodoroTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (!isTimerActive) {
-            // Template selector
-            TemplateSelector(
-                templates = templates,
-                selectedTemplateId = selectedTemplateId,
-                onSelectedTemplateIdChange = { templateId ->
-                    onSelectedTemplateIdChange(templateId)
-                    templateId?.let { id ->
-                        val template = templates.find { it.id == id }
-                        if (template != null) {
-                            onFocusMinutesChange(template.focusMinutes)
-                            onShortBreakMinutesChange(template.shortBreakMinutes)
-                            onLongBreakMinutesChange(template.longBreakMinutes)
-                            onTargetSessionsChange(template.targetSessions)
-                        }
-                    }
-                },
-                onManageClick = { onShowManageTemplatesChange(true) }
-            )
-
-            // Mark complete on finish toggle
-            Row(
-                verticalAlignment = Alignment.CenterVertically
+            // Timer Setup Card (matches StatsScreen card pattern)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
             ) {
-                Checkbox(
-                    checked = markCompleteOnFinish,
-                    onCheckedChange = onMarkCompleteOnFinishChange,
-                    modifier = Modifier.height(32.dp)
-                )
-                Text(
-                    text = "Mark task complete when done",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "TIMER SETUP",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Template selector
+                    TemplateSelector(
+                        templates = templates,
+                        selectedTemplateId = selectedTemplateId,
+                        onSelectedTemplateIdChange = { templateId ->
+                            onSelectedTemplateIdChange(templateId)
+                            templateId?.let { id ->
+                                val template = templates.find { it.id == id }
+                                if (template != null) {
+                                    onFocusMinutesChange(template.focusMinutes)
+                                    onShortBreakMinutesChange(template.shortBreakMinutes)
+                                    onLongBreakMinutesChange(template.longBreakMinutes)
+                                    onTargetSessionsChange(template.targetSessions)
+                                }
+                            }
+                        },
+                        onManageClick = { onShowManageTemplatesChange(true) }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Mark complete on finish toggle
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = markCompleteOnFinish,
+                            onCheckedChange = onMarkCompleteOnFinishChange,
+                            modifier = Modifier.height(32.dp)
+                        )
+                        Text(
+                            text = "Mark task complete when done",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // Custom time controls
+                    TimeControlRow("Focus", focusMinutes, 5, 120, onFocusMinutesChange)
+                    TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
+                    TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
+                    TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
+                }
             }
 
-            // Custom time controls
-            TimeControlRow("Focus", focusMinutes, 5, 120, onFocusMinutesChange)
-            TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
-            TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
-            TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
-        }
+            // Section label for task selector
+            Text(
+                text = "TASK / NOTE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp
+            )
 
-        // Task selector section (below controls, above start button)
-        if (!isTimerActive) {
             TaskSelectorSection(
                 availableTasks = availableTasks,
                 selectedTaskId = selectedTaskId,
                 onSelectedTaskIdChange = onSelectedTaskIdChange,
                 viewModel = viewModel
             )
-        }
 
-            // Timer Display & Controls
-            if (isTimerActive) {
-                // Session info
-                val sessionLabel = if (pomodoroPhase == "FOCUS") "FOCUS" else "BREAK"
-                val targetLabel = pomodoroTargetSessions?.let { "/$it" } ?: "/∞"
-                Text(
-                    text = "$sessionLabel · Session $pomodoroCurrentSession$targetLabel",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-
-                // Timer
-                Text(
-                    text = timeStr,
-                    fontSize = 72.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-
-                // Task name
-                Text(
-                    text = activeTask!!.title,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-
-            // Controls
-            TimerControls(
-                isRunning = isRunning,
-                isPaused = false,
-                onDiscard = { onShowStopConfirmChange(true) },
-                onStartPause = {
-                    if (isRunning) viewModel.pausePomodoro()
-                    else viewModel.resumePomodoro(context)
-                },
-                onStop = { viewModel.stopPomodoroEarly(context) },
-                onMinusOne = { viewModel.adjustPomodoroMinusOne() },
-                isDiscardConfirm = showStopConfirm,
-                onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
-                onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
-            )
-
-            // Task selector (locked while timer runs)
-            TaskSelectorSection(
-                availableTasks = availableTasks,
-                selectedTaskId = selectedTaskId,
-                onSelectedTaskIdChange = onSelectedTaskIdChange,
-                viewModel = viewModel,
-                isLocked = true
-            )
-        } else {
-            // Start button when timer is not active
+            // Start button
             Button(
                 onClick = {
                     val task = selectedTask
@@ -383,12 +361,96 @@ private fun PomodoroTab(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
                 enabled = selectedTask != null || selectedTaskId != null
             ) {
-                Text("Start Focus", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
+        }
+
+        // Timer Display & Controls (active state)
+        if (isTimerActive) {
+            // Timer Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Session info
+                    val sessionLabel = if (pomodoroPhase == "FOCUS") "FOCUS" else "BREAK"
+                    val targetLabel = pomodoroTargetSessions?.let { "/$it" } ?: "/∞"
+                    Text(
+                        text = "$sessionLabel · Session $pomodoroCurrentSession$targetLabel",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Timer
+                    Text(
+                        text = timeStr,
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.Light,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+
+                    // Task name
+                    Text(
+                        text = activeTask!!.title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Controls
+                    TimerControls(
+                        isRunning = isRunning,
+                        isPaused = false,
+                        onDiscard = { onShowStopConfirmChange(true) },
+                        onStartPause = {
+                            if (isRunning) viewModel.pausePomodoro()
+                            else viewModel.resumePomodoro(context)
+                        },
+                        onStop = { viewModel.stopPomodoroEarly(context) },
+                        onMinusOne = { viewModel.adjustPomodoroMinusOne() },
+                        isDiscardConfirm = showStopConfirm,
+                        onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
+                        onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
+                    )
+                }
+            }
+
+            // Section label for task selector
+            Text(
+                text = "TASK / NOTE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp
+            )
+
+            // Task selector (locked while timer runs)
+            TaskSelectorSection(
+                availableTasks = availableTasks,
+                selectedTaskId = selectedTaskId,
+                onSelectedTaskIdChange = onSelectedTaskIdChange,
+                viewModel = viewModel,
+                isLocked = true
+            )
         }
     }
 
@@ -478,6 +540,14 @@ private fun CronometerTab(
         }
 
         // Task selector at bottom
+        Text(
+            text = "TASK / NOTE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
         TaskSelectorSection(
             availableTasks = availableTasks,
             selectedTaskId = selectedTaskId,
@@ -706,13 +776,6 @@ private fun TaskSelectorSection(
     isLocked: Boolean = false
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Task / Note",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
         if (availableTasks.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxWidth().height(72.dp),
@@ -755,34 +818,36 @@ private fun TaskSelectorCard(
 ) {
     val containerColor = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    }
+    val borderStroke = when {
+        isSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+        else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
-                else Modifier
-            )
             .clickable(enabled = !isLocked) { onSelect() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = borderStroke
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Selection checkbox
             Box(
                 modifier = Modifier
                     .size(22.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .border(
                         width = if (isSelected) 0.dp else 1.5.dp,
                         color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(4.dp)
+                        shape = RoundedCornerShape(6.dp)
                     )
                     .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent),
                 contentAlignment = Alignment.Center
@@ -797,12 +862,13 @@ private fun TaskSelectorCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
+            // Task info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = task.title,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -811,21 +877,26 @@ private fun TaskSelectorCard(
                 if (task.label.isNotEmpty()) {
                     Text(
                         text = task.label,
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            IconButton(
-                onClick = onMarkComplete,
-                modifier = Modifier.size(32.dp)
+            // Mark complete button
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                    .clickable { onMarkComplete() },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Default.CheckCircleOutline,
                     contentDescription = "Mark complete",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
