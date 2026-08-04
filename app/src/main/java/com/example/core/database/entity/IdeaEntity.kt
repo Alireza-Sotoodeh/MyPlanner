@@ -21,5 +21,6 @@ data class IdeaEntity(
     val title: String,
     val description: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    val priority: String = "Medium"
 )

@@ -4612,7 +4612,7 @@ private fun IdeasTab(viewModel: MainViewModel) {
             viewModel = viewModel,
             groups = groups,
             onDismiss = { showCreateIdeaDialog = false },
-            onConfirm = { groupId, title, description, stages -> viewModel.addIdea(groupId, title, description, stages); showCreateIdeaDialog = false }
+            onConfirm = { groupId, title, description, stages, priority -> viewModel.addIdea(groupId, title, description, stages, priority); showCreateIdeaDialog = false }
         )
     }
     editingIdea?.let { idea ->
@@ -4624,8 +4624,9 @@ private fun IdeasTab(viewModel: MainViewModel) {
             initialDescription = idea.description,
             initialGroupId = idea.groupId,
             initialStages = ideaStages,
+            initialPriority = idea.priority,
             onDismiss = { editingIdea = null },
-            onConfirm = { groupId, title, description, stages -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description), stages); editingIdea = null }
+            onConfirm = { groupId, title, description, stages, priority -> viewModel.updateIdea(idea.copy(groupId = groupId, title = title, description = description, priority = priority), stages); editingIdea = null }
         )
     }
     showDeleteIdeaConfirm?.let { idea ->
@@ -4785,6 +4786,9 @@ private fun IdeaCard(
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PriorityBadge(idea.priority)
+                    }
                 }
                 Box {
                     IconButton(onClick = { showIdeaMenu = true }, modifier = Modifier.size(32.dp)) {
@@ -4994,13 +4998,15 @@ private fun CreateIdeaDialog(
     initialDescription: String = "",
     initialGroupId: Long? = null,
     initialStages: List<IdeaStageEntity> = emptyList(),
+    initialPriority: String = "Medium",
     onDismiss: () -> Unit,
-    onConfirm: (Long?, String, String, List<IdeaStageEntity>) -> Unit
+    onConfirm: (Long?, String, String, List<IdeaStageEntity>, String) -> Unit
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var description by remember { mutableStateOf(initialDescription) }
     var selectedGroupId by remember { mutableStateOf(initialGroupId) }
     var stages by remember { mutableStateOf(initialStages) }
+    var priority by remember { mutableStateOf(initialPriority) }
     var newStageTitle by remember { mutableStateOf("") }
     var editingStageIndex by remember { mutableStateOf(-1) }
     var editingStageText by remember { mutableStateOf("") }
@@ -5032,6 +5038,17 @@ private fun CreateIdeaDialog(
                     modifier = Modifier.fillMaxWidth().height(100.dp),
                     maxLines = 4
                 )
+
+                Text("How much important is to you?", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Low", "Medium", "High").forEach { p ->
+                        FilterChip(
+                            selected = priority == p,
+                            onClick = { priority = p },
+                            label = { Text(p, fontSize = 12.sp) }
+                        )
+                    }
+                }
 
                 Text("Group:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 LazyRow(
@@ -5184,7 +5201,7 @@ private fun CreateIdeaDialog(
                         if (newStageTitle.isNotBlank()) {
                             mutableStages.add(IdeaStageEntity(ideaId = 0L, title = newStageTitle.trim()))
                         }
-                        onConfirm(selectedGroupId, title.trim(), description.trim(), mutableStages)
+                        onConfirm(selectedGroupId, title.trim(), description.trim(), mutableStages, priority)
                     }
                 },
                 enabled = title.isNotBlank()

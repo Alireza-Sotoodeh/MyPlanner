@@ -1476,13 +1476,13 @@ class MainViewModel(
         }
     }
 
-    fun addIdea(groupId: Long?, title: String, description: String, stages: List<IdeaStageEntity> = emptyList()) {
+    fun addIdea(groupId: Long?, title: String, description: String, stages: List<IdeaStageEntity> = emptyList(), priority: String = "Medium") {
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
                 val allIdeas = ideaRepository.getAllIdeasSync()
                 val nextOrder = (allIdeas.maxOfOrNull { it.sortOrder } ?: -1) + 1
-                val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title.trim(), description = description.trim(), sortOrder = nextOrder))
+                val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title.trim(), description = description.trim(), sortOrder = nextOrder, priority = priority))
                 stages.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
                     ideaRepository.insertStage(s.copy(ideaId = ideaId, orderIndex = i))
                 }
