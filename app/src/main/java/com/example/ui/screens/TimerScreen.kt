@@ -1048,7 +1048,7 @@ private fun HistoryDatePickerDialog(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
         ) {
             IconButton(onClick = { prevMonth() }) {
                 Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, contentDescription = "Previous month")
@@ -1142,7 +1142,7 @@ private fun HistoryCalendarGrid(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = 42.dp)
+        modifier = Modifier.padding(top = 62.dp)
     ) {
         val dayHeaders = if (usePersian) listOf("ج", "پ", "چ", "س", "د", "ی", "ش")
         else listOf("S", "M", "T", "W", "T", "F", "S")
