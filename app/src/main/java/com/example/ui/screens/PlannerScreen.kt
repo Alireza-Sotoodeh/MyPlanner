@@ -151,6 +151,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.example.core.utils.PersianCalendarHelper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 
@@ -228,14 +229,17 @@ fun PlannerScreen(viewModel: MainViewModel) {
                 }
                  2 -> {
                         var showYearOverview by remember { mutableStateOf(true) }
+                        val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
                         if (showYearOverview) {
                             YearOverviewView(
                                 viewModel = viewModel,
+                                usePersianCalendar = usePersianCalendar,
                                 onMonthSelected = { showYearOverview = false }
                             )
                         } else {
                             MonthlyPlannerView(
                                 viewModel = viewModel,
+                                usePersianCalendar = usePersianCalendar,
                                 onBackToYear = { showYearOverview = true }
                             )
                         }
@@ -2422,6 +2426,19 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
 @Composable
 fun YearOverviewView(
     viewModel: MainViewModel,
+    usePersianCalendar: Boolean,
+    onMonthSelected: () -> Unit
+) {
+    if (usePersianCalendar) {
+        PersianYearOverviewView(viewModel, onMonthSelected)
+    } else {
+        GregorianYearOverviewView(viewModel, onMonthSelected)
+    }
+}
+
+@Composable
+private fun GregorianYearOverviewView(
+    viewModel: MainViewModel,
     onMonthSelected: () -> Unit
 ) {
     val selectedYear by viewModel.selectedYear.collectAsState()
@@ -2442,7 +2459,6 @@ fun YearOverviewView(
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // Year Header Navigation
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2491,7 +2507,6 @@ fun YearOverviewView(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Month grid
         if (topLevelTasks.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -2570,9 +2585,150 @@ fun YearOverviewView(
 }
 
 @Composable
-fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onBackToYear: () -> Unit = {}) {
+private fun PersianYearOverviewView(
+    viewModel: MainViewModel,
+    onMonthSelected: () -> Unit
+) {
+    val persianYear by viewModel.persianYear.collectAsState()
+    val persianYearTasks by viewModel.persianYearTasks.collectAsState()
+
+    val topLevelTasks = remember(persianYearTasks) {
+        persianYearTasks.filter { it.parentTaskId == null }
+    }
+
+    val tasksByPersianMonth = remember(topLevelTasks) {
+        topLevelTasks.groupBy { task ->
+            PersianCalendarHelper.getPersianDateParts(task.date).second
+        }.mapValues { it.value.size }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                viewModel.selectPersianMonth(persianYear - 1, 1)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBackIosNew,
+                    contentDescription = "Previous Year",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Text(
+                text = persianYear.toString(),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp
+            )
+
+            IconButton(onClick = {
+                viewModel.selectPersianMonth(persianYear + 1, 1)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForwardIos,
+                    contentDescription = "Next Year",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (topLevelTasks.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No tasks for this year.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                items(12) { index ->
+                    val count = tasksByPersianMonth[index + 1] ?: 0
+
+                    Card(
+                        onClick = {
+                            viewModel.selectPersianMonth(persianYear, index + 1)
+                            onMonthSelected()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (count > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = PersianCalendarHelper.monthAbbreviations[index],
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = count.toString(),
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (count > 0) MaterialTheme.colorScheme.onSurface
+                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthlyPlannerView(
+    viewModel: MainViewModel,
+    usePersianCalendar: Boolean,
+    filterLabel: String? = null,
+    onBackToYear: () -> Unit = {}
+) {
     val selectedMonth by viewModel.selectedMonth.collectAsState()
-    val rawMonthlyTasks by viewModel.monthlyTasks.collectAsState()
+    val persianYear by viewModel.persianYear.collectAsState()
+    val persianMonth by viewModel.persianMonth.collectAsState()
+
+    val rawMonthlyTasks by (
+        if (usePersianCalendar) viewModel.persianMonthTasks else viewModel.monthlyTasks
+    ).collectAsState()
     val monthlyTasks = if (filterLabel != null) rawMonthlyTasks.filter { it.label == filterLabel } else rawMonthlyTasks
 
     val mainTasks = monthlyTasks.filter { it.parentTaskId == null }
@@ -2583,14 +2739,13 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, on
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // Month Header Navigation
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = {
-                viewModel.selectMonth(getOffsetMonthString(selectedMonth, -1))
+                viewModel.navigateMonth(-1)
             }) {
                 Icon(
                     imageVector = Icons.Default.ArrowBackIosNew,
@@ -2600,28 +2755,21 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, on
                 )
             }
 
-            val monthLabel = remember(selectedMonth) {
-                try {
-                    val date = SimpleDateFormat("yyyy-MM", Locale.getDefault()).parse(selectedMonth)
-                    if (date != null) {
-                        val greg = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(date).uppercase()
-                        val persianDateStr = com.example.core.utils.PersianCalendarHelper.getPersianDateString("$selectedMonth-01")
-                        val persianParts = persianDateStr.split(" ")
-                        val persianStr = if (persianParts.size >= 3) {
-                            "${persianParts[1]} ${persianParts.last()}".uppercase()
+            val monthLabel = remember(selectedMonth, persianYear, persianMonth, usePersianCalendar) {
+                if (usePersianCalendar) {
+                    val name = PersianCalendarHelper.monthNames.getOrNull(persianMonth - 1) ?: ""
+                    "${name.uppercase()} $persianYear"
+                } else {
+                    try {
+                        val date = SimpleDateFormat("yyyy-MM", Locale.getDefault()).parse(selectedMonth)
+                        if (date != null) {
+                            SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(date).uppercase()
                         } else {
-                            ""
+                            selectedMonth
                         }
-                        if (persianStr.isNotEmpty()) {
-                            "$greg / $persianStr"
-                        } else {
-                            greg
-                        }
-                    } else {
+                    } catch (e: Exception) {
                         selectedMonth
                     }
-                } catch (e: Exception) {
-                    selectedMonth
                 }
             }
 
@@ -2634,15 +2782,28 @@ fun MonthlyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, on
                 modifier = Modifier.clickable { onBackToYear() }
             )
 
-            IconButton(onClick = {
-                viewModel.selectMonth(getOffsetMonthString(selectedMonth, 1))
-            }) {
-                Icon(
-                    imageVector = Icons.Default.ArrowForwardIos,
-                    contentDescription = "Next Month",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { viewModel.toggleUsePersianCalendar() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = if (usePersianCalendar) "Switch to Western Calendar" else "Switch to Persian Calendar",
+                        tint = if (usePersianCalendar) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(onClick = {
+                    viewModel.navigateMonth(1)
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowForwardIos,
+                        contentDescription = "Next Month",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 

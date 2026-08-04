@@ -41,6 +41,7 @@ import com.example.core.repository.ShopItemRepository
 import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
 import com.example.core.repository.TodoRepository
+import com.example.core.utils.PersianCalendarHelper
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Job
@@ -304,6 +305,8 @@ class MainViewModel(
     private var lastTodayDateString = getTodayDateString()
     private var lastTodayMonthString = getTodayMonthString()
     private var lastTodayYearString = getTodayYearString()
+    private var lastTodayPersianYear = PersianCalendarHelper.getCurrentPersianYear()
+    private var lastTodayPersianMonth = PersianCalendarHelper.getCurrentPersianMonth()
 
     private val dateChangeReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -344,6 +347,15 @@ class MainViewModel(
                 }
             }
 
+            // Same for Persian calendar
+            val newPersianParts = PersianCalendarHelper.getPersianDateParts(newToday)
+            if (_persianYear.value == lastTodayPersianYear && _persianMonth.value == lastTodayPersianMonth) {
+                _persianYear.value = newPersianParts.first
+                _persianMonth.value = newPersianParts.second
+            }
+            lastTodayPersianYear = newPersianParts.first
+            lastTodayPersianMonth = newPersianParts.second
+
             // Reset reviewed_today prefs cache on date change
             val cachedDate = prefs.getString("reviewed_today_date", null)
             if (cachedDate != null && cachedDate != newToday) {
@@ -361,6 +373,16 @@ class MainViewModel(
     private val _selectedYear = MutableStateFlow(getTodayYearString())
     val selectedYear: StateFlow<String> = _selectedYear.asStateFlow()
 
+    // Persian Calendar Toggle
+    private val _usePersianCalendar = MutableStateFlow(prefs.getBoolean("use_persian_calendar", false))
+    val usePersianCalendar: StateFlow<Boolean> = _usePersianCalendar.asStateFlow()
+
+    private val _persianYear = MutableStateFlow(PersianCalendarHelper.getCurrentPersianYear())
+    val persianYear: StateFlow<Int> = _persianYear.asStateFlow()
+
+    private val _persianMonth = MutableStateFlow(PersianCalendarHelper.getCurrentPersianMonth())
+    val persianMonth: StateFlow<Int> = _persianMonth.asStateFlow()
+
     // Tasks for currently selected day
     val dailyTasks: StateFlow<List<TaskEntity>> = _selectedDate.flatMapLatest { date ->
         taskRepository.getTasksForDate(date)
@@ -374,6 +396,20 @@ class MainViewModel(
     // Tasks for currently selected year (used in YearOverviewView)
     val yearTasks: StateFlow<List<TaskEntity>> = _selectedYear.flatMapLatest { year ->
         taskRepository.getTasksForYear(year)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Persian month tasks — queries by Persian month's Gregorian date range
+    val persianMonthTasks: StateFlow<List<TaskEntity>> = combine(_persianYear, _persianMonth) { year, month ->
+        PersianCalendarHelper.getGregorianDateRange(year, month)
+    }.flatMapLatest { (start, end) ->
+        taskRepository.getTasksForDateRange(start, end)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Persian year tasks — full Gregorian range of the Persian year
+    val persianYearTasks: StateFlow<List<TaskEntity>> = _persianYear.flatMapLatest { year ->
+        val start = PersianCalendarHelper.getGregorianDateString(year, 1, 1)
+        val end = PersianCalendarHelper.getGregorianDateString(year + 1, 1, 1)
+        taskRepository.getTasksForDateRange(start, end)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // All Tasks
@@ -697,6 +733,35 @@ class MainViewModel(
 
     fun selectYear(year: String) {
         _selectedYear.value = year
+    }
+
+    fun toggleUsePersianCalendar() {
+        val newValue = !_usePersianCalendar.value
+        if (newValue) {
+            val parts = PersianCalendarHelper.getPersianDateParts("$_selectedMonth-15")
+            _persianYear.value = parts.first
+            _persianMonth.value = parts.second
+        } else {
+            val gregDate = PersianCalendarHelper.getGregorianDateString(_persianYear.value, _persianMonth.value, 15)
+            _selectedMonth.value = gregDate.substring(0, 7)
+        }
+        _usePersianCalendar.value = newValue
+        prefs.edit().putBoolean("use_persian_calendar", newValue).apply()
+    }
+
+    fun navigateMonth(delta: Int) {
+        if (_usePersianCalendar.value) {
+            val (newYear, newMonth) = PersianCalendarHelper.getOffsetPersianMonth(_persianYear.value, _persianMonth.value, delta)
+            _persianYear.value = newYear
+            _persianMonth.value = newMonth
+        } else {
+            _selectedMonth.value = getOffsetMonthString(_selectedMonth.value, delta)
+        }
+    }
+
+    fun selectPersianMonth(year: Int, month: Int) {
+        _persianYear.value = year
+        _persianMonth.value = month
     }
 
     // --- Task CRUD Operations ---
@@ -1920,6 +1985,15 @@ class MainViewModel(
         } else {
             cancelDayReviewAlarm(context)
         }
+    }
+
+    private fun getOffsetMonthString(monthStr: String, offsetMonths: Int): String {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
+        val date = sdf.parse(monthStr) ?: java.util.Date()
+        val cal = java.util.Calendar.getInstance()
+        cal.time = date
+        cal.add(java.util.Calendar.MONTH, offsetMonths)
+        return sdf.format(cal.time)
     }
 
     // Helper utilities for date

@@ -8,6 +8,39 @@ import java.util.Locale
 
 object PersianCalendarHelper {
     private val persianLocale = ULocale("fa_IR@calendar=persian")
+
+    val monthNames = arrayOf(
+        "Farvardin", "Ordibehesht", "Khordad", "Tir", "Mordad", "Shahrivar",
+        "Mehr", "Aban", "Azar", "Dey", "Bahman", "Esfand"
+    )
+
+    val monthAbbreviations = arrayOf(
+        "FAR", "ORD", "KHO", "TIR", "MOR", "SHA",
+        "MEH", "ABA", "AZA", "DEY", "BAH", "ESF"
+    )
+
+    fun getCurrentPersianYear(): Int = getPersianDateParts(
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+    ).first
+
+    fun getCurrentPersianMonth(): Int = getPersianDateParts(
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+    ).second
+
+    fun getGregorianDateRange(persianYear: Int, persianMonth: Int): Pair<String, String> {
+        val startDate = getGregorianDateString(persianYear, persianMonth, 1)
+        val (nextYear, nextMonth) = getOffsetPersianMonth(persianYear, persianMonth, 1)
+        val endDate = getGregorianDateString(nextYear, nextMonth, 1)
+        return Pair(startDate, endDate)
+    }
+
+    fun getOffsetPersianMonth(year: Int, month: Int, delta: Int): Pair<Int, Int> {
+        var m = month + delta
+        var y = year
+        while (m < 1) { m += 12; y -= 1 }
+        while (m > 12) { m -= 12; y += 1 }
+        return Pair(y, m)
+    }
     
     fun getPersianDateString(gregorianDateStr: String): String {
         try {
@@ -28,10 +61,6 @@ object PersianCalendarHelper {
             val month = calendar.get(Calendar.MONTH) + 1
             val day = calendar.get(Calendar.DAY_OF_MONTH)
             
-            val monthNames = arrayOf(
-                "Farvardin", "Ordibehesht", "Khordad", "Tir", "Mordad", "Shahrivar", 
-                "Mehr", "Aban", "Azar", "Dey", "Bahman", "Esfand"
-            )
             val monthName = monthNames.getOrNull(month - 1) ?: month.toString()
             
             return "$day $monthName $year"

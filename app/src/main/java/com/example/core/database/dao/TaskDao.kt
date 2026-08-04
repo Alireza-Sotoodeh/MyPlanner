@@ -18,6 +18,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE date LIKE :yearPrefix || '%' ORDER BY date ASC, priority ASC")
     fun getTasksForYear(yearPrefix: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE date >= :startDate AND date < :endDate ORDER BY date ASC, priority ASC")
+    fun getTasksForDateRange(startDate: String, endDate: String): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM tasks WHERE date >= :startDate AND date < :endDate ORDER BY date ASC, priority ASC")
+    suspend fun getTasksForDateRangeSync(startDate: String, endDate: String): List<TaskEntity>
+
     @Query("SELECT * FROM tasks ORDER BY id DESC")
     fun getAllTasks(): Flow<List<TaskEntity>>
 
