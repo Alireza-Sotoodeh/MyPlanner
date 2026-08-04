@@ -64,7 +64,7 @@ fun UndoBar(
 
     Card(
         modifier = modifier
-            .widthIn(max = 140.dp)
+            .widthIn(max = 180.dp)
             .padding(start = 16.dp, bottom = 4.dp)
             .navigationBarsPadding(),
         shape = RoundedCornerShape(14.dp),
