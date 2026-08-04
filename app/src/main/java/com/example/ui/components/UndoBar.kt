@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -64,7 +63,6 @@ fun UndoBar(
 
     Card(
         modifier = modifier
-            .widthIn(max = 180.dp)
             .padding(start = 16.dp, bottom = 4.dp)
             .navigationBarsPadding(),
         shape = RoundedCornerShape(14.dp),
@@ -99,12 +97,12 @@ fun UndoBar(
             Spacer(Modifier.width(6.dp))
             TextButton(
                 onClick = onRestore,
-                modifier = Modifier.height(28.dp)
+                modifier = Modifier.height(32.dp)
             ) {
                 Text(
                     "Restore",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
