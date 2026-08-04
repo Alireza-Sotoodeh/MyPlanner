@@ -4388,6 +4388,13 @@ private fun IdeasTab(viewModel: MainViewModel) {
     var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
     var expandAllIdeas by remember { mutableStateOf(true) }
 
+    var draggingIdeaId by remember { mutableStateOf<Long?>(null) }
+    var dragOffsetX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var draggedIdeas by remember { mutableStateOf<List<IdeaEntity>?>(null) }
+    val ideaItemHeights = remember { androidx.compose.runtime.mutableStateMapOf<Long, Int>() }
+    val densityD = androidx.compose.ui.platform.LocalDensity.current
+
     var showGroupChips by remember { mutableStateOf(true) }
     val groupChipScrollConnection = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
@@ -4399,8 +4406,9 @@ private fun IdeasTab(viewModel: MainViewModel) {
         }
     }
 
-    val filteredIdeas = if (selectedGroupId == null) ideas
+    val baseFilteredIdeas = if (selectedGroupId == null) ideas
     else ideas.filter { it.groupId == selectedGroupId }
+    val filteredIdeas = draggedIdeas ?: baseFilteredIdeas
 
     Column(
         modifier = Modifier
@@ -4497,14 +4505,82 @@ private fun IdeasTab(viewModel: MainViewModel) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(filteredIdeas, key = { it.id }) { idea ->
-                            IdeaCard(
-                                idea = idea,
-                                expanded = expandAllIdeas,
-                                viewModel = viewModel,
-                                onEdit = { editingIdea = it },
-                                onDelete = { showDeleteIdeaConfirm = it },
-                                onAddToPlanner = { ideaForPlanner = it }
-                            )
+                            Box(modifier = Modifier.animateItem().onGloballyPositioned { ideaItemHeights[idea.id] = it.size.height }) {
+                                IdeaCard(
+                                    idea = idea,
+                                    expanded = expandAllIdeas,
+                                    viewModel = viewModel,
+                                    isDragging = draggingIdeaId == idea.id,
+                                    dragOffsetX = if (draggingIdeaId == idea.id) dragOffsetX else 0f,
+                                    dragOffsetY = if (draggingIdeaId == idea.id) dragOffsetY else 0f,
+                                    onDragStart = {
+                                        draggingIdeaId = idea.id
+                                        dragOffsetX = 0f
+                                        dragOffsetY = 0f
+                                        draggedIdeas = baseFilteredIdeas
+                                    },
+                                    onDrag = { amount ->
+                                        if (draggingIdeaId == idea.id) {
+                                            dragOffsetX += amount.x
+                                            dragOffsetY += amount.y
+                                            val currentList = draggedIdeas
+                                            if (currentList != null) {
+                                                val draggedIndex = currentList.indexOfFirst { it.id == idea.id }
+                                                if (draggedIndex != -1) {
+                                                    val spacing = with(densityD) { 12.dp.toPx() }
+                                                    if (dragOffsetY > 0) {
+                                                        if (draggedIndex < currentList.size - 1) {
+                                                            val nextItem = currentList[draggedIndex + 1]
+                                                            val nextHeight = ideaItemHeights[nextItem.id] ?: 80
+                                                            val threshold = nextHeight / 2f + spacing
+                                                            if (dragOffsetY > threshold) {
+                                                                val mutableList = currentList.toMutableList()
+                                                                mutableList.removeAt(draggedIndex)
+                                                                mutableList.add(draggedIndex + 1, idea)
+                                                                draggedIdeas = mutableList
+                                                                dragOffsetY -= (nextHeight + spacing)
+                                                            }
+                                                        }
+                                                    } else if (dragOffsetY < 0) {
+                                                        if (draggedIndex > 0) {
+                                                            val prevItem = currentList[draggedIndex - 1]
+                                                            val prevHeight = ideaItemHeights[prevItem.id] ?: 80
+                                                            val threshold = -prevHeight / 2f - spacing
+                                                            if (dragOffsetY < threshold) {
+                                                                val mutableList = currentList.toMutableList()
+                                                                mutableList.removeAt(draggedIndex)
+                                                                mutableList.add(draggedIndex - 1, idea)
+                                                                draggedIdeas = mutableList
+                                                                dragOffsetY += (prevHeight + spacing)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        if (draggingIdeaId == idea.id) {
+                                            val originalIndex = baseFilteredIdeas.indexOfFirst { it.id == idea.id }
+                                            val currentList = draggedIdeas
+                                            if (currentList != null && originalIndex != -1) {
+                                                val finalIndex = currentList.indexOfFirst { it.id == idea.id }
+                                                val deltaIndex = finalIndex - originalIndex
+                                                if (deltaIndex != 0) {
+                                                    viewModel.reorderIdea(idea, baseFilteredIdeas, deltaIndex)
+                                                }
+                                            }
+                                            draggingIdeaId = null
+                                            draggedIdeas = null
+                                            dragOffsetX = 0f
+                                            dragOffsetY = 0f
+                                        }
+                                    },
+                                    onEdit = { editingIdea = it },
+                                    onDelete = { showDeleteIdeaConfirm = it },
+                                    onAddToPlanner = { ideaForPlanner = it }
+                                )
+                            }
                         }
                     }
                 }
@@ -4616,12 +4692,18 @@ private fun GroupChipRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun IdeaCard(
     idea: IdeaEntity,
     expanded: Boolean = true,
     viewModel: MainViewModel,
+    isDragging: Boolean = false,
+    dragOffsetX: Float = 0f,
+    dragOffsetY: Float = 0f,
+    onDragStart: (() -> Unit)? = null,
+    onDrag: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
     onEdit: (IdeaEntity) -> Unit,
     onDelete: (IdeaEntity) -> Unit,
     onAddToPlanner: (IdeaEntity) -> Unit
@@ -4638,13 +4720,58 @@ private fun IdeaCard(
     }
     val groupColor = ideaGroup?.color?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
 
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isDragging) 1.04f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "ideaDragScale"
+    )
+
+    val shadowElevation by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isDragging) 12.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "ideaDragShadow"
+    )
+
+    val bgColor = if (isDragging) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp))
+            .zIndex(if (isDragging) 10f else 0f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
+            .shadow(elevation = shadowElevation, shape = RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .background(bgColor)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+            .then(
+                if (onDragStart != null) {
+                    Modifier.pointerInput(idea.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { _ -> onDragStart() },
+                            onDragEnd = { onDragEnd?.invoke() },
+                            onDragCancel = { onDragEnd?.invoke() },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onDrag?.invoke(dragAmount)
+                            }
+                        )
+                    }
+                } else Modifier
+            )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

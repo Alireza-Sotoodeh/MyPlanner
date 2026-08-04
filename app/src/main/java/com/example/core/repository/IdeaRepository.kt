@@ -27,6 +27,8 @@ class IdeaRepository(
 
     fun getAllIdeas(): Flow<List<IdeaEntity>> = ideaDao.getAllIdeas()
 
+    suspend fun getAllIdeasSync(): List<IdeaEntity> = ideaDao.getAllIdeasSync()
+
     suspend fun getIdeaById(id: Long): IdeaEntity? = ideaDao.getIdeaById(id)
 
     suspend fun insertIdea(idea: IdeaEntity): Long = ideaDao.insertIdea(idea)
@@ -37,6 +39,8 @@ class IdeaRepository(
 
     suspend fun moveIdeaToGroup(ideaId: Long, newGroupId: Long?) =
         ideaDao.moveIdeaToGroup(ideaId, newGroupId)
+
+    suspend fun updateIdeaSortOrders(ideas: List<IdeaEntity>) = ideaDao.updateIdeaSortOrders(ideas)
 
     fun getStagesForIdea(ideaId: Long): Flow<List<IdeaStageEntity>> =
         ideaStageDao.getStagesForIdea(ideaId)

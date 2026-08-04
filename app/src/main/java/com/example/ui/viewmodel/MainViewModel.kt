@@ -1480,12 +1480,31 @@ class MainViewModel(
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
-                val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title.trim(), description = description.trim()))
+                val allIdeas = ideaRepository.getAllIdeasSync()
+                val nextOrder = (allIdeas.maxOfOrNull { it.sortOrder } ?: -1) + 1
+                val ideaId = ideaRepository.insertIdea(IdeaEntity(groupId = groupId, title = title.trim(), description = description.trim(), sortOrder = nextOrder))
                 stages.filter { it.title.isNotBlank() }.forEachIndexed { i, s ->
                     ideaRepository.insertStage(s.copy(ideaId = ideaId, orderIndex = i))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add idea", e)
+            }
+        }
+    }
+
+    fun reorderIdea(idea: IdeaEntity, activeIdeas: List<IdeaEntity>, deltaIndex: Int) {
+        viewModelScope.launch {
+            val currentIndex = activeIdeas.indexOf(idea)
+            if (currentIndex == -1) return@launch
+            val newIndex = (currentIndex + deltaIndex).coerceIn(0, activeIdeas.size - 1)
+            if (deltaIndex != 0) {
+                val mutableIdeas = activeIdeas.toMutableList()
+                mutableIdeas.removeAt(currentIndex)
+                mutableIdeas.add(newIndex, idea)
+                val updatedIdeas = mutableIdeas.mapIndexed { index, t ->
+                    t.copy(sortOrder = index)
+                }
+                ideaRepository.updateIdeaSortOrders(updatedIdeas)
             }
         }
     }
