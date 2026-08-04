@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -364,7 +363,7 @@ fun AestheticNavigationBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    Column(modifier = Modifier.navigationBarsPadding()) {
+    Column {
         // Simple single-pixel border at the top of bottom bar
         Spacer(
             modifier = Modifier
@@ -381,23 +380,25 @@ fun AestheticNavigationBar(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val navItems = listOf(
-                NavigationItem("Planner", Icons.Default.Task, 0),
-                NavigationItem("Habits", Icons.Default.Favorite, 1),
-                NavigationItem("Timer", Icons.Default.Timer, 2),
-                NavigationItem("Stats", Icons.Default.Leaderboard, 3),
-                NavigationItem("More", Icons.Default.MoreHoriz, 4)
-            )
+            val navItems = remember {
+                listOf(
+                    NavigationItem("Planner", Icons.Default.Task),
+                    NavigationItem("Habits", Icons.Default.Favorite),
+                    NavigationItem("Timer", Icons.Default.Timer),
+                    NavigationItem("Stats", Icons.Default.Leaderboard),
+                    NavigationItem("More", Icons.Default.MoreHoriz)
+                )
+            }
 
-            navItems.forEach { item ->
-                val isSelected = selectedTab == item.index
+            navItems.forEachIndexed { index, item ->
+                val isSelected = selectedTab == index
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .fillMaxHeight()
-                        .clickable { onTabSelected(item.index) }
+                        .clickable { onTabSelected(index) }
                         .padding(horizontal = 12.dp)
                 ) {
                     Box(
@@ -427,8 +428,7 @@ fun AestheticNavigationBar(
     }
 }
 
-data class NavigationItem(
+private data class NavigationItem(
     val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val index: Int
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
 )

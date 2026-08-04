@@ -225,7 +225,7 @@ class MainViewModel(
     val currentTab: StateFlow<Int> = _currentTab.asStateFlow()
 
     fun selectTab(tab: Int) {
-        _currentTab.value = tab
+        _currentTab.value = tab.coerceIn(0, 4)
     }
 
     // State flows for Settings
