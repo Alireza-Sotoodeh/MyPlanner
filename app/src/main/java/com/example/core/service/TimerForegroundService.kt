@@ -275,44 +275,86 @@ class TimerForegroundService : Service() {
         val current = _state.value
         val isFg = isAppInForeground
 
+        launchPomodoroFinishActivity(current)
+
         if (!isFg) {
-            launchPomodoroFinishActivity(current)
             saveTimerSessionFromCompletion(current)
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            _state.value = TimerServiceState()
-            fireCompletionNotification(current)
-        } else {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            _state.value = current.copy(running = false, completed = true)
         }
 
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        _state.value = if (isFg) current.copy(running = false, completed = true) else TimerServiceState()
+        fireCompletionNotification(current)
         stopSelf()
     }
 
     private fun launchPomodoroFinishActivity(state: TimerServiceState) {
         try {
-            val intent = Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra("phase", state.phase)
-                putExtra("sessionNumber", state.sessionNumber)
-                putExtra("taskTitle", state.taskTitle)
-                putExtra("taskId", state.taskId)
-                putExtra("durationSeconds", state.focusMinutes * 60)
-                putExtra("nextActionLabel", "")
-                putExtra("nextActionMinutes", 0)
-                putExtra("canProceed", false)
-                putExtra("isFinal", false)
-                putExtra("breakDuration", -1)
-
-                val prefs = getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
-                putExtra("ringtoneUri", prefs.getString("pomodoro_ringtone_uri", "") ?: "")
-                putExtra("ringtoneEnabled", prefs.getBoolean("pomodoro_ringtone_enabled", true))
-                putExtra("vibrateEnabled", prefs.getBoolean("pomodoro_vibrate_enabled", true))
-                putExtra("vibratePattern", prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat")
-            }
-            startActivity(intent)
+            startActivity(buildPomodoroFinishIntent(state))
         } catch (e: Exception) {
             Log.e(TAG, "launchPomodoroFinishActivity failed", e)
+        }
+    }
+
+    private fun buildPomodoroFinishIntent(state: TimerServiceState): Intent {
+        val isTargetReached = state.targetSessions != null && state.sessionNumber >= state.targetSessions
+        val isLongBreak = state.sessionNumber % 4 == 0
+        val breakDuration = if (isLongBreak) state.longBreakMinutes else state.shortBreakMinutes
+        val hasBreak = breakDuration != null && breakDuration > 0
+
+        val nextActionLabel: String
+        val nextActionMinutes: Int
+        val canProceed: Boolean
+        val isFinal: Boolean
+
+        if (state.phase == "FOCUS") {
+            if (isTargetReached) {
+                nextActionLabel = ""
+                nextActionMinutes = 0
+                canProceed = false
+                isFinal = true
+            } else {
+                if (hasBreak) {
+                    nextActionLabel = "Start Break (${breakDuration}m)"
+                    nextActionMinutes = breakDuration
+                } else {
+                    nextActionLabel = "Next Focus (${state.focusMinutes}m)"
+                    nextActionMinutes = state.focusMinutes
+                }
+                canProceed = true
+                isFinal = false
+            }
+        } else {
+            if (isTargetReached) {
+                nextActionLabel = ""
+                nextActionMinutes = 0
+                canProceed = false
+                isFinal = true
+            } else {
+                nextActionLabel = "Next Focus (${state.focusMinutes}m)"
+                nextActionMinutes = state.focusMinutes
+                canProceed = true
+                isFinal = false
+            }
+        }
+
+        val prefs = getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+        return Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("phase", state.phase)
+            putExtra("sessionNumber", state.sessionNumber)
+            putExtra("totalSessions", state.targetSessions)
+            putExtra("taskTitle", state.taskTitle)
+            putExtra("taskId", state.taskId)
+            putExtra("durationSeconds", state.focusMinutes * 60)
+            putExtra("nextActionLabel", nextActionLabel)
+            putExtra("nextActionMinutes", nextActionMinutes)
+            putExtra("canProceed", canProceed)
+            putExtra("isFinal", isFinal)
+            putExtra("breakDuration", if (hasBreak) breakDuration else -1)
+            putExtra("ringtoneUri", prefs.getString("pomodoro_ringtone_uri", "") ?: "")
+            putExtra("ringtoneEnabled", prefs.getBoolean("pomodoro_ringtone_enabled", true))
+            putExtra("vibrateEnabled", prefs.getBoolean("pomodoro_vibrate_enabled", true))
+            putExtra("vibratePattern", prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat")
         }
     }
 
@@ -338,25 +380,7 @@ class TimerForegroundService : Service() {
                 notificationManager.createNotificationChannel(channel)
             }
 
-            val activityIntent = Intent(this, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra("phase", state.phase)
-                putExtra("sessionNumber", state.sessionNumber)
-                putExtra("taskTitle", state.taskTitle)
-                putExtra("taskId", state.taskId)
-                putExtra("durationSeconds", state.focusMinutes * 60)
-                putExtra("nextActionLabel", "")
-                putExtra("nextActionMinutes", 0)
-                putExtra("canProceed", false)
-                putExtra("isFinal", false)
-                putExtra("breakDuration", -1)
-
-                val prefs = getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
-                putExtra("ringtoneUri", prefs.getString("pomodoro_ringtone_uri", "") ?: "")
-                putExtra("ringtoneEnabled", prefs.getBoolean("pomodoro_ringtone_enabled", true))
-                putExtra("vibrateEnabled", prefs.getBoolean("pomodoro_vibrate_enabled", true))
-                putExtra("vibratePattern", prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat")
-            }
+            val activityIntent = buildPomodoroFinishIntent(state)
             val pendingIntent = PendingIntent.getActivity(
                 this, 4003, activityIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
