@@ -57,6 +57,18 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  packaging {
+    resources {
+      excludes += listOf(
+        "META-INF/INDEX.LIST",
+        "META-INF/DEPENDENCIES"
+      )
+    }
+  }
+}
+
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 
@@ -100,8 +112,11 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  // implementation(libs.play.services.location)
+  implementation(libs.play.services.auth)
+  implementation(libs.google.api.services.drive)
+  implementation(libs.google.http.client.gson)
   implementation(libs.retrofit)
+  implementation("androidx.work:work-runtime-ktx:2.7.1")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

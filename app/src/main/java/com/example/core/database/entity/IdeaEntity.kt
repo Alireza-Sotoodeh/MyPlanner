@@ -7,13 +7,24 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "ideas",
-    foreignKeys = [ForeignKey(
-        entity = IdeaGroupEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["groupId"],
-        onDelete = ForeignKey.CASCADE
-    )],
-    indices = [Index(value = ["groupId"])]
+    foreignKeys = [
+        ForeignKey(
+            entity = IdeaGroupEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["groupId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = TaskEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["linkedTaskId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
+    indices = [
+        Index(value = ["groupId"]),
+        Index("linkedTaskId")
+    ]
 )
 data class IdeaEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

@@ -215,7 +215,7 @@ class MainViewModel(
     private val _googleDriveConnected = MutableStateFlow(prefs.getBoolean("google_drive_connected", false))
     val googleDriveConnected: StateFlow<Boolean> = _googleDriveConnected.asStateFlow()
 
-    private val _googleDriveEmail = MutableStateFlow(prefs.getString("google_drive_email", "ar.sotoodeh@gmail.com") ?: "ar.sotoodeh@gmail.com")
+    private val _googleDriveEmail = MutableStateFlow(prefs.getString("google_drive_email", "") ?: "")
     val googleDriveEmail: StateFlow<String> = _googleDriveEmail.asStateFlow()
 
     private val _dndEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_dnd_enabled", false))
@@ -344,12 +344,57 @@ class MainViewModel(
         _customLabels.value = labels
     }
 
-    fun updateGoogleDriveConnected(connected: Boolean, email: String = "ar.sotoodeh@gmail.com") {
-        prefs.edit().putBoolean("google_drive_connected", connected)
-            .putString("google_drive_email", email)
-            .apply()
-        _googleDriveConnected.value = connected
-        _googleDriveEmail.value = email
+    fun updateDefaultBreakMinutes(minutes: Int) {
+        prefs.edit().putInt("default_break_minutes", minutes).apply()
+        _defaultBreakMinutes.value = minutes
+    }
+
+    fun updateGoogleDriveConnected(connected: Boolean, email: String = "") {
+        if (connected) {
+            trySilentSignIn(email)
+        } else {
+            com.example.core.manager.DriveManager.signOut(context)
+            com.example.core.manager.DriveManager.invalidateToken()
+            prefs.edit().putBoolean("google_drive_connected", false)
+                .putString("google_drive_email", "")
+                .apply()
+            _googleDriveConnected.value = false
+            _googleDriveEmail.value = ""
+        }
+    }
+
+    private val _pendingDriveSignInIntent = MutableStateFlow<android.content.Intent?>(null)
+    val pendingDriveSignInIntent: StateFlow<android.content.Intent?> = _pendingDriveSignInIntent.asStateFlow()
+
+    private fun trySilentSignIn(email: String) {
+        viewModelScope.launch {
+            if (com.example.core.manager.DriveManager.isSignedIn(context)) {
+                val account = com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(context)
+                val accEmail = account?.email ?: email
+                prefs.edit().putBoolean("google_drive_connected", true)
+                    .putString("google_drive_email", accEmail)
+                    .apply()
+                _googleDriveConnected.value = true
+                _googleDriveEmail.value = accEmail
+            } else {
+                _pendingDriveSignInIntent.value = com.example.core.manager.DriveManager.getSignInIntent(context)
+            }
+        }
+    }
+
+    fun onDriveSignInResult(data: android.content.Intent?): Boolean {
+        _pendingDriveSignInIntent.value = null
+        val account = com.example.core.manager.DriveManager.handleSignInResult(data)
+        if (account != null) {
+            val email = account.email ?: ""
+            prefs.edit().putBoolean("google_drive_connected", true)
+                .putString("google_drive_email", email)
+                .apply()
+            _googleDriveConnected.value = true
+            _googleDriveEmail.value = email
+            return true
+        }
+        return false
     }
 
     fun updateDndEnabled(enabled: Boolean) {
@@ -465,6 +510,11 @@ class MainViewModel(
     fun backupDataToGoogleDrive(onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             try {
+                if (!com.example.core.manager.DriveManager.isSignedIn(context)) {
+                    onResult(false, "Not signed in to Google Drive. Please reconnect.")
+                    return@launch
+                }
+
                 val tasksList = taskRepository.getAllTasks().first()
                 val habitsList = habitRepository.allHabits.first()
                 val habitLogsList = habitRepository.getAllLogs().first()
@@ -498,13 +548,24 @@ class MainViewModel(
                 val adapter = moshi.adapter(BulletCoachBackup::class.java)
                 val jsonString = adapter.toJson(backupObj)
 
-                // Save locally to represent Google Drive file
+                // Save locally (offline fallback)
                 val backupFile = java.io.File(context.filesDir, "bulletcoach_backup.json")
                 backupFile.writeText(jsonString)
 
-                // Simulate Google Drive Sync and success
-                delay(1200)
-                onResult(true, "Successfully backed up ${tasksList.size} intentions, ${habitsList.size} habits, and logs to Google Drive!")
+                // Upload to Drive
+                val data = jsonString.toByteArray(Charsets.UTF_8)
+                val dateStr = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                val filename = "bulletcoach_${dateStr}.json"
+                val fileId = com.example.core.manager.DriveManager.uploadBackup(context, data, filename)
+
+                if (fileId != null) {
+                    com.example.core.manager.DriveManager.rotateBackups(context)
+                    val lastSync = System.currentTimeMillis()
+                    prefs.edit().putLong("drive_last_sync_at", lastSync).apply()
+                    onResult(true, "Successfully backed up ${tasksList.size} intentions, ${habitsList.size} habits, and logs to Google Drive!")
+                } else {
+                    onResult(true, "Saved locally (Drive upload failed). ${tasksList.size} intentions backed up.")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Backup failed", e)
                 onResult(false, "Backup failed: ${e.localizedMessage}")
@@ -515,13 +576,35 @@ class MainViewModel(
     fun restoreDataFromGoogleDrive(onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             try {
-                val backupFile = java.io.File(context.filesDir, "bulletcoach_backup.json")
-                if (!backupFile.exists()) {
-                    onResult(false, "No backup file found on Google Drive. Please create a backup first!")
-                    return@launch
+                var jsonString: String? = null
+
+                // Try Drive first
+                if (com.example.core.manager.DriveManager.isSignedIn(context)) {
+                    try {
+                        val driveBytes = com.example.core.manager.DriveManager.downloadLatest(context)
+                        if (driveBytes != null) {
+                            jsonString = String(driveBytes, Charsets.UTF_8)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Drive download failed, falling back to local", e)
+                    }
                 }
 
-                val jsonString = backupFile.readText()
+                // Fall back to local
+                if (jsonString == null) {
+                    val backupFile = java.io.File(context.filesDir, "bulletcoach_backup.json")
+                    if (!backupFile.exists()) {
+                        onResult(false, "No backup file found. Please create a backup first!")
+                        return@launch
+                    }
+                    val MAX_BACKUP_SIZE = 50 * 1024 * 1024L
+                    if (backupFile.length() > MAX_BACKUP_SIZE) {
+                        onResult(false, "Backup file too large (${backupFile.length() / 1024 / 1024} MB). Max supported: 50 MB.")
+                        return@launch
+                    }
+                    jsonString = backupFile.readText()
+                }
+
                 val adapter = moshi.adapter(BulletCoachBackup::class.java)
                 val backupObj = adapter.fromJson(jsonString)
 
@@ -546,6 +629,35 @@ class MainViewModel(
                 backupObj.shopItems.forEach { shopItemRepository.insertItem(it) }
                 backupObj.mottos.forEach { mottoRepository.insertMotto(it) }
                 backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
+
+                val taskIds = backupObj.tasks.map { it.id }.toSet()
+                val todoIds = backupObj.todos.map { it.id }.toSet()
+                val ideaIds = backupObj.ideas.map { it.id }.toSet()
+                val learnSectionIds = backupObj.learnSections.map { it.id }.toSet()
+
+                backupObj.tasks
+                    .filter { it.linkedTodoId != null && it.linkedTodoId !in todoIds }
+                    .forEach { taskRepository.updateTask(it.copy(linkedTodoId = null)) }
+                backupObj.tasks
+                    .filter { it.linkedIdeaId != null && it.linkedIdeaId !in ideaIds }
+                    .forEach { taskRepository.updateTask(it.copy(linkedIdeaId = null)) }
+                backupObj.tasks
+                    .filter { it.linkedLearnSectionId != null && it.linkedLearnSectionId !in learnSectionIds }
+                    .forEach { taskRepository.updateTask(it.copy(linkedLearnSectionId = null)) }
+                backupObj.todos
+                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
+                    .forEach { todoRepository.updateTodo(it.copy(linkedTaskId = null)) }
+                backupObj.ideas
+                    .filter { it.linkedTaskId != null && it.linkedTaskId !in taskIds }
+                    .forEach { ideaRepository.updateIdea(it.copy(linkedTaskId = null)) }
+                backupObj.learnSections
+                    .filter { it.studyTaskId != null && it.studyTaskId !in taskIds }
+                    .forEach { learnRepository.updateSection(it.copy(studyTaskId = null)) }
+                backupObj.learnSections
+                    .filter { it.reviewTaskId != null && it.reviewTaskId !in taskIds }
+                    .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
+
+                com.example.core.manager.SystemSettingsApplier.reapplyAfterRestore(context)
 
                 delay(1500)
                 onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from Google Drive!")
@@ -737,7 +849,7 @@ class MainViewModel(
     private val _pomodoroMarkCompleteOnFinish = MutableStateFlow(false)
     val pomodoroMarkCompleteOnFinish: StateFlow<Boolean> = _pomodoroMarkCompleteOnFinish.asStateFlow()
 
-    private val _pomodoroShortBreakMinutes = MutableStateFlow<Int?>(5)
+    private val _pomodoroShortBreakMinutes = MutableStateFlow<Int?>(_defaultBreakMinutes.value)
     val pomodoroShortBreakMinutes: StateFlow<Int?> = _pomodoroShortBreakMinutes.asStateFlow()
 
     private val _pomodoroLongBreakMinutes = MutableStateFlow<Int?>(null)
@@ -2268,7 +2380,7 @@ class MainViewModel(
         task: TaskEntity,
         focusMinutes: Int = task.durationMinutes,
         targetSessions: Int? = 1,
-        shortBreakMinutes: Int? = 5,
+        shortBreakMinutes: Int? = _defaultBreakMinutes.value,
         longBreakMinutes: Int? = null,
         markCompleteOnFinish: Boolean = false,
         templateName: String? = null

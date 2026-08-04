@@ -1,9 +1,25 @@
 package com.example.core.database.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "tasks")
+@Entity(
+    tableName = "tasks",
+    foreignKeys = [
+        ForeignKey(entity = TaskEntity::class, parentColumns = ["id"], childColumns = ["parentTaskId"], onDelete = ForeignKey.SET_NULL),
+        ForeignKey(entity = TodoEntity::class, parentColumns = ["id"], childColumns = ["linkedTodoId"], onDelete = ForeignKey.SET_NULL),
+        ForeignKey(entity = IdeaEntity::class, parentColumns = ["id"], childColumns = ["linkedIdeaId"], onDelete = ForeignKey.SET_NULL),
+        ForeignKey(entity = LearnSectionEntity::class, parentColumns = ["id"], childColumns = ["linkedLearnSectionId"], onDelete = ForeignKey.SET_NULL)
+    ],
+    indices = [
+        Index("parentTaskId"),
+        Index("linkedTodoId"),
+        Index("linkedIdeaId"),
+        Index("linkedLearnSectionId")
+    ]
+)
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,

@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -3604,9 +3606,11 @@ fun SettingsDialog(
     val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
     val pomodoroRingtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
     val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
+    val defaultBreakMinutes by viewModel.defaultBreakMinutes.collectAsState()
     var enteredPomodoroRingtoneUri by remember { mutableStateOf(pomodoroRingtoneUri) }
     var enteredPomodoroRingtoneEnabled by remember { mutableStateOf(pomodoroRingtoneEnabled) }
     var enteredPomodoroVibrateEnabled by remember { mutableStateOf(pomodoroVibrateEnabled) }
+    var enteredDefaultBreakMinutes by remember { mutableStateOf(defaultBreakMinutes.toString()) }
     val reviewTimePickerState = rememberTimePickerState(
         initialHour = enteredReviewTime.substringBefore(":").toIntOrNull() ?: 21,
         initialMinute = enteredReviewTime.substringAfter(":").toIntOrNull() ?: 0,
@@ -3685,7 +3689,30 @@ fun SettingsDialog(
     )
 
     ModalBottomSheet(
-        onDismissRequest = { onDismiss() },
+        onDismissRequest = {
+            viewModel.updateDndEnabled(enteredDndEnabled)
+            viewModel.updateEventReminderVibrate(enteredEventVibrate)
+            viewModel.updateEventReminderSound(enteredEventSound)
+            viewModel.updateEventReminderEnabled(enteredEventEnabled)
+            viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
+            viewModel.updatePomodoroRingtoneEnabled(enteredPomodoroRingtoneEnabled)
+            viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
+            viewModel.updateReviewReminderTime(enteredReviewTime)
+            viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
+            viewModel.updateSleepReminderTime(enteredSleepTime)
+            viewModel.updateSleepReminderEnabled(enteredSleepEnabled)
+            viewModel.updateDiaryReminderTime(enteredDiaryTime)
+            viewModel.updateDiaryReminderEnabled(enteredDiaryEnabled)
+            viewModel.updatePlannerReminderTime(enteredPlannerTime)
+            viewModel.updatePlannerReminderEnabled(enteredPlannerEnabled)
+            viewModel.updateHabitsReminderTime(enteredHabitsTime)
+            viewModel.updateHabitsReminderEnabled(enteredHabitsEnabled)
+            viewModel.updateTomorrowPlannerReminderTime(enteredTomorrowPlannerTime)
+            viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
+            viewModel.updateLearnReviewReminderTime(enteredLearnReviewReminderTime)
+            viewModel.updateLearnReviewReminderEnabled(enteredLearnReviewReminderEnabled)
+            onDismiss()
+        },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -3785,9 +3812,10 @@ fun SettingsDialog(
                     }
                 } else {
                     OutlinedTextField(
-                        value = enteredEmail,
-                        onValueChange = { enteredEmail = it; dirty = true },
+                        value = googleDriveEmail,
+                        onValueChange = {},
                         label = { Text("Google Account Email") },
+                        enabled = false,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -3903,6 +3931,35 @@ fun SettingsDialog(
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text("Pattern: Heartbeat 🫀", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Default Break (min)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    OutlinedTextField(
+                        value = enteredDefaultBreakMinutes,
+                        onValueChange = { newVal ->
+                            val filtered = newVal.filter { it.isDigit() }
+                            if (filtered.isNotEmpty()) {
+                                val num = filtered.toIntOrNull() ?: return@OutlinedTextField
+                                if (num in 0..30) {
+                                    enteredDefaultBreakMinutes = filtered
+                                    viewModel.updateDefaultBreakMinutes(num)
+                                }
+                            } else {
+                                enteredDefaultBreakMinutes = ""
+                            }
+                        },
+                        modifier = Modifier.width(80.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+                    )
                 }
                 TextButton(onClick = {
                     viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
@@ -4119,8 +4176,8 @@ fun SettingsDialog(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = { if (dirty) showCancelConfirm = true else onDismiss() }) {
-                    Text("CANCEL", color = MaterialTheme.colorScheme.primary)
+                TextButton(onClick = { onDismiss() }) {
+                    Text("CLOSE", color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(

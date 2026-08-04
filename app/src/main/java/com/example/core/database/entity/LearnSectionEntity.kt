@@ -7,12 +7,26 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "learn_sections",
-    foreignKeys = [ForeignKey(
-        entity = LearnItemEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["learnItemId"],
-        onDelete = ForeignKey.CASCADE
-    )],
+    foreignKeys = [
+        ForeignKey(
+            entity = LearnItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["learnItemId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = TaskEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["studyTaskId"],
+            onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = TaskEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["reviewTaskId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
     indices = [
         Index(value = ["learnItemId"]),
         Index(value = ["status"]),

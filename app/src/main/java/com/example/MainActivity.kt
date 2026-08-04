@@ -50,6 +50,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,10 +91,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.core.manager.BackupWorker
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
     private lateinit var dayReviewTriggeredReceiver: BroadcastReceiver
+
+    private val driveSignInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            viewModel.onDriveSignInResult(result.data)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,6 +142,8 @@ class MainActivity : ComponentActivity() {
             applicationContext
         )
         viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
+
+        scheduleDailyBackup()
 
         if (intent.getBooleanExtra("open_day_review", false)) {
             viewModel.checkAndTriggerDayReviewPrompt()
@@ -264,8 +279,31 @@ class MainActivity : ComponentActivity() {
                         snackbarHostState.currentSnackbarData?.dismiss()
                     }
                 }
+
+                val pendingSignIn by viewModel.pendingDriveSignInIntent.collectAsState()
+                LaunchedEffect(pendingSignIn) {
+                    val intent = pendingSignIn
+                    if (intent != null) {
+                        driveSignInLauncher.launch(intent)
+                    }
+                }
             }
         }
+    }
+
+    private fun scheduleDailyBackup() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val dailyBackup = PeriodicWorkRequestBuilder<BackupWorker>(24, java.util.concurrent.TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .addTag("daily_drive_backup")
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_drive_backup",
+            ExistingPeriodicWorkPolicy.KEEP,
+            dailyBackup
+        )
     }
 
     override fun onResume() {

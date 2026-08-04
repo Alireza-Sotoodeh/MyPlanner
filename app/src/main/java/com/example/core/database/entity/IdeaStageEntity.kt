@@ -13,7 +13,10 @@ import androidx.room.PrimaryKey
         childColumns = ["ideaId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index(value = ["ideaId"])]
+    indices = [
+        Index(value = ["ideaId"]),
+        Index(value = ["ideaId", "orderIndex"], unique = true)
+    ]
 )
 data class IdeaStageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
