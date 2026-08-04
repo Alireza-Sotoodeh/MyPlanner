@@ -529,7 +529,7 @@ private fun CronometerTab(
             ) {
                 Text(
                     text = timeStr,
-                    fontSize = 72.sp,
+                    fontSize = 56.sp,
                     fontWeight = FontWeight.Light,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onBackground,
