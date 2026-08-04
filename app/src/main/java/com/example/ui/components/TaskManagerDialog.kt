@@ -57,7 +57,7 @@ fun HardwareAcceleratedVisibility(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun TaskManagerDialog(
     viewModel: MainViewModel,
@@ -182,7 +182,14 @@ fun TaskManagerDialog(
     if (showNewLabelDialog) {
         var newLabelName by remember { mutableStateOf("") }
         var selectedColor by remember { mutableStateOf(0xFF6750A4) }
-        val colors = listOf(0xFF6750A4, 0xFF381E72, 0xFFEADDFF, 0xFF4F378B, 0xFFD0BCFF, 0xFFB3261E, 0xFFF9DEDC, 0xFF410E0B, 0xFF1D192B)
+        val colors = listOf(
+            0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFF673AB7,
+            0xFF3F51B5, 0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4,
+            0xFF009688, 0xFF4CAF50, 0xFF8BC34A, 0xFFCDDC39,
+            0xFFFFEB3B, 0xFFFFC107, 0xFFFF9800, 0xFFFF5722,
+            0xFF795548, 0xFF607D8B, 0xFF6750A4, 0xFFB3261E,
+            0xFF381E72, 0xFF410E0B, 0xFF1D192B, 0xFFEADDFF
+        )
         
         AlertDialog(
             onDismissRequest = { showNewLabelDialog = false },
@@ -196,8 +203,11 @@ fun TaskManagerDialog(
                         label = { Text("Label Name") }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(colors) { color ->
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        colors.forEach { color ->
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
@@ -228,7 +238,14 @@ fun TaskManagerDialog(
     if (showEditLabelDialog && labelToEdit != null) {
         var editLabelName by remember { mutableStateOf(labelToEdit!!.first) }
         var selectedColor by remember { mutableStateOf(labelToEdit!!.second) }
-        val colors = listOf(0xFF6750A4, 0xFF381E72, 0xFFEADDFF, 0xFF4F378B, 0xFFD0BCFF, 0xFFB3261E, 0xFFF9DEDC, 0xFF410E0B, 0xFF1D192B)
+        val colors = listOf(
+            0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFF673AB7,
+            0xFF3F51B5, 0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4,
+            0xFF009688, 0xFF4CAF50, 0xFF8BC34A, 0xFFCDDC39,
+            0xFFFFEB3B, 0xFFFFC107, 0xFFFF9800, 0xFFFF5722,
+            0xFF795548, 0xFF607D8B, 0xFF6750A4, 0xFFB3261E,
+            0xFF381E72, 0xFF410E0B, 0xFF1D192B, 0xFFEADDFF
+        )
         
         AlertDialog(
             onDismissRequest = { showEditLabelDialog = false },
@@ -242,8 +259,11 @@ fun TaskManagerDialog(
                         label = { Text("Label Name") }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(colors) { color ->
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        colors.forEach { color ->
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
