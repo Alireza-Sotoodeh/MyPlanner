@@ -2,7 +2,7 @@
 
 > A minimal, private, offline-first planner, habit tracker, and life organizer for Android.
 
-**No accounts, no cloud sync (except manual Drive backup), no ads, no data collection.**
+**No accounts, no cloud sync, no ads, no data collection.**
 
 ---
 
@@ -20,7 +20,7 @@
 | 🌙 **Day Review** | End-of-day reflection: 4 fields (Good/Bad/Improve/Gratitude), 5-star mood, 1-10 slider, auto-prompt at user-set time |
 | 📊 **Statistics** | Task completion trends (done vs postponed ratio, daily activity line charts), habit chart, sleep log, pomodoro stats, screen time per app |
 | 🔔 **Reminders** | Alarm-based event reminders (night-before + X minutes before), habit reminders, boot/time-change persistence, full-screen alarm activity |
-| 💾 **Backup/Restore** | JSON export to user-selected Storage Access Framework (SAF) directory, monthly rotation, 17 entity types, Google Drive compatible |
+| 💾 **Backup/Restore** | JSON export to user-selected Storage Access Framework (SAF) directory, monthly rotation, 17 entity types, pre-restore safety snapshot, backup metadata with version tracking |
 | 🌐 **Persian Calendar** | Full Jalali date support: toggleable FA/EN across all date displays, month views, stats graphs |
 
 ---
@@ -133,16 +133,18 @@ sequenceDiagram
     VM->>VM: collect 17 StateFlows (tasks, habits, ideas, ...)
     VM->>SAF: select directory (month dir / _permanent)
     VM->>FS: write 17 JSON files via Moshi
+    VM->>FS: write backup_info.json (app version, schema version)
     VM->>U: onResult(success)
     
     Note over VM: Monthly rotation — new folder each month
     
     U->>VM: restoreFromMonth(month)
+    VM->>VM: save pre-restore snapshot to _pre_restore/
     VM->>FS: read 17 JSON files
-    VM->>DB: atomic transaction<br/>PRAGMA foreign_keys=OFF<br/>insert all entities<br/>PRAGMA foreign_keys=ON
+    VM->>DB: atomic transaction<br/>PRAGMA foreign_keys=OFF<br/>insert all entities<br/>nullify orphan FKs<br/>PRAGMA foreign_keys=ON
     VM->>U: onResult(success)
     
-    VM->>SystemSettingsApplier: recreate 6 notification channels
+    VM->>SystemSettingsApplier: recreate notification channels
 ```
 
 ### Undo System
@@ -195,7 +197,6 @@ stateDiagram-v2
 | **Serialization** | Moshi (codegen via KSP) | — |
 | **Networking** | Retrofit + OkHttp | — |
 | **Backup** | Storage Access Framework (SAF) | — |
-| **Drive** | Google Play Services Auth + Drive API | — |
 | **Background** | WorkManager | 2.7.1 |
 | **Scheduling** | AlarmManager | — |
 | **Testing** | JUnit + Robolectric + Roborazzi | — |
@@ -413,15 +414,20 @@ Backup is a directory of JSON files (one per entity type) written via Moshi. The
 
 ```
 /BackupDir/
-├── 2026-01/
-│   ├── tasks.json
-│   ├── habits.json
-│   ├── todos.json
+├── _permanent/                    # ALL 17 entity types (full dataset, overwritten each backup)
+│   ├── HabitEntity.json
+│   ├── TodoEntity.json
+│   ├── MottoEntity.json
 │   └── ... (17 files total)
-├── 2026-02/
+├── 2026-08/                       # Current month (date-based entities only)
+│   ├── TaskEntity.json
+│   ├── HabitLogEntity.json
+│   └── ... (6 files)
+├── 2026-07/                       # Previous months (rotated by maxMonths)
 │   └── ...
-├── _permanent/
-│   └── ... (preferences, etc.)
+├── _pre_restore/                  # Safety snapshot (created before each restore)
+│   └── ... (17 files)
+└── backup_info.json               # Metadata: app version, schema version, timestamp
 ```
 
 ---

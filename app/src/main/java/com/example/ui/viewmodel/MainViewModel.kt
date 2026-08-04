@@ -247,7 +247,7 @@ private val mottoRepository: MottoRepository,
     private val _backupMaxMonths = MutableStateFlow(prefs.getInt("backup_max_months", 5))
     val backupMaxMonths: StateFlow<Int> = _backupMaxMonths.asStateFlow()
 
-    private val _lastBackupTimestamp = MutableStateFlow(prefs.getLong("drive_last_sync_at", 0L))
+    private val _lastBackupTimestamp = MutableStateFlow(backupFileManager.getLastSyncTimestamp())
     val lastBackupTimestamp: StateFlow<Long> = _lastBackupTimestamp.asStateFlow()
 
     private val _dndEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_dnd_enabled", false))
@@ -602,6 +602,10 @@ private val mottoRepository: MottoRepository,
 
     // Local directory backup
     fun backupDataToLocation(onResult: (Boolean, String) -> Unit) {
+        if (!backupFileManager.tryStartBackup()) {
+            onResult(false, "Backup already in progress")
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _isSyncing.value = true
             try {
@@ -675,7 +679,24 @@ private val mottoRepository: MottoRepository,
                 val maxMonths = backupFileManager.getBackupMaxMonths()
                 backupFileManager.rotateOldBackups(rootDir, maxMonths)
 
+                val totalEntities = monthTasks.size + habitsList.size + habitLogsList.size +
+                    sleepLogsList.size + ideaGroupsList.size + ideasList.size + ideaStagesList.size +
+                    todosList.size + diaryEntriesList.size + shopItemsList.size + mottosList.size +
+                    dayReviewsList.size + learnGroupsList.size + learnItemsList.size +
+                    learnSectionsList.size + timerSessionsList.size + timerTemplatesList.size
                 val lastSync = System.currentTimeMillis()
+                try {
+                    backupFileManager.writeBackupInfo(rootDir, BackupFileManager.BackupInfo(
+                        appVersion = context.packageManager.getPackageInfo(context.packageName, 0).let {
+                            @Suppress("DEPRECATION") it.longVersionCode.toInt()
+                        },
+                        schemaVersion = 31,
+                        createdAt = lastSync,
+                        entityCount = totalEntities
+                    ))
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to write backup_info.json", e)
+                }
                 backupFileManager.setLastSyncTimestamp(lastSync)
                 _lastBackupTimestamp.value = lastSync
                 onResult(true, "Backup successful — ${monthTasks.size} tasks, ${habitsList.size} habits, ${todosList.size} todos backed up")
@@ -683,6 +704,7 @@ private val mottoRepository: MottoRepository,
                 Log.e(TAG, "Backup failed", e)
                 onResult(false, "Backup failed: ${e.localizedMessage}")
             } finally {
+                backupFileManager.finishBackup()
                 _isSyncing.value = false
             }
         }
@@ -745,6 +767,54 @@ private val mottoRepository: MottoRepository,
                 if (totalEntities == 0) {
                     onResult(false, "No entities found in backup files - data loss may have occurred")
                     return@launch
+                }
+
+                // Pre-restore safety snapshot: save current data to _pre_restore/
+                val rootDirForSnapshot = backupFileManager.getBackupRootDir()
+                if (rootDirForSnapshot != null) {
+                    try {
+                        val preRestoreDir = backupFileManager.getOrCreateDir(rootDirForSnapshot, "_pre_restore")
+                        if (preRestoreDir != null) {
+                            val curTasks = taskRepository.getAllTasks().first()
+                            val curHabits = habitRepository.allHabits.first()
+                            val curHabitLogs = habitRepository.getAllLogs().first()
+                            val curSleepLogs = sleepLogRepository.allSleepLogs.first()
+                            val curIdeaGroups = ideaRepository.allGroups.first()
+                            val curIdeas = ideaRepository.getAllIdeas().first()
+                            val curIdeaStages = curIdeas.flatMap { ideaRepository.getStagesForIdeaSync(it.id) }
+                            val curTodos = todoRepository.allTodos.first()
+                            val curDiaryEntries = diaryRepository.getAllEntries().first()
+                            val curShopItems = shopItemRepository.allItems.first()
+                            val curMottos = mottoRepository.allMottos.first()
+                            val curDayReviews = dayReviewRepository.getAllReviews().first()
+                            val curTimerSessions = timerRepository.getAllSessions().first()
+                            val curTimerTemplates = timerRepository.getAllTemplates().first()
+                            val curLearnGroups = learnRepository.getAllGroupsSync()
+                            val curLearnItems = learnRepository.getAllItemsSync()
+                            val curLearnSections = curLearnItems.flatMap { learnRepository.getSectionsForItemSync(it.id) }
+
+                            backupFileManager.writeEntityFile(preRestoreDir, "TaskEntity.json", backupFileManager.toJson(curTasks, TaskEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "HabitEntity.json", backupFileManager.toJson(curHabits, HabitEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "HabitLogEntity.json", backupFileManager.toJson(curHabitLogs, HabitLogEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "SleepLogEntity.json", backupFileManager.toJson(curSleepLogs, SleepLogEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "IdeaGroupEntity.json", backupFileManager.toJson(curIdeaGroups, IdeaGroupEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "IdeaEntity.json", backupFileManager.toJson(curIdeas, IdeaEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "IdeaStageEntity.json", backupFileManager.toJson(curIdeaStages, IdeaStageEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "TodoEntity.json", backupFileManager.toJson(curTodos, TodoEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "DiaryEntryEntity.json", backupFileManager.toJson(curDiaryEntries, DiaryEntryEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "ShopItemEntity.json", backupFileManager.toJson(curShopItems, ShopItemEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "MottoEntity.json", backupFileManager.toJson(curMottos, MottoEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "DayReviewEntity.json", backupFileManager.toJson(curDayReviews, DayReviewEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "LearnGroupEntity.json", backupFileManager.toJson(curLearnGroups, LearnGroupEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "LearnItemEntity.json", backupFileManager.toJson(curLearnItems, LearnItemEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "LearnSectionEntity.json", backupFileManager.toJson(curLearnSections, LearnSectionEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "TimerSessionEntity.json", backupFileManager.toJson(curTimerSessions, TimerSessionEntity::class.java))
+                            backupFileManager.writeEntityFile(preRestoreDir, "TimerTemplateEntity.json", backupFileManager.toJson(curTimerTemplates, TimerTemplateEntity::class.java))
+                            Log.d(TAG, "Pre-restore snapshot saved to _pre_restore/")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Pre-restore snapshot failed (continuing with restore)", e)
+                    }
                 }
 
                 val backupObj = BulletCoachBackup(
@@ -827,10 +897,19 @@ private val mottoRepository: MottoRepository,
                     backupObj.learnSections
                         .filter { it.reviewTaskId != null && it.reviewTaskId !in taskIds }
                         .forEach { learnRepository.updateSection(it.copy(reviewTaskId = null)) }
+                    backupObj.tasks
+                        .filter { it.parentTaskId != null && it.parentTaskId !in taskIds }
+                        .forEach { taskRepository.updateTask(it.copy(parentTaskId = null)) }
+                    backupObj.todos
+                        .filter { it.parentTodoId != null && it.parentTodoId !in todoIds }
+                        .forEach { todoRepository.updateTodo(it.copy(parentTodoId = null)) }
+                    backupObj.timerSessions
+                        .filter { it.taskId != null && it.taskId !in taskIds }
+                        .forEach { timerRepository.updateSessionTaskId(it.id, null, it.label) }
 
                     writableDb.setTransactionSuccessful()
-                    writableDb.execSQL("PRAGMA foreign_keys=ON")
                 } finally {
+                    writableDb.execSQL("PRAGMA foreign_keys=ON")
                     writableDb.endTransaction()
                 }
 
@@ -2119,6 +2198,10 @@ private val mottoRepository: MottoRepository,
 
         // Sync direct file access preference to BackupFileManager
         backupFileManager.setDirectFileAccess(prefs.getBoolean("direct_file_access", false))
+
+        // Migrate legacy prefs key
+        backupFileManager.migratePrefsKey()
+        _lastBackupTimestamp.value = backupFileManager.getLastSyncTimestamp()
 
         // Check backup location writability on start
         viewModelScope.launch {

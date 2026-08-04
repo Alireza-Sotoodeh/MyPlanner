@@ -3571,6 +3571,9 @@ fun SettingsDialog(
     var showRestoreConfirm by remember { mutableStateOf(false) }
     var pendingRestoreMonth by remember { mutableStateOf("") }
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val currentMonth = remember {
+        java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US).format(java.util.Date())
+    }
 
     // Launcher for backup folder picker
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -4159,10 +4162,26 @@ fun SettingsDialog(
             }
 
             if (showRestoreConfirm) {
+                val isOlderMonth = pendingRestoreMonth < currentMonth
                 AlertDialog(
                     onDismissRequest = { showRestoreConfirm = false },
                     title = { Text("Confirm Restore") },
-                    text = { Text("Replace all current data with backup from $pendingRestoreMonth? This action cannot be undone.") },
+                    text = {
+                        Column {
+                            if (isOlderMonth) {
+                                Text(
+                                    text = "Warning: restoring from $pendingRestoreMonth will REPLACE all current data, including data from months after $pendingRestoreMonth.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                            Text("A safety snapshot of current data will be saved to _pre_restore/ before restore.")
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("This action cannot be undone beyond the safety snapshot.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
                     confirmButton = {
                         TextButton(onClick = {
                             showRestoreConfirm = false

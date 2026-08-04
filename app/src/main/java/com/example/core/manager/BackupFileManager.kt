@@ -20,6 +20,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class BackupFileManager(private val context: Context) {
 
@@ -27,6 +28,8 @@ class BackupFileManager(private val context: Context) {
         private const val TAG = "BackupFileManager"
         private const val PREFS_NAME = "bulletcoach_prefs"
         private const val NOTIFICATION_CHANNEL_ID = "backup_failures"
+        private const val OLD_SYNC_KEY = "drive_last_sync_at"
+        private const val NEW_SYNC_KEY = "last_backup_timestamp"
         private val DATE_FULL_REGEX = Regex("^\\d{4}-\\d{2}-\\d{2}$")
         private val DATE_MONTH_REGEX = Regex("^\\d{4}-\\d{2}$")
         private val DATE_WEEK_REGEX = Regex("^\\d{4}-W\\d{2}$")
@@ -37,6 +40,10 @@ class BackupFileManager(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private var useDirectFileAccess = false
+    private val backupInProgress = AtomicBoolean(false)
+
+    fun tryStartBackup(): Boolean = backupInProgress.compareAndSet(false, true)
+    fun finishBackup() { backupInProgress.set(false) }
 
     fun setDirectFileAccess(enabled: Boolean) {
         useDirectFileAccess = enabled
@@ -413,6 +420,49 @@ class BackupFileManager(private val context: Context) {
     fun getBackupMaxMonths(): Int = prefs.getInt("backup_max_months", 5)
 
     fun setLastSyncTimestamp(timestamp: Long) {
-        prefs.edit().putLong("drive_last_sync_at", timestamp).apply()
+        prefs.edit().putLong(NEW_SYNC_KEY, timestamp).apply()
+    }
+
+    fun getLastSyncTimestamp(): Long = prefs.getLong(NEW_SYNC_KEY, 0L)
+
+    fun migratePrefsKey() {
+        val old = prefs.getLong(OLD_SYNC_KEY, 0L)
+        if (old > 0 && prefs.getLong(NEW_SYNC_KEY, 0L) == 0L) {
+            prefs.edit().putLong(NEW_SYNC_KEY, old).remove(OLD_SYNC_KEY).apply()
+        }
+    }
+
+    data class BackupInfo(
+        val appVersion: Int = 0,
+        val schemaVersion: Int = 0,
+        val createdAt: Long = 0L,
+        val entityCount: Int = 0
+    )
+
+    private val backupInfoAdapter by lazy {
+        moshi.adapter(BackupInfo::class.java).indent("  ")
+    }
+
+    fun writeBackupInfo(root: Uri, info: BackupInfo) {
+        val json = backupInfoAdapter.toJson(info)
+        writeEntityFile(root, "backup_info.json", json)
+    }
+
+    fun readBackupInfo(root: Uri): BackupInfo? {
+        return try {
+            val fileUri = findChildUri(root, "backup_info.json") ?: return null
+            val json = if (useDirectFileAccess && (root.scheme == "file" || DocumentsContract.isTreeUri(root))) {
+                val file = uriToFile(root)?.let { File(it, "backup_info.json") }
+                file?.readText(Charsets.UTF_8) ?: return null
+            } else {
+                contentResolver.openInputStream(fileUri)?.use {
+                    it.reader(StandardCharsets.UTF_8).readText()
+                } ?: return null
+            }
+            backupInfoAdapter.fromJson(json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read backup_info.json", e)
+            null
+        }
     }
 }

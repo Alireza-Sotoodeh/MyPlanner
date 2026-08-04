@@ -46,26 +46,30 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private val backupFileManager = BackupFileManager(context)
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val rootUri = backupFileManager.getBackupRootDir()
-        if (rootUri == null) {
-            Log.w(TAG, "No backup location set, notifying user")
-            backupFileManager.notifyUser(
-                "Auto-backup skipped",
-                "No backup location selected — open Settings to choose one"
-            )
-            return@withContext Result.retry()
+        if (!backupFileManager.tryStartBackup()) {
+            Log.w(TAG, "Backup already in progress, skipping")
+            return@withContext Result.failure()
         }
-
-if (!backupFileManager.hasWritePermission(rootUri)) {
-            Log.w(TAG, "Backup location unavailable, notifying user")
-            backupFileManager.notifyUser(
-                "Auto-backup skipped",
-                "No write permission for backup location — check Settings"
-            )
-            return@withContext Result.retry()
-        }
-
         try {
+            val rootUri = backupFileManager.getBackupRootDir()
+            if (rootUri == null) {
+                Log.w(TAG, "No backup location set, notifying user")
+                backupFileManager.notifyUser(
+                    "Auto-backup skipped",
+                    "No backup location selected — open Settings to choose one"
+                )
+                return@withContext Result.failure()
+            }
+
+            if (!backupFileManager.hasWritePermission(rootUri)) {
+                Log.w(TAG, "Backup location unavailable, notifying user")
+                backupFileManager.notifyUser(
+                    "Auto-backup skipped",
+                    "No write permission for backup location — check Settings"
+                )
+                return@withContext Result.failure()
+            }
+
             val database = AppDatabase.getDatabase(applicationContext)
             val taskRepository = TaskRepository(database.taskDao())
             val habitRepository = HabitRepository(database.habitDao())
@@ -138,13 +142,33 @@ if (!backupFileManager.hasWritePermission(rootUri)) {
             val maxMonths = backupFileManager.getBackupMaxMonths()
             backupFileManager.rotateOldBackups(rootUri, maxMonths)
 
-            backupFileManager.setLastSyncTimestamp(System.currentTimeMillis())
+            val totalEntities = monthTasks.size + habitsList.size + habitLogsList.size +
+                sleepLogsList.size + ideaGroupsList.size + ideasList.size + ideaStagesList.size +
+                todosList.size + diaryEntriesList.size + shopItemsList.size + mottosList.size +
+                dayReviewsList.size + learnGroupsList.size + learnItemsList.size +
+                learnSectionsList.size + timerSessionsList.size + timerTemplatesList.size
+            val now = System.currentTimeMillis()
+            try {
+                val pkgInfo = applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0)
+                @Suppress("DEPRECATION")
+                backupFileManager.writeBackupInfo(rootUri, BackupFileManager.BackupInfo(
+                    appVersion = pkgInfo.longVersionCode.toInt(),
+                    schemaVersion = 31,
+                    createdAt = now,
+                    entityCount = totalEntities
+                ))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to write backup_info.json", e)
+            }
+            backupFileManager.setLastSyncTimestamp(now)
             Log.d(TAG, "Auto-backup successful")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Auto-backup failed", e)
             backupFileManager.notifyUser("Auto-backup failed", "Error: ${e.message ?: "Unknown error"}")
             Result.failure()
+        } finally {
+            backupFileManager.finishBackup()
         }
     }
 }
