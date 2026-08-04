@@ -286,7 +286,7 @@ private fun PomodoroFinishContent(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = "\"$taskTitle\"",
+                    text = if (taskTitle.isNotBlank()) "\"$taskTitle\"" else "Untitled Session",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary,

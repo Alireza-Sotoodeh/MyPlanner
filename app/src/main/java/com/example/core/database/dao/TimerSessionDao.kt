@@ -15,6 +15,9 @@ interface TimerSessionDao {
     @Query("UPDATE timer_sessions SET durationSeconds = :durationSeconds, note = :note, date = :date WHERE id = :id")
     suspend fun update(id: Long, durationSeconds: Int, note: String, date: String)
 
+    @Query("UPDATE timer_sessions SET taskId = :taskId, label = :label, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateTaskId(id: Long, taskId: Long?, label: String, updatedAt: Long)
+
     @Query("DELETE FROM timer_sessions WHERE id = :id")
     suspend fun delete(id: Long)
 

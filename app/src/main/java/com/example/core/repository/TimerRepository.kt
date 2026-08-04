@@ -26,6 +26,9 @@ class TimerRepository(
     suspend fun updateSession(id: Long, durationSeconds: Int, note: String, date: String) =
         timerSessionDao.update(id, durationSeconds, note, date)
 
+    suspend fun updateSessionTaskId(id: Long, taskId: Long?, label: String) =
+        timerSessionDao.updateTaskId(id, taskId, label, System.currentTimeMillis())
+
     suspend fun deleteSession(id: Long) =
         timerSessionDao.delete(id)
 

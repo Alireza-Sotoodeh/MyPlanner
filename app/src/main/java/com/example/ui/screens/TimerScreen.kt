@@ -438,19 +438,16 @@ private fun PomodoroTab(
                         // Start button
                         Button(
                             onClick = {
-                                val task = selectedTask
-                                if (task != null) {
-                                    viewModel.startPomodoro(
-                                        context = context,
-                                        task = task,
-                                        focusMinutes = focusMinutes,
-                                        targetSessions = targetSessions,
-                                        shortBreakMinutes = shortBreakMinutes,
-                                        longBreakMinutes = longBreakMinutes,
-                                        markCompleteOnFinish = markCompleteOnFinish,
-                                        templateName = templates.find { it.id == selectedTemplateId }?.name
-                                    )
-                                }
+                                viewModel.startPomodoro(
+                                    context = context,
+                                    task = selectedTask,
+                                    focusMinutes = focusMinutes,
+                                    targetSessions = targetSessions,
+                                    shortBreakMinutes = shortBreakMinutes,
+                                    longBreakMinutes = longBreakMinutes,
+                                    markCompleteOnFinish = markCompleteOnFinish,
+                                    templateName = templates.find { it.id == selectedTemplateId }?.name
+                                )
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -461,8 +458,7 @@ private fun PomodoroTab(
                                 contentColor = MaterialTheme.colorScheme.onPrimary,
                                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            ),
-                            enabled = selectedTask != null || selectedTaskId != null
+                            )
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -613,7 +609,8 @@ private fun PomodoroTab(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = "\"${state.taskTitle}\"",
+                            text = if (state.taskTitle.isNotBlank()) "\"${state.taskTitle}\""
+                                   else "Untitled Session",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary,
@@ -1219,6 +1216,39 @@ private fun TaskSelectorSection(
                     }
                 }
             } else {
+                    // "No task" option
+                    val noTaskSelected = selectedTaskId == null
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isLocked) {
+                                if (!isLocked) onSelectedTaskIdChange(null)
+                            }
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = noTaskSelected,
+                            onClick = {
+                                if (!isLocked) onSelectedTaskIdChange(null)
+                            },
+                            enabled = !isLocked,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Without a task",
+                            fontSize = 13.sp,
+                            color = if (noTaskSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (noTaskSelected) FontWeight.Medium else FontWeight.Normal
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
+                        thickness = 1.dp
+                    )
                 availableTasks.forEachIndexed { index, task ->
                     val isSelected = task.id == selectedTaskId
                     TaskSectionItem(
@@ -1811,6 +1841,11 @@ private fun EditSessionDialog(
     var note by remember { mutableStateOf(session.note) }
     var date by remember { mutableStateOf(session.date) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var selectedEditTaskId by remember { mutableStateOf(session.taskId) }
+
+    val availableTasks = remember(tasks) {
+        tasks.filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "NOTE") }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1839,6 +1874,41 @@ private fun EditSessionDialog(
                         disabledTextColor = MaterialTheme.colorScheme.onSurface
                     )
                 )
+                // Task selector
+                var taskExpanded by remember { mutableStateOf(false) }
+                val selTask = availableTasks.find { it.id == selectedEditTaskId }
+                Box {
+                    OutlinedTextField(
+                        value = selTask?.title ?: "No task",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Task/Note") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { taskExpanded = true },
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    DropdownMenu(
+                        expanded = taskExpanded,
+                        onDismissRequest = { taskExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("None") },
+                            onClick = { selectedEditTaskId = null; taskExpanded = false }
+                        )
+                        availableTasks.forEach { task ->
+                            DropdownMenuItem(
+                                text = { Text(task.title) },
+                                onClick = { selectedEditTaskId = task.id; taskExpanded = false }
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
@@ -1857,6 +1927,9 @@ private fun EditSessionDialog(
                     note,
                     date
                 )
+                if (selectedEditTaskId != session.taskId) {
+                    viewModel.updateTimerSessionTask(session.id, selectedEditTaskId)
+                }
                 onDismiss()
             }) { Text("Save") }
         },

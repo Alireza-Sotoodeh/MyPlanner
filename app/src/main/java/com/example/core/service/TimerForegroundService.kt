@@ -387,7 +387,11 @@ class TimerForegroundService : Service() {
             )
 
             val title = if (state.phase == "FOCUS") "Focus Session Completed!" else "Break Over!"
-            val message = "Session ${state.sessionNumber} for '${state.taskTitle}' is done."
+            val message = if (state.taskTitle.isNotEmpty()) {
+                "Session ${state.sessionNumber} for '${state.taskTitle}' is done."
+            } else {
+                "Session ${state.sessionNumber} completed."
+            }
 
             val notification = NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(R.drawable.ic_timer_notification)

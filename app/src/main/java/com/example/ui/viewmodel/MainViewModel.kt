@@ -2977,8 +2977,8 @@ class MainViewModel(
     // --- Pomodoro, Chronometer and DND Management ---
     fun startPomodoro(
         context: Context,
-        task: TaskEntity,
-        focusMinutes: Int = task.durationMinutes,
+        task: TaskEntity? = null,
+        focusMinutes: Int = task?.durationMinutes ?: _pomodoroFocusMinutes.value,
         targetSessions: Int? = 1,
         shortBreakMinutes: Int? = _defaultBreakMinutes.value,
         longBreakMinutes: Int? = null,
@@ -2987,18 +2987,8 @@ class MainViewModel(
     ) {
         if (_pomodoroRunning.value) return
 
-        val updatedTask = task.copy(
-            durationMinutes = focusMinutes,
-            targetSessions = targetSessions,
-            breakMinutes = shortBreakMinutes
-        )
-
-        viewModelScope.launch {
-            taskRepository.updateTask(updatedTask)
-        }
-
         _pomodoroProcessedCompletion = false
-        _activePomodoroTask.value = updatedTask
+        _activePomodoroTask.value = task
         _pomodoroFocusMinutes.value = focusMinutes
         _pomodoroTargetSessions.value = targetSessions
         _pomodoroShortBreakMinutes.value = shortBreakMinutes
@@ -3008,6 +2998,18 @@ class MainViewModel(
         _pomodoroPhase.value = "FOCUS"
         _pomodoroSecondsLeft.value = focusMinutes * 60
         _pomodoroRunning.value = true
+
+        if (task != null) {
+            val updatedTask = task.copy(
+                durationMinutes = focusMinutes,
+                targetSessions = targetSessions,
+                breakMinutes = shortBreakMinutes
+            )
+            viewModelScope.launch {
+                taskRepository.updateTask(updatedTask)
+            }
+            _activePomodoroTask.value = updatedTask
+        }
 
         if (_dndEnabled.value) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -3021,8 +3023,8 @@ class MainViewModel(
         val intent = Intent(context, TimerForegroundService::class.java).apply {
             action = TimerForegroundService.ACTION_START_POMODORO
             putExtra(TimerForegroundService.EXTRA_FOCUS_MINUTES, focusMinutes)
-            putExtra(TimerForegroundService.EXTRA_TASK_TITLE, task.title)
-            putExtra(TimerForegroundService.EXTRA_TASK_ID, task.id)
+            putExtra(TimerForegroundService.EXTRA_TASK_TITLE, task?.title ?: "")
+            putExtra(TimerForegroundService.EXTRA_TASK_ID, task?.id ?: -1L)
             putExtra(TimerForegroundService.EXTRA_SESSION_NUMBER, 1)
             if (shortBreakMinutes != null) putExtra(TimerForegroundService.EXTRA_SHORT_BREAK, shortBreakMinutes)
             if (longBreakMinutes != null) putExtra(TimerForegroundService.EXTRA_LONG_BREAK, longBreakMinutes)
@@ -3099,7 +3101,7 @@ class MainViewModel(
                         if (s.longBreakMinutes != null) _pomodoroLongBreakMinutes.value = s.longBreakMinutes
                         if (s.targetSessions != null) _pomodoroTargetSessions.value = s.targetSessions
                         _pomodoroMarkCompleteOnFinish.value = s.markCompleteOnFinish
-                        if (s.taskId != -1L && _activePomodoroTask.value?.id != s.taskId) {
+                        if (s.taskId > 0 && _activePomodoroTask.value?.id != s.taskId) {
                             viewModelScope.launch {
                                 val restored = taskRepository.getTaskById(s.taskId)
                                 if (restored != null) {
@@ -3146,7 +3148,7 @@ class MainViewModel(
     }
 
     private fun handlePhaseCompletion(context: Context) {
-        val task = _activePomodoroTask.value ?: return
+        val task = _activePomodoroTask.value
         val currentPhase = _pomodoroPhase.value
         val shortBreakMin = _pomodoroShortBreakMinutes.value
         val longBreakMin = _pomodoroLongBreakMinutes.value
@@ -3157,36 +3159,38 @@ class MainViewModel(
 
         if (currentPhase == "FOCUS") {
             viewModelScope.launch {
-                val relatedTask = taskRepository.getTaskById(task.id)
+                val relatedTask = if (task != null) taskRepository.getTaskById(task.id) else null
                 timerRepository.insertSession(
                     TimerSessionEntity(
                         type = "POMODORO",
-                        taskId = task.id,
-                        label = relatedTask?.label ?: task.label,
+                        taskId = task?.id,
+                        label = relatedTask?.label ?: task?.label ?: "",
                         durationSeconds = _pomodoroFocusMinutes.value * 60,
                         date = getTodayDateString()
                     )
                 )
 
-                if (_pomodoroMarkCompleteOnFinish.value) {
-                    val subtasks = allTasks.value.filter { it.parentTaskId == task.id }
-                    val hasIncompleteSubtasks = subtasks.any { it.status != "COMPLETED" }
-                    val updated = task.copy(
-                        pomodorosCompleted = task.pomodorosCompleted + 1,
-                        status = if (hasIncompleteSubtasks) task.status else "COMPLETED"
-                    )
-                    taskRepository.updateTask(updated)
-                    _activePomodoroTask.value = updated
-                    if (updated.status == "COMPLETED") {
-                        updated.linkedTodoId?.let { todoId ->
-                            val linkedTodo = todoRepository.getTodoById(todoId)
-                            if (linkedTodo != null && linkedTodo.status != "DONE") {
-                                todoRepository.updateTodo(linkedTodo.copy(status = "DONE"))
+                if (task != null) {
+                    if (_pomodoroMarkCompleteOnFinish.value) {
+                        val subtasks = allTasks.value.filter { it.parentTaskId == task.id }
+                        val hasIncompleteSubtasks = subtasks.any { it.status != "COMPLETED" }
+                        val updated = task.copy(
+                            pomodorosCompleted = task.pomodorosCompleted + 1,
+                            status = if (hasIncompleteSubtasks) task.status else "COMPLETED"
+                        )
+                        taskRepository.updateTask(updated)
+                        _activePomodoroTask.value = updated
+                        if (updated.status == "COMPLETED") {
+                            updated.linkedTodoId?.let { todoId ->
+                                val linkedTodo = todoRepository.getTodoById(todoId)
+                                if (linkedTodo != null && linkedTodo.status != "DONE") {
+                                    todoRepository.updateTodo(linkedTodo.copy(status = "DONE"))
+                                }
                             }
                         }
+                    } else {
+                        taskRepository.updateTask(task.copy(pomodorosCompleted = task.pomodorosCompleted + 1))
                     }
-                } else {
-                    taskRepository.updateTask(task.copy(pomodorosCompleted = task.pomodorosCompleted + 1))
                 }
             }
 
@@ -3219,13 +3223,13 @@ class MainViewModel(
         }
     }
 
-    private fun setCompletionStateAndNotify(context: Context, task: TaskEntity, phase: String, sessionNumber: Int, totalSessions: Int?, durationSeconds: Int, nextActionLabel: String, nextActionMinutes: Int, canProceed: Boolean, isFinal: Boolean, breakDuration: Int?) {
+    private fun setCompletionStateAndNotify(context: Context, task: TaskEntity?, phase: String, sessionNumber: Int, totalSessions: Int?, durationSeconds: Int, nextActionLabel: String, nextActionMinutes: Int, canProceed: Boolean, isFinal: Boolean, breakDuration: Int?) {
         val state = PomodoroCompletionState(
             phase = phase,
             sessionNumber = sessionNumber,
             totalSessions = totalSessions,
-            taskTitle = task.title,
-            taskId = task.id,
+            taskTitle = task?.title ?: "",
+            taskId = task?.id ?: -1L,
             durationSeconds = durationSeconds,
             nextActionLabel = nextActionLabel,
             nextActionMinutes = nextActionMinutes,
@@ -3446,6 +3450,13 @@ class MainViewModel(
     fun updateTimerSession(id: Long, durationSeconds: Int, note: String, date: String) {
         viewModelScope.launch {
             timerRepository.updateSession(id, durationSeconds, note, date)
+        }
+    }
+
+    fun updateTimerSessionTask(id: Long, taskId: Long?) {
+        viewModelScope.launch {
+            val relatedTask = if (taskId != null) taskRepository.getTaskById(taskId) else null
+            timerRepository.updateSessionTaskId(id, taskId, relatedTask?.label ?: "")
         }
     }
 
