@@ -160,7 +160,6 @@ class MainActivity : ComponentActivity() {
                             PermissionsScreen(
                                 viewModel = viewModel,
                                 onAllPermissionsGranted = {
-                                    viewModel.setPermissionsGateSkipped(true)
                                     showPermissions = false
                                 }
                             )

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,7 +58,8 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
     val backupUri by viewModel.backupLocationUri.collectAsState()
     val hasBackupLocation = backupUri != null
     var continueClicked by remember { mutableStateOf(false) }
-    var showNotificationSettings by remember { mutableStateOf(false) }
+    var showNotificationSettings by rememberSaveable { mutableStateOf(false) }
+    var showNotificationRationale by remember { mutableStateOf(false) }
 
     val allGranted = hasNotification && hasExactAlarm && hasDndAccess && hasFullScreenIntent
     
@@ -69,6 +71,9 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 hasUsageStats = viewModel.hasUsageStatsPermission(context)
                 hasDndAccess = viewModel.checkNotificationPolicyPermission(context)
                 hasFullScreenIntent = viewModel.hasFullScreenIntentPermission(context)
+                hasManageStorage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    android.os.Environment.isExternalStorageManager()
+                } else true
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -83,9 +88,15 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
             hasNotification = isGranted
             if (!isGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val activity = context as? android.app.Activity
-                if (activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
-                    showNotificationSettings = true
+                if (activity != null) {
+                    if (!ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
+                        showNotificationSettings = true
+                    } else {
+                        showNotificationRationale = true
+                    }
                 }
+            } else if (isGranted) {
+                showNotificationRationale = false
             }
         }
     )
@@ -99,8 +110,14 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
-            } catch (_: SecurityException) { }
-            viewModel.setBackupLocationUri(uri.toString())
+                viewModel.setBackupLocationUri(uri.toString())
+            } catch (_: SecurityException) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Could not persist backup folder access. Please try again.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -161,6 +178,15 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 buttonText = if (showNotificationSettings) "SETTINGS" else "GRANT"
             )
 
+            if (showNotificationRationale && !hasNotification) {
+                Text(
+                    text = "Notifications are required for task reminders and pomodoro alerts. Granting helps you stay on track.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
+                )
+            }
+
             PermissionItem(
                 title = "Exact Alarms",
                 description = "Needed for precise timer and event notifications.",
@@ -169,11 +195,15 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                 onClick = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         try {
-                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            }
+                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                             context.startActivity(intent)
-                        } catch (_: Exception) { }
+                        } catch (_: Exception) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Could not open exact alarm settings.",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
                 }
             )
@@ -231,7 +261,13 @@ fun PermissionsScreen(viewModel: MainViewModel, onAllPermissionsGranted: () -> U
                         }
                         try {
                             manageStorageLauncher.launch(intent)
-                        } catch (_: Exception) { }
+                        } catch (_: Exception) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Could not open storage settings.",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     },
                     buttonText = "GRANT"
                 )
