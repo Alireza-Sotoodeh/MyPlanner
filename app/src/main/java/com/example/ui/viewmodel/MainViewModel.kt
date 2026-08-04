@@ -2070,6 +2070,18 @@ class MainViewModel(
             subtasks.forEach { sub ->
                 taskRepository.updateTask(sub.copy(date = targetDate, status = "PENDING"))
             }
+            // Sync learn section state when migrating learn-linked tasks
+            if (task.linkedLearnSectionId != null) {
+                val section = learnRepository.getSectionById(task.linkedLearnSectionId)
+                if (section != null && (section.studyTaskId == task.id || section.reviewTaskId == task.id)) {
+                    if (task.status == "COMPLETED") {
+                        handleLearnTaskToggle(original = task, updated = task.copy(status = "PENDING"))
+                    }
+                    if (task.label == "Review") {
+                        learnRepository.updateSection(section.copy(nextReviewDate = targetDate))
+                    }
+                }
+            }
             if (updated.type == "EVENT") {
                 com.example.core.manager.ReminderManager.cancelReminders(context, task)
                 com.example.core.manager.ReminderManager.scheduleReminders(
