@@ -164,6 +164,12 @@ fun PlannerScreen(viewModel: MainViewModel) {
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
     val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
 
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 0) {
+            viewModel.selectDate(viewModel.todayDate.value)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
