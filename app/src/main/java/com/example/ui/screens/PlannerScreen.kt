@@ -5,6 +5,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -3466,6 +3469,17 @@ private fun TodoTab(viewModel: MainViewModel) {
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
     var showUnlinkConfirm by remember { mutableStateOf<TodoEntity?>(null) }
 
+    var showFilterChips by remember { mutableStateOf(true) }
+    val filterChipScrollConnection = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < -15) showFilterChips = false
+                else if (available.y > 15) showFilterChips = true
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+
     val displayTodos = when (filter) {
         TodoTabFilter.ALL -> allTodos
         TodoTabFilter.PENDING -> allTodos.filter { it.status == "PENDING" }
@@ -3479,7 +3493,11 @@ private fun TodoTab(viewModel: MainViewModel) {
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(filterChipScrollConnection)
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3502,16 +3520,22 @@ private fun TodoTab(viewModel: MainViewModel) {
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            AnimatedVisibility(
+                visible = showFilterChips,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                TodoTabFilter.entries.forEach { f ->
-                    FilterChip(
-                        selected = filter == f,
-                        onClick = { filter = f },
-                        label = { Text(f.name, fontSize = 12.sp) }
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TodoTabFilter.entries.forEach { f ->
+                        FilterChip(
+                            selected = filter == f,
+                            onClick = { filter = f },
+                            label = { Text(f.name, fontSize = 12.sp) }
+                        )
+                    }
                 }
             }
 
@@ -3633,81 +3657,114 @@ private fun TodoItem(
     onUnlink: (TodoEntity) -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var descExpanded by remember { mutableStateOf(false) }
     val isDone = todo.status == "DONE"
 
-    Card(
-        modifier = Modifier.fillMaxWidth().combinedClickable(
-            onClick = { viewModel.toggleTodoCompletion(todo) },
-            onLongClick = { showMenu = true }
-        ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        ),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = isDone,
-                onCheckedChange = { viewModel.toggleTodoCompletion(todo) },
-                modifier = Modifier.size(24.dp),
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
+    val bgColor = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+        else MaterialTheme.colorScheme.surface
+    val outlineAlpha = if (isDone) 0.08f else 0.2f
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = outlineAlpha), RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = { viewModel.toggleTodoCompletion(todo) },
+                onLongClick = { showMenu = true }
             )
-            Spacer(Modifier.width(6.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    todo.title,
-                    fontSize = 14.sp,
-                    fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
-                    color = if (isDone) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    else MaterialTheme.colorScheme.onSurface,
-                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = isDone,
+                    onCheckedChange = { viewModel.toggleTodoCompletion(todo) },
+                    modifier = Modifier.size(24.dp),
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary,
+                        uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PriorityBadge(todo.priority)
-                    if (todo.linkedTaskId != null) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Linked to planner",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                        )
+                Spacer(Modifier.width(6.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        todo.title,
+                        fontSize = 14.sp,
+                        fontWeight = if (isDone) FontWeight.Normal else FontWeight.Medium,
+                        color = if (isDone) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.onSurface,
+                        textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PriorityBadge(todo.priority)
+                        if (todo.linkedTaskId != null) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Linked to planner",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+                if (todo.linkedTaskId != null) {
+                    IconButton(onClick = { onUnlink(todo) }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.LinkOff, contentDescription = "Unlink", modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    }
+                } else {
+                    IconButton(onClick = { onLink(todo) }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = "Link to planner", modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                    }
+                }
+                Box {
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit(todo) })
+                        if (todo.linkedTaskId != null) {
+                            DropdownMenuItem(text = { Text("Unlink") }, onClick = { showMenu = false; onUnlink(todo) })
+                        } else {
+                            DropdownMenuItem(text = { Text("Schedule") }, onClick = { showMenu = false; onLink(todo) })
+                        }
+                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            onClick = { showMenu = false; onDelete(todo) })
                     }
                 }
             }
-            if (todo.linkedTaskId != null) {
-                IconButton(onClick = { onUnlink(todo) }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.LinkOff, contentDescription = "Unlink", modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                }
-            } else {
-                IconButton(onClick = { onLink(todo) }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.CalendarMonth, contentDescription = "Link to planner", modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
-                }
-            }
-            Box {
-                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(18.dp))
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit(todo) })
-                    if (todo.linkedTaskId != null) {
-                        DropdownMenuItem(text = { Text("Unlink") }, onClick = { showMenu = false; onUnlink(todo) })
-                    } else {
-                        DropdownMenuItem(text = { Text("Schedule") }, onClick = { showMenu = false; onLink(todo) })
-                    }
-                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                        onClick = { showMenu = false; onDelete(todo) })
+
+            if (todo.description.isNotBlank()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 38.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
+                        .animateContentSize()
+                ) {
+                    Text(
+                        todo.description,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        maxLines = if (descExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (descExpanded) "less" else "more",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { descExpanded = !descExpanded }
+                    )
                 }
             }
         }
@@ -3983,6 +4040,17 @@ private fun IdeasTab(viewModel: MainViewModel) {
     var editingGroup by remember { mutableStateOf<IdeaGroupEntity?>(null) }
     var ideaForPlanner by remember { mutableStateOf<IdeaEntity?>(null) }
 
+    var showGroupChips by remember { mutableStateOf(true) }
+    val groupChipScrollConnection = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y < -15) showGroupChips = false
+                else if (available.y > 15) showGroupChips = true
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+
     val filteredIdeas = if (selectedGroupId == null) ideas
     else ideas.filter { it.groupId == selectedGroupId }
 
@@ -3993,7 +4061,11 @@ private fun IdeasTab(viewModel: MainViewModel) {
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(groupChipScrollConnection)
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4022,13 +4094,19 @@ private fun IdeasTab(viewModel: MainViewModel) {
             }
 
             // Group filter chips
-            GroupChipRow(
-                groups = groups,
-                selectedGroupId = selectedGroupId,
-                onGroupSelected = { selectedGroupId = it },
-                onEditGroup = { editingGroup = it },
-                onDeleteGroup = { showDeleteGroupConfirm = it }
-            )
+            AnimatedVisibility(
+                visible = showGroupChips && groups.isNotEmpty(),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                GroupChipRow(
+                    groups = groups,
+                    selectedGroupId = selectedGroupId,
+                    onGroupSelected = { selectedGroupId = it },
+                    onEditGroup = { editingGroup = it },
+                    onDeleteGroup = { showDeleteGroupConfirm = it }
+                )
+            }
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (filteredIdeas.isEmpty()) {
@@ -4202,17 +4280,20 @@ private fun IdeaCard(
     var expanded by remember { mutableStateOf(false) }
     var showIdeaMenu by remember { mutableStateOf(false) }
     var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
+    var descExpanded by remember { mutableStateOf(false) }
 
     val ideaGroup = remember(idea.groupId) {
         viewModel.ideaGroups.value.find { it.id == idea.groupId }
     }
     val groupColor = ideaGroup?.color?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
 
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4231,15 +4312,6 @@ private fun IdeaCard(
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (idea.description.isNotBlank()) {
-                        Text(
-                            idea.description,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
                 Box {
                     IconButton(onClick = { showIdeaMenu = true }, modifier = Modifier.size(32.dp)) {
@@ -4251,6 +4323,32 @@ private fun IdeaCard(
                         DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                             onClick = { showIdeaMenu = false; onDelete(idea) })
                     }
+                }
+            }
+
+            // Collapsible description
+            if (idea.description.isNotBlank()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 26.dp, end = 4.dp, top = 2.dp)
+                        .animateContentSize()
+                ) {
+                    Text(
+                        idea.description,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        maxLines = if (descExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (descExpanded) "less" else "more",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { descExpanded = !descExpanded }
+                    )
                 }
             }
 
