@@ -821,13 +821,12 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
 
                 AnimatedContent(
                     targetState = filterLabels to showPostponedOnly,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }
                 ) {
                 if (tasks.isEmpty()) {
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -869,7 +868,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
 
                     LazyColumn(state = lazyListState,
                         modifier = Modifier
-                            .weight(1f)
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)
