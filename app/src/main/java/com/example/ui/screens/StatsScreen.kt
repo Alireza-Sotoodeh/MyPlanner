@@ -50,6 +50,7 @@ fun StatsScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     val totalScreenTimeMinutes by viewModel.totalScreenTimeMinutes.collectAsState()
     val appUsageItems by viewModel.appUsageItems.collectAsState()
+    val screenTimeError by viewModel.screenTimeError.collectAsState()
     val habits by viewModel.habits.collectAsState()
     val habitLogs by viewModel.habitLogs.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
@@ -120,69 +121,78 @@ fun StatsScreen(viewModel: MainViewModel) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val hours = totalScreenTimeMinutes / 60
-                    val minutes = totalScreenTimeMinutes % 60
-                    val formattedTime = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
-
-                    Text(
-                        text = formattedTime,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "TOP APPS LOGGED:",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (appUsageItems.isEmpty()) {
+                    if (screenTimeError != null) {
                         Text(
-                            text = "No usage statistics available.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            text = screenTimeError!!,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
                         )
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            appUsageItems.forEach { item ->
-                                val maxDuration = appUsageItems.maxOfOrNull { it.durationMinutes } ?: 1L
-                                val progress = item.durationMinutes.toFloat() / maxDuration.toFloat()
+                        val hours = totalScreenTimeMinutes / 60
+                        val minutes = totalScreenTimeMinutes % 60
+                        val formattedTime = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 
-                                Column {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = item.appName,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onBackground
-                                        )
-                                        Text(
-                                            text = "${item.durationMinutes}m",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
+                        Text(
+                            text = formattedTime,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Light,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "TOP APPS LOGGED:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (appUsageItems.isEmpty()) {
+                            Text(
+                                text = "No usage statistics available.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                appUsageItems.forEach { item ->
+                                    val maxDuration = appUsageItems.maxOfOrNull { it.durationMinutes } ?: 1L
+                                    val progress = item.durationMinutes.toFloat() / maxDuration.toFloat()
+
+                                    Column {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = item.appName,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onBackground
+                                            )
+                                            Text(
+                                                text = "${item.durationMinutes}m",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        LinearProgressIndicator(
+                                            progress = { progress },
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(8.dp)
+                                                .clip(CircleShape)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    LinearProgressIndicator(
-                                        progress = { progress },
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(8.dp)
-                                            .clip(CircleShape)
-                                    )
                                 }
                             }
                         }

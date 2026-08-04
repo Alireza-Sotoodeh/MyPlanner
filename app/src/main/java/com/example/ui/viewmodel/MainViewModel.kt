@@ -407,6 +407,9 @@ class MainViewModel(
     private val _totalScreenTimeMinutes = MutableStateFlow(0L)
     val totalScreenTimeMinutes: StateFlow<Long> = _totalScreenTimeMinutes.asStateFlow()
 
+    private val _screenTimeError = MutableStateFlow<String?>(null)
+    val screenTimeError: StateFlow<String?> = _screenTimeError.asStateFlow()
+
     // === Idea List State ===
     val ideaGroups: StateFlow<List<IdeaGroupEntity>> = ideaRepository.allGroups
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -1215,59 +1218,63 @@ class MainViewModel(
 
     // --- Usage Stats and Screen Time ---
     fun updateAppUsage(context: Context) {
-        viewModelScope.launch {
-            if (!hasUsageStatsPermission(context)) {
-                _appUsageItems.value = listOf(
-                    AppUsageItem("AI Studio Simulator", "com.example.mock", 145),
-                    AppUsageItem("BulletCoach AI", context.packageName, 42),
-                    AppUsageItem("Slack", "com.slack", 35),
-                    AppUsageItem("Chrome", "com.android.chrome", 28)
-                )
-                _totalScreenTimeMinutes.value = 250
+        viewModelScope.launch(Dispatchers.IO) {
+            _screenTimeError.value = null
+
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                _appUsageItems.value = emptyList()
+                _totalScreenTimeMinutes.value = 0
+                _screenTimeError.value = "Screen time tracking requires Android 5.0+"
                 return@launch
             }
 
-            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val calendar = Calendar.getInstance()
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
-            val startTime = calendar.timeInMillis
-            val endTime = System.currentTimeMillis()
+            if (!hasUsageStatsPermission(context)) {
+                _appUsageItems.value = emptyList()
+                _totalScreenTimeMinutes.value = 0
+                return@launch
+            }
 
-            val statsMap = usageStatsManager.queryAndAggregateUsageStats(
-                startTime,
-                endTime
-            )
+            try {
+                val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val calendar = Calendar.getInstance()
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                val startTime = calendar.timeInMillis
+                val endTime = System.currentTimeMillis()
 
-            val packageManager = context.packageManager
-            val allItems = statsMap.values
-                .filter { it.totalTimeInForeground > 0 }
-                .filter { stat -> 
-                    // Filter out system apps/background processes without a launch intent
-                    packageManager.getLaunchIntentForPackage(stat.packageName) != null 
-                }
-                .map { stat ->
-                    val label = try {
-                        val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
-                        packageManager.getApplicationLabel(appInfo).toString()
-                    } catch (e: Exception) {
-                        stat.packageName.substringAfterLast('.')
+                val statsMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+
+                val packageManager = context.packageManager
+                val allItems = statsMap.values
+                    .filter { it.totalTimeInForeground > 0 }
+                    .mapNotNull { stat ->
+                        val mins = stat.totalTimeInForeground / (1000 * 60)
+                        if (mins <= 0) return@mapNotNull null
+                        val label = try {
+                            val appInfo = packageManager.getApplicationInfo(stat.packageName, 0)
+                            packageManager.getApplicationLabel(appInfo).toString()
+                        } catch (_: Exception) {
+                            return@mapNotNull null
+                        }
+                        AppUsageItem(
+                            appName = label,
+                            packageName = stat.packageName,
+                            durationMinutes = mins
+                        )
                     }
-                    AppUsageItem(
-                        appName = label,
-                        packageName = stat.packageName,
-                        durationMinutes = stat.totalTimeInForeground / (1000 * 60)
-                    )
-                }
-                .filter { it.durationMinutes > 0 }
-                .sortedByDescending { it.durationMinutes }
+                    .sortedByDescending { it.durationMinutes }
 
-            val topItems = allItems.take(6)
-            val total = allItems.sumOf { it.durationMinutes }
-            
-            _appUsageItems.value = topItems
-            _totalScreenTimeMinutes.value = total
+                val topItems = allItems.take(6)
+                val total = allItems.sumOf { it.durationMinutes }
+
+                _appUsageItems.value = topItems
+                _totalScreenTimeMinutes.value = total
+            } catch (e: Exception) {
+                _appUsageItems.value = emptyList()
+                _totalScreenTimeMinutes.value = 0
+                _screenTimeError.value = "Unable to load screen time"
+            }
         }
     }
 
