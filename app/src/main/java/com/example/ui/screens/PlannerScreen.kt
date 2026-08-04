@@ -2132,13 +2132,13 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                 val lastStr = sdfOutput.format(lastDate)
                 val gregRange = "$firstStr - $lastStr"
 
-                val pFirst = com.example.core.utils.PersianCalendarHelper.getPersianDateString(weekDays.first())
-                val pLast = com.example.core.utils.PersianCalendarHelper.getPersianDateString(weekDays.last())
-                val partsFirst = pFirst.split(" ")
-                val partsLast = pLast.split(" ")
-                val persianRange = if (partsFirst.size >= 3 && partsLast.size >= 3) {
-                    val pFirstStr = "${partsFirst[0]} ${partsFirst[1]}"
-                    val pLastStr = "${partsLast[0]} ${partsLast[1]}"
+                val pFirstParts = com.example.core.utils.PersianCalendarHelper.getPersianDateParts(weekDays.first())
+                val pLastParts = com.example.core.utils.PersianCalendarHelper.getPersianDateParts(weekDays.last())
+                val persianRange = if (pFirstParts.third != 0 && pLastParts.third != 0) {
+                    val helper = com.example.core.utils.PersianCalendarHelper
+                    val abbr = { m: Int -> helper.monthAbbreviations.getOrElse(m - 1) { "?" } }
+                    val pFirstStr = "${pFirstParts.third} ${abbr(pFirstParts.second)}"
+                    val pLastStr = "${pLastParts.third} ${abbr(pLastParts.second)}"
                     " / $pFirstStr - $pLastStr"
                 } else {
                     ""
