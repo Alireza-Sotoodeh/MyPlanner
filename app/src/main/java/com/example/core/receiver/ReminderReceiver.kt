@@ -55,7 +55,8 @@ class ReminderReceiver : BroadcastReceiver() {
                         ReminderConfig("diary_reminder_enabled", "diary_reminder_time", "20:00", "com.example.action.DIARY_REMINDER", 7000),
                         ReminderConfig("planner_reminder_enabled", "planner_reminder_time", "07:00", "com.example.action.PLANNER_REMINDER", 8000),
                         ReminderConfig("habits_reminder_enabled", "habits_reminder_time", "21:00", "com.example.action.HABITS_REMINDER", 9000),
-                        ReminderConfig("tomorrow_planner_reminder_enabled", "tomorrow_planner_reminder_time", "20:00", "com.example.action.TOMORROW_PLANNER_REMINDER", 10000)
+                        ReminderConfig("tomorrow_planner_reminder_enabled", "tomorrow_planner_reminder_time", "20:00", "com.example.action.TOMORROW_PLANNER_REMINDER", 10000),
+                        ReminderConfig("learn_review_reminder_enabled", "learn_review_reminder_time", "19:00", "com.example.action.LEARN_REVIEW_REMINDER", 11000)
                     )
                     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
                     for (cfg in reminders) {
@@ -104,6 +105,7 @@ class ReminderReceiver : BroadcastReceiver() {
             "com.example.action.PLANNER_REMINDER" -> { handlePlannerReminder(context); return }
             "com.example.action.HABITS_REMINDER" -> { handleHabitsReminder(context); return }
             "com.example.action.TOMORROW_PLANNER_REMINDER" -> { handleTomorrowPlannerReminder(context); return }
+            "com.example.action.LEARN_REVIEW_REMINDER" -> { handleLearnReviewReminder(context); return }
         }
 
         val title = intent.getStringExtra("title") ?: "Event Reminder"
@@ -474,6 +476,67 @@ class ReminderReceiver : BroadcastReceiver() {
                     .setAutoCancel(true)
                     .build()
                 (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(10000, notification)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun handleLearnReviewReminder(context: Context) {
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return@launch
+                }
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val todayStr = sdf.format(Calendar.getInstance().time)
+                val database = AppDatabase.getDatabase(context)
+                val tasks = database.taskDao().getTasksForDateSync(todayStr)
+                val learnReviewCount = tasks.count { it.type == "LEARN_REVIEW" }
+                val learnStudyCount = tasks.count { it.type == "LEARN_STUDY" }
+                if (learnReviewCount == 0 && learnStudyCount == 0) return@launch
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(
+                        "learn_review_reminder", "Learn Review Reminder",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    ).apply { description = "Daily reminder for pending learn reviews" }
+                    (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+                }
+
+                val body = buildString {
+                    append("You have ")
+                    if (learnStudyCount > 0) {
+                        append("$learnStudyCount study session")
+                        if (learnStudyCount != 1) append("s")
+                    }
+                    if (learnStudyCount > 0 && learnReviewCount > 0) append(" and ")
+                    if (learnReviewCount > 0) {
+                        append("$learnReviewCount review")
+                        if (learnReviewCount != 1) append("s")
+                    }
+                    append(" due today")
+                }
+
+                val openIntent = Intent(context, com.example.MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    putExtra("navigate_to_tab", 0)
+                }
+                val pendingIntent = PendingIntent.getActivity(context, 11000, openIntent, PendingIntent.FLAG_IMMUTABLE)
+
+                val notification = NotificationCompat.Builder(context, "learn_review_reminder")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("Learn Reviews Due")
+                    .setContentText(body)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build()
+                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(11000, notification)
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

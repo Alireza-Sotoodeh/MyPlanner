@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
@@ -152,6 +153,9 @@ import com.example.core.database.entity.TodoEntity
 import com.example.core.database.entity.IdeaEntity
 import com.example.core.database.entity.IdeaGroupEntity
 import com.example.core.database.entity.IdeaStageEntity
+import com.example.core.database.entity.LearnGroupEntity
+import com.example.core.database.entity.LearnItemEntity
+import com.example.core.database.entity.LearnSectionEntity
 import com.example.ui.components.ActiveTimerWidget
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
@@ -189,8 +193,11 @@ fun PlannerScreen(viewModel: MainViewModel) {
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showTaskManager by remember { mutableStateOf(false) }
     var taskManagerInitialType by remember { mutableStateOf("TASK") }
+    val pendingReviewTask by viewModel.pendingReviewTask.collectAsState()
+    val pendingReviewSection by viewModel.pendingReviewSection.collectAsState()
+    val pendingReviewLearnItem by viewModel.pendingReviewLearnItem.collectAsState()
     val taskForPomodoroSetup by viewModel.taskForPomodoroSetup.collectAsState()
-    val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS")
+    val tabTitles = listOf("DAILY", "WEEKLY", "MONTHLY", "TO-DO", "IDEAS", "LEARN")
 
     LaunchedEffect(selectedTab) {
         viewModel.selectDate(viewModel.todayDate.value)
@@ -285,6 +292,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
                     }
                  3 -> TodoTab(viewModel)
                  4 -> IdeasTab(viewModel)
+                 5 -> LearnTab(viewModel)
             }
 
             if (selectedTab == 0 || selectedTab == 3 || selectedTab == 4) {
@@ -362,6 +370,23 @@ fun PlannerScreen(viewModel: MainViewModel) {
             onDismiss = { showTaskManager = false }
         )
     }
+
+    pendingReviewTask?.let { task ->
+        pendingReviewSection?.let { section ->
+            pendingReviewLearnItem?.let { item ->
+                ReviewRatingSheet(
+                    learnItem = item,
+                    task = task,
+                    section = section,
+                    onRate = { rating ->
+                        viewModel.completeReviewWithRating(task.id, section.id, rating)
+                    },
+                    onDismiss = { viewModel.dismissReviewRating() }
+                )
+            }
+        }
+    }
+
 }
 
 @Composable
@@ -449,7 +474,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
     }
 
     val labelInfos = rawTasks
-        .filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE") }
+        .filter { it.status != "COMPLETED" && (it.type == "TASK" || it.type == "EVENT" || it.type == "NOTE" || it.type == "LEARN_STUDY" || it.type == "LEARN_REVIEW") }
         .groupBy { it.label }
         .filterKeys { it.isNotBlank() }
         .map { (label, items) ->
@@ -1403,6 +1428,14 @@ fun BulletTaskItem(
                                         .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(1.dp))
                                 )
                             }
+                            "LEARN_STUDY", "LEARN_REVIEW" -> {
+                                Icon(
+                                    imageVector = Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Color(0xFFFFB300)
+                                )
+                            }
                             else -> {
                                 Box(
                                     modifier = Modifier
@@ -1522,6 +1555,23 @@ fun BulletTaskItem(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+                    if (task.type == "LEARN_STUDY" || task.type == "LEARN_REVIEW") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.MenuBook,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = Color(0xFFFFB300)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (task.type == "LEARN_STUDY") "Study" else "Review",
+                                fontSize = 11.sp,
+                                color = Color(0xFFFFB300),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                     if (task.description.isNotEmpty()) {
                         Text(
@@ -2357,6 +2407,13 @@ fun WeeklyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, onN
                                                 modifier = Modifier
                                                     .size(width = 7.dp, height = 2.dp)
                                                     .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(0.5.dp))
+                                            )
+                                        } else if (task.type == "LEARN_STUDY" || task.type == "LEARN_REVIEW") {
+                                            Icon(
+                                                imageVector = Icons.Default.MenuBook,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(10.dp),
+                                                tint = Color(0xFFFFB300)
                                             )
                                         } else {
                                             Box(
@@ -3495,6 +3552,12 @@ fun SettingsDialog(
     var enteredTomorrowPlannerEnabled by remember { mutableStateOf(tomorrowPlannerReminderEnabled) }
     var showTomorrowPlannerTimePicker by remember { mutableStateOf(false) }
 
+    val learnReviewReminderTime by viewModel.learnReviewReminderTime.collectAsState()
+    val learnReviewReminderEnabled by viewModel.learnReviewReminderEnabled.collectAsState()
+    var enteredLearnReviewReminderTime by remember { mutableStateOf(learnReviewReminderTime) }
+    var enteredLearnReviewReminderEnabled by remember { mutableStateOf(learnReviewReminderEnabled) }
+    var showLearnReviewReminderTimePicker by remember { mutableStateOf(false) }
+
     val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
     val pomodoroRingtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
     val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
@@ -3529,6 +3592,11 @@ fun SettingsDialog(
     val tomorrowPlannerTimePickerState = rememberTimePickerState(
         initialHour = enteredTomorrowPlannerTime.substringBefore(":").toIntOrNull() ?: 20,
         initialMinute = enteredTomorrowPlannerTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+    val learnReviewReminderTimePickerState = rememberTimePickerState(
+        initialHour = enteredLearnReviewReminderTime.substringBefore(":").toIntOrNull() ?: 19,
+        initialMinute = enteredLearnReviewReminderTime.substringAfter(":").toIntOrNull() ?: 0,
         is24Hour = true
     )
 
@@ -3883,6 +3951,18 @@ fun SettingsDialog(
                     onTimeClick = { showTomorrowPlannerTimePicker = true },
                     onTestClick = { viewModel.sendImmediateTomorrowPlannerReminderNotification(context) }
                 )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.MenuBook,
+                    title = "Learn Review",
+                    subtitle = "Remind about pending learn reviews",
+                    enabled = enteredLearnReviewReminderEnabled,
+                    onEnabledChange = onReminderToggle { enteredLearnReviewReminderEnabled = it },
+                    time = enteredLearnReviewReminderTime,
+                    showDetails = enteredLearnReviewReminderEnabled,
+                    onTimeClick = { showLearnReviewReminderTimePicker = true },
+                    onTestClick = { viewModel.sendImmediateLearnReviewReminderNotification(context) }
+                )
             }
 
             // 4. Event Notifications
@@ -4021,6 +4101,8 @@ fun SettingsDialog(
                         viewModel.updateHabitsReminderEnabled(enteredHabitsEnabled)
                         viewModel.updateTomorrowPlannerReminderTime(enteredTomorrowPlannerTime)
                         viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
+                        viewModel.updateLearnReviewReminderTime(enteredLearnReviewReminderTime)
+                        viewModel.updateLearnReviewReminderEnabled(enteredLearnReviewReminderEnabled)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -4144,6 +4226,22 @@ fun SettingsDialog(
                 }) { Text("OK") }
             },
             dismissButton = { TextButton(onClick = { showTomorrowPlannerTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showLearnReviewReminderTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showLearnReviewReminderTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = learnReviewReminderTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = learnReviewReminderTimePickerState.hour; val min = learnReviewReminderTimePickerState.minute
+                    enteredLearnReviewReminderTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showLearnReviewReminderTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showLearnReviewReminderTimePicker = false }) { Text("Cancel") } }
         )
     }
 }
@@ -5659,6 +5757,100 @@ private fun GroupChipRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LearnGroupChipRow(
+    groups: List<LearnGroupEntity>,
+    selectedGroupId: Long?,
+    onGroupSelected: (Long?) -> Unit,
+    onEditGroup: (LearnGroupEntity) -> Unit,
+    onDeleteGroup: (LearnGroupEntity) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selectedGroupId == null,
+                onClick = { onGroupSelected(null) },
+                label = { Text("All", fontSize = 12.sp) }
+            )
+        }
+        items(groups, key = { it.id }) { group ->
+            FilterChip(
+                selected = selectedGroupId == group.id,
+                onClick = { onGroupSelected(group.id) },
+                label = { Text(group.name, fontSize = 12.sp) },
+                trailingIcon = {
+                    Box(
+                        modifier = Modifier.size(8.dp).background(Color(group.color), CircleShape)
+                    )
+                },
+                modifier = Modifier.combinedClickable(
+                    onClick = { onGroupSelected(group.id) },
+                    onLongClick = { onEditGroup(group) }
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun CreateLearnGroupDialog(
+    initialName: String? = null,
+    initialColor: Long? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Long) -> Unit
+) {
+    var name by remember { mutableStateOf(initialName ?: "") }
+    var selectedColor by remember { mutableStateOf(initialColor ?: 0xFF4CAF50) }
+    val presetColors = listOf(
+        0xFF4CAF50, 0xFF2196F3, 0xFFFF9800, 0xFFE91E63,
+        0xFF9C27B0, 0xFF00BCD4, 0xFFFF5722, 0xFF607D8B
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initialName != null) "Edit Group" else "New Group") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Group Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Color", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    presetColors.forEach { c ->
+                        val isSelected = selectedColor == c
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(c))
+                                .border(if (isSelected) 2.dp else 0.dp, if (isSelected) MaterialTheme.colorScheme.onSurface else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
+                                .clickable { selectedColor = c }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank()) onConfirm(name.trim(), selectedColor) },
+                enabled = name.isNotBlank()
+            ) { Text(if (initialName != null) "Save" else "Create") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun IdeaCard(
@@ -6086,6 +6278,746 @@ private fun AddToPlannerDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@Composable
+fun LearnTab(viewModel: MainViewModel) {
+    val learnItems by viewModel.learnItems.collectAsState()
+    val learnGroups by viewModel.learnGroups.collectAsState()
+    var selectedGroupId by remember { mutableStateOf<Long?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var itemToEdit by remember { mutableStateOf<LearnItemEntity?>(null) }
+    var itemToStart by remember { mutableStateOf<LearnItemEntity?>(null) }
+    var editingGroup by remember { mutableStateOf<LearnGroupEntity?>(null) }
+    var showDeleteGroupConfirm by remember { mutableStateOf<LearnGroupEntity?>(null) }
+
+    val filteredItems = if (selectedGroupId == null) learnItems
+    else learnItems.filter { it.groupId == selectedGroupId }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (learnGroups.isNotEmpty()) {
+                LearnGroupChipRow(
+                    groups = learnGroups,
+                    selectedGroupId = selectedGroupId,
+                    onGroupSelected = { selectedGroupId = it },
+                    onEditGroup = { editingGroup = it },
+                    onDeleteGroup = { showDeleteGroupConfirm = it }
+                )
+            }
+            if (filteredItems.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No learn items yet.\nTap + to add a book or course.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    items(filteredItems, key = { it.id }) { item ->
+                        LearnItemCard(
+                            item = item,
+                            viewModel = viewModel,
+                            onEdit = { itemToEdit = item },
+                            onStart = { itemToStart = item },
+                            onDelete = { viewModel.deleteLearnItemWithUndo(item) }
+                        )
+                    }
+                }
+            }
+        }
+
+        FloatingActionButton(
+            onClick = { showCreateDialog = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 16.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.background,
+            shape = CircleShape
+        ) {
+            Icon(imageVector = Icons.Default.Add, contentDescription = "Create learn item")
+        }
+    }
+
+    editingGroup?.let { group ->
+        CreateLearnGroupDialog(
+            initialName = group.name,
+            initialColor = group.color,
+            onDismiss = { editingGroup = null },
+            onConfirm = { name, color ->
+                viewModel.updateLearnGroup(group.copy(name = name, color = color))
+                editingGroup = null
+            }
+        )
+    }
+
+    showDeleteGroupConfirm?.let { group ->
+        AlertDialog(
+            onDismissRequest = { showDeleteGroupConfirm = null },
+            title = { Text("Delete group?") },
+            text = { Text("All learn items in \"${group.name}\" will also be deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteLearnGroup(group)
+                    if (selectedGroupId == group.id) selectedGroupId = null
+                    showDeleteGroupConfirm = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteGroupConfirm = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showCreateDialog) {
+        LearnItemDialog(
+            viewModel = viewModel,
+            existingItem = null,
+            onDismiss = { showCreateDialog = false }
+        )
+    }
+
+    itemToEdit?.let { item ->
+        LearnItemDialog(
+            viewModel = viewModel,
+            existingItem = item,
+            onDismiss = { itemToEdit = null }
+        )
+    }
+
+    itemToStart?.let { item ->
+        StartLearningDialog(
+            viewModel = viewModel,
+            learnItem = item,
+            onDismiss = { itemToStart = null }
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+fun LearnItemCard(
+    item: LearnItemEntity,
+    viewModel: MainViewModel,
+    onEdit: () -> Unit,
+    onStart: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    val sections by viewModel.sectionsForLearnItem(item.id).collectAsState(initial = emptyList())
+    val learnGroups by viewModel.learnGroups.collectAsState()
+    val groupColor = remember(item.groupId, learnGroups) {
+        learnGroups.find { it.id == item.groupId }?.color?.let { Color(it) }
+    }
+    val masteredCount = sections.count { it.status == "MASTERED" }
+    val inReviewCount = sections.count { it.status == "IN_REVIEW" }
+    val studiedCount = sections.count { it.status == "STUDIED" }
+    val notStartedCount = sections.count { it.status == "NOT_STARTED" }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { showMenu = true }
+            ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        border = groupColor?.let { BorderStroke(2.dp, it) }
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MenuBook,
+                    contentDescription = null,
+                    tint = Color(0xFFFFB300)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                val priorityColor = when (item.priorityLevel) {
+                    "High" -> Color(0xFFE53935)
+                    "Medium" -> Color(0xFFFFB300)
+                    else -> Color(0xFF4CAF50)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = item.priorityLevel.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = priorityColor,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = when (item.status) {
+                        "NOT_STARTED" -> "Not Started"
+                        "ACTIVE" -> "Active"
+                        "COMPLETED" -> "Completed"
+                        else -> item.status
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when (item.status) {
+                        "NOT_STARTED" -> MaterialTheme.colorScheme.onSurfaceVariant
+                        "ACTIVE" -> Color(0xFFFFB300)
+                        "COMPLETED" -> Color(0xFF4CAF50)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${item.type} - ${item.unit}: ${item.totalAmount}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (sections.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val totalSections = sections.size
+                    Text(
+                        text = "$masteredCount/$totalSections mastered",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (masteredCount == totalSections) Color(0xFF4CAF50) else Color(0xFFFFB300)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    LinearProgressIndicator(
+                        progress = { if (totalSections > 0) masteredCount.toFloat() / totalSections else 0f },
+                        modifier = Modifier.weight(1f).height(6.dp),
+                        color = Color(0xFF4CAF50),
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    )
+                }
+                if (item.status == "ACTIVE") {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val dotColors = listOf(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f) to notStartedCount,
+                            Color(0xFFFFB300).copy(alpha = 0.5f) to studiedCount,
+                            Color(0xFFFFB300) to inReviewCount,
+                            Color(0xFF4CAF50) to masteredCount
+                        )
+                        val dotLabels = listOf("•", "•", "•", "•")
+                        dotColors.forEachIndexed { index, (color, count) ->
+                            if (count > 0) {
+                                Text(
+                                    text = "${dotLabels[index]} $count",
+                                    fontSize = 10.sp,
+                                    color = color
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                if (item.status != "ACTIVE" && item.status != "COMPLETED") {
+                    TextButton(onClick = onStart) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Start", fontSize = 12.sp)
+                    }
+                }
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+
+    DropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = { showMenu = false }
+    ) {
+        DropdownMenuItem(
+            text = { Text("Edit") },
+            onClick = { showMenu = false; onEdit() },
+            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Delete") },
+            onClick = { showMenu = false; onDelete() },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp)) }
+        )
+        if (item.status != "COMPLETED") {
+            DropdownMenuItem(
+                text = { Text(if (item.status == "ACTIVE") "Archive" else "Archive") },
+                onClick = {
+                    showMenu = false
+                    viewModel.archiveLearnItem(item)
+                },
+                leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(18.dp)) }
+            )
+        }
+    }
+}
+
+@Composable
+fun LearnItemDialog(
+    viewModel: MainViewModel,
+    existingItem: LearnItemEntity?,
+    onDismiss: () -> Unit
+) {
+    var title by remember { mutableStateOf(existingItem?.title ?: "") }
+    var type by remember { mutableStateOf(existingItem?.type?.uppercase()?.let { if (it == "BOOK" || it == "COURSE") it else "BOOK" } ?: "BOOK") }
+    var totalSections by remember { mutableStateOf(existingItem?.totalSections?.toString() ?: "1") }
+    var unit by remember { mutableStateOf(existingItem?.unit?.uppercase()?.let { if (it == "PAGES" || it == "MINUTES") it else "PAGES" } ?: "PAGES") }
+    var totalAmount by remember { mutableStateOf(existingItem?.totalAmount?.toString() ?: "") }
+    var priorityLevel by remember { mutableStateOf(existingItem?.priorityLevel ?: "Medium") }
+    var selectedGroupId by remember { mutableStateOf(existingItem?.groupId) }
+    var showNewGroupDialog by remember { mutableStateOf(false) }
+    val learnGroups by viewModel.learnGroups.collectAsState()
+    val isEditing = existingItem != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isEditing) "Edit Learn Item" else "New Learn Item") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Type", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = type == "BOOK",
+                        onClick = { type = "BOOK" },
+                        label = { Text("Book") }
+                    )
+                    FilterChip(
+                        selected = type == "COURSE",
+                        onClick = { type = "COURSE" },
+                        label = { Text("Course") }
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                if (type == "BOOK") {
+                    Text("Unit", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = unit == "PAGES",
+                            onClick = { unit = "PAGES" },
+                            label = { Text("Pages") }
+                        )
+                        FilterChip(
+                            selected = unit == "MINUTES",
+                            onClick = { unit = "MINUTES" },
+                            label = { Text("Minutes") }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                OutlinedTextField(
+                    value = totalAmount,
+                    onValueChange = { totalAmount = it.filter { c -> c.isDigit() } },
+                    label = { Text(if (type == "BOOK") "Total pages" else "Total minutes") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = totalSections,
+                    onValueChange = { totalSections = it.filter { c -> c.isDigit() } },
+                    label = { Text("Number of ${if (type == "BOOK") "chapters" else "lessons"}") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Priority", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Low", "Medium", "High").forEach { p ->
+                        FilterChip(
+                            selected = priorityLevel == p,
+                            onClick = { priorityLevel = p },
+                            label = { Text(p) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Group", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showNewGroupDialog = true }
+                        ) {
+                            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                Text("+ New", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
+                    }
+                    item {
+                        val isNone = selectedGroupId == null
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isNone) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedGroupId = null }
+                        ) {
+                            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                Text("None", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    items(learnGroups) { group ->
+                        val isSelected = selectedGroupId == group.id
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(group.color).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedGroupId = group.id }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Box(modifier = Modifier.size(8.dp).background(Color(group.color), CircleShape))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(group.name, fontSize = 11.sp, color = if (isSelected) Color(group.color) else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val amount = totalAmount.toIntOrNull() ?: return@TextButton
+                    val sections = totalSections.toIntOrNull() ?: return@TextButton
+                    if (title.isBlank() || amount <= 0 || sections <= 0) return@TextButton
+                    if (isEditing) {
+                        existingItem?.let { item ->
+                            viewModel.updateLearnItem(
+                                item = item,
+                                newTitle = title,
+                                newType = type,
+                                newTotalSections = sections,
+                                newUnit = unit,
+                                newTotalAmount = amount,
+                                newPriorityLevel = priorityLevel,
+                                newGroupId = selectedGroupId
+                            )
+                        }
+                    } else {
+                        viewModel.addLearnItem(
+                            title = title,
+                            type = type,
+                            totalSections = sections,
+                            unit = unit,
+                            totalAmount = amount,
+                            priorityLevel = priorityLevel,
+                            groupId = selectedGroupId
+                        )
+                    }
+                    onDismiss()
+                },
+                enabled = title.isNotBlank() && (totalAmount.toIntOrNull() ?: 0) > 0 && (totalSections.toIntOrNull() ?: 0) > 0
+            ) { Text(if (isEditing) "Save" else "Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+
+    if (showNewGroupDialog) {
+        var newGroupName by remember { mutableStateOf("") }
+        var newGroupColor by remember { mutableStateOf(0xFF4CAF50) }
+        val presetColors = listOf(
+            0xFF4CAF50, 0xFF2196F3, 0xFFFF9800, 0xFFE91E63,
+            0xFF9C27B0, 0xFF00BCD4, 0xFFFF5722, 0xFF607D8B
+        )
+
+        AlertDialog(
+            onDismissRequest = { showNewGroupDialog = false },
+            title = { Text("New Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newGroupName,
+                        onValueChange = { newGroupName = it },
+                        label = { Text("Group Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(presetColors) { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(color))
+                                    .border(2.dp, if (newGroupColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                    .clickable { newGroupColor = color }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newGroupName.isNotBlank()) {
+                        viewModel.addLearnGroup(newGroupName.trim(), newGroupColor)
+                        showNewGroupDialog = false
+                    }
+                }) { Text("ADD") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewGroupDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+@Composable
+fun StartLearningDialog(
+    viewModel: MainViewModel,
+    learnItem: LearnItemEntity,
+    onDismiss: () -> Unit
+) {
+    var useDeadline by remember { mutableStateOf(false) }
+    var sectionsPerDay by remember { mutableStateOf("1") }
+    var deadlineDate by remember { mutableStateOf(viewModel.todayDate.value) }
+    var startDate by remember { mutableStateOf(viewModel.todayDate.value) }
+
+    val effectivePerDay = if (useDeadline) {
+        val perDay = sectionsPerDay.toIntOrNull() ?: 1
+        perDay
+    } else {
+        sectionsPerDay.toIntOrNull() ?: 0
+    }
+    val totalDays = remember(useDeadline, effectivePerDay, startDate, deadlineDate) {
+        if (useDeadline && effectivePerDay > 0) {
+            try {
+                val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                val from = fmt.parse(startDate)
+                val to = fmt.parse(deadlineDate)
+                if (from != null && to != null) {
+                    ((to.time - from.time) / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+                } else 1
+            } catch (_: Exception) { 1 }
+        } else if (effectivePerDay > 0) {
+            ceil(learnItem.totalSections.toFloat() / effectivePerDay.toFloat()).toInt()
+        } else 0
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Start Learning: ${learnItem.title}") },
+        text = {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !useDeadline,
+                        onClick = { useDeadline = false },
+                        label = { Text("Sections/day") }
+                    )
+                    FilterChip(
+                        selected = useDeadline,
+                        onClick = { useDeadline = true },
+                        label = { Text("Finish by date") }
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                if (useDeadline) {
+                    DatePickerField(
+                        label = "Deadline",
+                        date = deadlineDate,
+                        onDateSelected = { deadlineDate = it }
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = sectionsPerDay,
+                        onValueChange = { sectionsPerDay = it.filter { c -> c.isDigit() } },
+                        label = { Text("Sections per day") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                DatePickerField(
+                    label = "Start Date",
+                    date = startDate,
+                    onDateSelected = { startDate = it }
+                )
+                if (totalDays > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${learnItem.totalSections} sections over $totalDays day${if (totalDays != 1) "s" else ""}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val perDay = sectionsPerDay.toIntOrNull() ?: 0
+                    if (perDay <= 0 && !useDeadline) return@TextButton
+                    viewModel.applyLearningAlgorithm(
+                        learnItem.id, startDate,
+                        if (useDeadline) 1 else perDay,
+                        deadline = if (useDeadline) deadlineDate else null
+                    )
+                    onDismiss()
+                },
+                enabled = if (useDeadline) true else (sectionsPerDay.toIntOrNull() ?: 0) > 0
+            ) { Text("Start") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReviewRatingSheet(
+    learnItem: LearnItemEntity,
+    task: TaskEntity,
+    section: LearnSectionEntity,
+    onRate: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "How was your review?",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "${learnItem.title} - ${section.title}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(
+                    onClick = { onRate("EASY") },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                ) { Text("Easy") }
+                Button(
+                    onClick = { onRate("MEDIUM") },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300))
+                ) { Text("Medium") }
+                Button(
+                    onClick = { onRate("HARD") },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
+                ) { Text("Hard") }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DatePickerField(
+    label: String,
+    date: String,
+    onDateSelected: (String) -> Unit
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = try {
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(date)?.time
+        } catch (_: Exception) { null }
+    )
+
+    OutlinedTextField(
+        value = date,
+        onValueChange = {},
+        label = { Text(label) },
+        readOnly = true,
+        trailingIcon = {
+            IconButton(onClick = { showDatePicker = true }) {
+                Icon(Icons.Default.DateRange, contentDescription = "Pick date")
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                        onDateSelected(sdf.format(Date(millis)))
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 private data class LabelInfo(

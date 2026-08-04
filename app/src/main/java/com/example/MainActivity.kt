@@ -67,6 +67,7 @@ import com.example.core.repository.MottoRepository
 import com.example.core.repository.ShopItemRepository
 import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
+import com.example.core.repository.LearnRepository
 import com.example.core.repository.TimerRepository
 import com.example.core.repository.TodoRepository
 import com.example.core.service.TimerForegroundService
@@ -110,6 +111,7 @@ class MainActivity : ComponentActivity() {
         val shopItemRepository = ShopItemRepository(database.shopItemDao())
         val mottoRepository = MottoRepository(database.mottoDao())
         val dayReviewRepository = DayReviewRepository(database.dayReviewDao())
+        val learnRepository = LearnRepository(database.learnDao(), database.learnGroupDao())
 
         // 2. Initialize unified MainViewModel
         val viewModelFactory = MainViewModelFactory(
@@ -123,6 +125,7 @@ class MainActivity : ComponentActivity() {
             shopItemRepository,
             mottoRepository,
             dayReviewRepository,
+            learnRepository,
             applicationContext
         )
         viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]

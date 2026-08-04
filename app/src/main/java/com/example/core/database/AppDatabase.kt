@@ -17,6 +17,8 @@ import com.example.core.database.dao.TimerSessionDao
 import com.example.core.database.dao.TimerTemplateDao
 import com.example.core.database.dao.ShopItemDao
 import com.example.core.database.dao.SleepLogDao
+import com.example.core.database.dao.LearnDao
+import com.example.core.database.dao.LearnGroupDao
 import com.example.core.database.dao.TaskDao
 import com.example.core.database.dao.TodoDao
 import com.example.core.database.entity.DayReviewEntity
@@ -26,6 +28,9 @@ import com.example.core.database.entity.HabitLogEntity
 import com.example.core.database.entity.IdeaEntity
 import com.example.core.database.entity.IdeaGroupEntity
 import com.example.core.database.entity.IdeaStageEntity
+import com.example.core.database.entity.LearnGroupEntity
+import com.example.core.database.entity.LearnItemEntity
+import com.example.core.database.entity.LearnSectionEntity
 import com.example.core.database.entity.MottoEntity
 import com.example.core.database.entity.TimerSessionEntity
 import com.example.core.database.entity.TimerTemplateEntity
@@ -49,9 +54,12 @@ import com.example.core.database.entity.TodoEntity
         DiaryEntryEntity::class,
         ShopItemEntity::class,
         MottoEntity::class,
-        DayReviewEntity::class
+        DayReviewEntity::class,
+        LearnGroupEntity::class,
+        LearnItemEntity::class,
+        LearnSectionEntity::class
     ],
-    version = 22,
+    version = 25,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,6 +76,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shopItemDao(): ShopItemDao
     abstract fun mottoDao(): MottoDao
     abstract fun dayReviewDao(): DayReviewDao
+    abstract fun learnDao(): LearnDao
+    abstract fun learnGroupDao(): LearnGroupDao
 
     companion object {
         @Volatile
@@ -84,6 +94,16 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("DROP TABLE IF EXISTS pomodoro_sessions")
         }
 
+        private val MIGRATION_23_24 = Migration(23, 24) { db ->
+            db.execSQL("ALTER TABLE learn_items ADD COLUMN priorityLevel TEXT NOT NULL DEFAULT 'Medium'")
+        }
+
+        private val MIGRATION_24_25 = Migration(24, 25) { db ->
+            db.execSQL("CREATE TABLE IF NOT EXISTS `learn_groups` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `color` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL DEFAULT 0)")
+            db.execSQL("ALTER TABLE learn_items ADD COLUMN groupId INTEGER REFERENCES learn_groups(id) ON DELETE CASCADE")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_learn_items_groupId ON learn_items(groupId)")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -91,7 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "bulletcoach_database"
                 )
-                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18)
+                    .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_23_24, MIGRATION_24_25)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

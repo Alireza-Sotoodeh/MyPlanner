@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat
 import android.app.NotificationChannel
 import android.provider.Settings
 import android.util.Log
+import kotlin.math.ceil
 import java.util.concurrent.ConcurrentHashMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -27,6 +28,9 @@ import com.example.core.database.entity.HabitEntity
 import com.example.core.database.entity.HabitLogEntity
 import com.example.core.database.entity.IdeaEntity
 import com.example.core.database.entity.IdeaGroupEntity
+import com.example.core.database.entity.LearnGroupEntity
+import com.example.core.database.entity.LearnItemEntity
+import com.example.core.database.entity.LearnSectionEntity
 import com.example.core.database.entity.IdeaStageEntity
 import com.example.core.database.entity.MottoEntity
 import com.example.core.database.entity.ShopItemEntity
@@ -37,6 +41,7 @@ import com.example.core.database.entity.TimerTemplateEntity
 import com.example.core.database.entity.TodoEntity
 import com.example.core.repository.DayReviewRepository
 import com.example.core.repository.DiaryRepository
+import com.example.core.repository.LearnRepository
 import com.example.core.repository.HabitRepository
 import com.example.core.repository.IdeaRepository
 import com.example.core.repository.MottoRepository
@@ -112,6 +117,12 @@ sealed class UndoSnapshot(val typeLabel: String) {
     data class TimerSessionSnapshot(val session: TimerSessionEntity) : UndoSnapshot("Timer session")
     data class ShopItemSnapshot(val item: ShopItemEntity) : UndoSnapshot("Shop item")
     data class MottoSnapshot(val motto: MottoEntity) : UndoSnapshot("Motto")
+    data class LearnItemSnapshot(
+        val item: LearnItemEntity,
+        val sections: List<LearnSectionEntity>,
+        val studyTaskIds: List<Long>,
+        val reviewTaskIds: List<Long>,
+    ) : UndoSnapshot("Learn Item")
 }
 
 data class UndoEntry(
@@ -133,7 +144,10 @@ data class BulletCoachBackup(
     val diaryEntries: List<DiaryEntryEntity> = emptyList(),
     val shopItems: List<ShopItemEntity> = emptyList(),
     val mottos: List<MottoEntity> = emptyList(),
-    val dayReviews: List<DayReviewEntity> = emptyList()
+    val dayReviews: List<DayReviewEntity> = emptyList(),
+    val learnGroups: List<LearnGroupEntity> = emptyList(),
+    val learnItems: List<LearnItemEntity> = emptyList(),
+    val learnSections: List<LearnSectionEntity> = emptyList()
 )
 
 data class PendingTaskCompletion(
@@ -177,6 +191,7 @@ class MainViewModel(
     private val shopItemRepository: ShopItemRepository,
     private val mottoRepository: MottoRepository,
     private val dayReviewRepository: DayReviewRepository,
+    private val learnRepository: LearnRepository,
     private val context: Context
 ) : ViewModel() {
 
@@ -228,7 +243,17 @@ class MainViewModel(
         val HEARTBEAT_PATTERN = longArrayOf(0, 300, 100, 300, 500, 300, 100, 300)
         val HEARTBEAT_PATTERN_SINGLE = longArrayOf(0, 300, 100, 300)
         private const val PREFS_KEY_ORIGINAL_DND_FILTER = "original_dnd_filter"
+        val LEITNER_INTERVALS = intArrayOf(1, 3, 7, 16, 35, 90)
     }
+
+    private val _pendingReviewTask = MutableStateFlow<TaskEntity?>(null)
+    val pendingReviewTask: StateFlow<TaskEntity?> = _pendingReviewTask.asStateFlow()
+
+    private val _pendingReviewSection = MutableStateFlow<LearnSectionEntity?>(null)
+    val pendingReviewSection: StateFlow<LearnSectionEntity?> = _pendingReviewSection.asStateFlow()
+
+    private val _pendingReviewLearnItem = MutableStateFlow<LearnItemEntity?>(null)
+    val pendingReviewLearnItem: StateFlow<LearnItemEntity?> = _pendingReviewLearnItem.asStateFlow()
 
     private val _pomodoroCompletionState = MutableStateFlow<PomodoroCompletionState?>(null)
     val pomodoroCompletionState: StateFlow<PomodoroCompletionState?> = _pomodoroCompletionState.asStateFlow()
@@ -413,7 +438,10 @@ class MainViewModel(
                     diaryEntries = diaryEntriesList,
                     shopItems = shopItemsList,
                     mottos = mottosList,
-                    dayReviews = dayReviewsList
+                    dayReviews = dayReviewsList,
+                    learnGroups = learnRepository.getAllGroupsSync(),
+                    learnItems = learnItems.value,
+                    learnSections = learnItems.value.flatMap { learnRepository.getSectionsForItemSync(it.id) }
                 )
 
                 val adapter = moshi.adapter(BulletCoachBackup::class.java)
@@ -451,7 +479,10 @@ class MainViewModel(
                     return@launch
                 }
 
-                // Restore to database
+                // Restore to database (learn groups first because items may reference them)
+                backupObj.learnGroups.forEach { learnRepository.insertGroup(it) }
+                backupObj.learnItems.forEach { learnRepository.insertItem(it) }
+                backupObj.learnSections.forEach { learnRepository.insertSection(it) }
                 backupObj.tasks.forEach { taskRepository.insertTask(it) }
                 backupObj.habits.forEach { habitRepository.insertHabit(it) }
                 backupObj.habitLogs.forEach { habitRepository.insertLog(it) }
@@ -466,7 +497,8 @@ class MainViewModel(
                 backupObj.dayReviews.forEach { dayReviewRepository.insertReview(it) }
 
                 delay(1500)
-                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, and logs from Google Drive!")
+                onResult(true, "Successfully restored ${backupObj.tasks.size} intentions, ${backupObj.habits.size} habits, ${backupObj.learnItems.size} learn items, and logs from Google Drive!")
+
             } catch (e: Exception) {
                 Log.e(TAG, "Restore failed", e)
                 onResult(false, "Restore failed: ${e.localizedMessage}")
@@ -799,6 +831,8 @@ class MainViewModel(
             }
             taskRepository.updateTask(updated)
 
+            afterLearnTaskCompleted(updated)
+
             updated.linkedTodoId?.let { linkedId ->
                 val linkedTodo = todoRepository.getTodoById(linkedId)
                 if (linkedTodo != null && linkedTodo.status != "DONE") {
@@ -812,7 +846,7 @@ class MainViewModel(
                 }
             }
 
-            if (effectiveDuration > 0) {
+            if (effectiveDuration > 0 && task.type != "LEARN_STUDY" && task.type != "LEARN_REVIEW") {
                 val timestamp = computeStartTimestamp(startHour, startMinute)
                 timerRepository.insertSession(
                     TimerSessionEntity(
@@ -973,6 +1007,73 @@ class MainViewModel(
     val allMottos: StateFlow<List<MottoEntity>> = mottoRepository.allMottos
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // === Learn State ===
+    val learnItems: StateFlow<List<LearnItemEntity>> = learnRepository.getAllItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val learnGroups: StateFlow<List<LearnGroupEntity>> = learnRepository.allGroups
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun addLearnGroup(name: String, color: Long) {
+        viewModelScope.launch {
+            try {
+                val all = learnRepository.getAllGroupsSync()
+                val nextOrder = (all.maxOfOrNull { it.sortOrder } ?: -1) + 1
+                learnRepository.insertGroup(LearnGroupEntity(name = name.trim(), color = color, sortOrder = nextOrder))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add learn group", e)
+            }
+        }
+    }
+
+    fun updateLearnGroup(group: LearnGroupEntity) {
+        viewModelScope.launch {
+            try {
+                learnRepository.updateGroup(group)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update learn group", e)
+            }
+        }
+    }
+
+    fun deleteLearnGroup(group: LearnGroupEntity) {
+        viewModelScope.launch {
+            try {
+                learnRepository.deleteGroup(group)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete learn group", e)
+            }
+        }
+    }
+
+    fun moveLearnItemToGroup(itemId: Long, newGroupId: Long?) {
+        viewModelScope.launch {
+            try {
+                learnRepository.moveItemToGroup(itemId, newGroupId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to move learn item to group", e)
+            }
+        }
+    }
+
+    fun sectionsForLearnItem(itemId: Long) = learnRepository.getSectionsForItem(itemId)
+
+    fun archiveLearnItem(item: LearnItemEntity) {
+        viewModelScope.launch {
+            try {
+                learnRepository.updateItem(item.copy(status = "ARCHIVED"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to archive learn item", e)
+            }
+        }
+    }
+
+    suspend fun getReviewStageForTaskId(taskId: Long): Int {
+        val section = learnRepository.getSectionByReviewTaskId(taskId)
+            ?: learnRepository.getSectionByStudyTaskId(taskId)
+        return section?.reviewStage ?: -1
+    }
+
     // === Day Review State ===
     private val _reviewReminderTime = MutableStateFlow(prefs.getString("review_reminder_time", "21:00") ?: "21:00")
     val reviewReminderTime: StateFlow<String> = _reviewReminderTime.asStateFlow()
@@ -1009,6 +1110,12 @@ class MainViewModel(
     val tomorrowPlannerReminderTime: StateFlow<String> = _tomorrowPlannerReminderTime.asStateFlow()
     private val _tomorrowPlannerReminderEnabled = MutableStateFlow(prefs.getBoolean("tomorrow_planner_reminder_enabled", false))
     val tomorrowPlannerReminderEnabled: StateFlow<Boolean> = _tomorrowPlannerReminderEnabled.asStateFlow()
+
+    // === Learn Review Reminder State ===
+    private val _learnReviewReminderTime = MutableStateFlow(prefs.getString("learn_review_reminder_time", "19:00") ?: "19:00")
+    val learnReviewReminderTime: StateFlow<String> = _learnReviewReminderTime.asStateFlow()
+    private val _learnReviewReminderEnabled = MutableStateFlow(prefs.getBoolean("learn_review_reminder_enabled", false))
+    val learnReviewReminderEnabled: StateFlow<Boolean> = _learnReviewReminderEnabled.asStateFlow()
 
     // === Deep-link More Screen State ===
     private val _pendingMoreScreen = MutableStateFlow<String?>(null)
@@ -1248,6 +1355,44 @@ class MainViewModel(
 
     fun cancelTomorrowPlannerReminderAlarm(context: Context) {
         cancelReminderAlarm(context, "com.example.action.TOMORROW_PLANNER_REMINDER", 10000)
+    }
+
+    fun scheduleLearnReviewReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.LEARN_REVIEW_REMINDER", 11000, _learnReviewReminderTime.value)
+    }
+
+    fun cancelLearnReviewReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.LEARN_REVIEW_REMINDER", 11000)
+    }
+
+    fun sendImmediateLearnReviewReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
+        createLearnReviewReminderChannel(context)
+        val intent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("navigate_to_tab", 0)
+        }
+        val pendingIntent = PendingIntent.getActivity(context, 11001, intent, getImmutableFlag())
+        val notification = NotificationCompat.Builder(context, "learn_review_reminder")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Learn Reviews Due")
+            .setContentText("You have learn reviews waiting — check your planner!")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(11001, notification)
+    }
+
+    private fun createLearnReviewReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "learn_review_reminder",
+                "Learn Review Reminder",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Daily reminder for pending learn reviews" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
     }
 
     fun sendImmediateSleepReminderNotification(context: Context) {
@@ -1795,6 +1940,7 @@ class MainViewModel(
 
     fun toggleTaskCompletion(task: TaskEntity, subtasks: List<TaskEntity> = emptyList()) {
         viewModelScope.launch {
+            if (handleLearnTaskCompletion(task)) return@launch
             if (task.status != "COMPLETED") {
                 val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
                 if (incompleteSubtasks.isNotEmpty()) {
@@ -1816,6 +1962,7 @@ class MainViewModel(
                     }
                 }
             }
+            afterLearnTaskCompleted(updated)
         }
     }
 
@@ -1862,6 +2009,7 @@ class MainViewModel(
         endMinute: Int? = null
     ) {
         viewModelScope.launch {
+            if (handleLearnTaskCompletion(task)) return@launch
             val effectiveDuration = if (startHour != null && startMinute != null && endHour != null && endMinute != null) {
                 (endHour * 60 + endMinute - startHour * 60 - startMinute).coerceAtLeast(0)
             } else {
@@ -1886,6 +2034,8 @@ class MainViewModel(
             )
             taskRepository.updateTask(updated)
 
+            afterLearnTaskCompleted(updated)
+
             updated.linkedTodoId?.let { todoId ->
                 val linkedTodo = todoRepository.getTodoById(todoId)
                 if (linkedTodo != null && linkedTodo.status != "DONE") {
@@ -1893,7 +2043,7 @@ class MainViewModel(
                 }
             }
 
-            if (effectiveDuration > 0) {
+            if (effectiveDuration > 0 && task.type != "LEARN_STUDY" && task.type != "LEARN_REVIEW") {
                 val timestamp = computeStartTimestamp(startHour, startMinute)
                 timerRepository.insertSession(
                     TimerSessionEntity(
@@ -2563,6 +2713,7 @@ class MainViewModel(
     fun markTaskCompleteFromTimer(taskId: Long) {
         viewModelScope.launch {
             val task = taskRepository.getTaskById(taskId) ?: return@launch
+            if (handleLearnTaskCompletion(task)) return@launch
             val subtasks = taskRepository.getSubtasks(task.id)
             val incompleteSubtasks = subtasks.filter { it.status != "COMPLETED" }
             if (incompleteSubtasks.isNotEmpty()) {
@@ -2573,6 +2724,7 @@ class MainViewModel(
             }
             val updated = task.copy(status = "COMPLETED")
             taskRepository.updateTask(updated)
+            afterLearnTaskCompleted(updated)
             updated.linkedTodoId?.let { todoId ->
                 val linkedTodo = todoRepository.getTodoById(todoId)
                 if (linkedTodo != null && linkedTodo.status != "DONE") {
@@ -3489,6 +3641,330 @@ class MainViewModel(
         }
     }
 
+    // === Learn CRUD ===
+    fun addLearnItem(
+        title: String,
+        type: String,
+        totalSections: Int,
+        unit: String,
+        totalAmount: Int,
+        priorityLevel: String = "Medium",
+        groupId: Long? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                val base = if (totalSections > 0) totalAmount / totalSections else 0
+                val remainder = if (totalSections > 0) totalAmount % totalSections else 0
+                val itemId = learnRepository.insertItem(
+                    LearnItemEntity(
+                        title = title.trim(),
+                        type = type,
+                        totalSections = totalSections,
+                        unit = unit,
+                        totalAmount = totalAmount,
+                        priorityLevel = priorityLevel,
+                        groupId = groupId
+                    )
+                )
+                for (i in 0 until totalSections) {
+                    val chapNum = when (type) {
+                        "BOOK" -> "Chapter"
+                        "COURSE" -> "Lesson"
+                        else -> "Section"
+                    }
+                    val amount = base + if (i == totalSections - 1) remainder else 0
+                    learnRepository.insertSection(
+                        LearnSectionEntity(
+                            learnItemId = itemId,
+                            orderIndex = i,
+                            title = "$chapNum ${i + 1}",
+                            amount = amount
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add learn item", e)
+            }
+        }
+    }
+
+    fun updateLearnItem(
+        item: LearnItemEntity,
+        newTitle: String,
+        newType: String,
+        newTotalSections: Int,
+        newUnit: String,
+        newTotalAmount: Int,
+        newPriorityLevel: String = "Medium",
+        newGroupId: Long? = item.groupId
+    ) {
+        viewModelScope.launch {
+            try {
+                val existingSections = learnRepository.getSectionsForItemSync(item.id)
+                val anyStarted = existingSections.any { it.status != "NOT_STARTED" }
+                learnRepository.updateItem(
+                    item.copy(
+                        title = newTitle.trim(),
+                        type = newType,
+                        totalSections = newTotalSections,
+                        unit = newUnit,
+                        totalAmount = newTotalAmount,
+                        priorityLevel = newPriorityLevel,
+                        groupId = newGroupId
+                    )
+                )
+                if (!anyStarted) {
+                    for (section in existingSections) {
+                        learnRepository.deleteSection(section)
+                    }
+                    val base = if (newTotalSections > 0) newTotalAmount / newTotalSections else 0
+                    val remainder = if (newTotalSections > 0) newTotalAmount % newTotalSections else 0
+                    for (i in 0 until newTotalSections) {
+                        val chapNum = when (newType) {
+                            "BOOK" -> "Chapter"
+                            "COURSE" -> "Lesson"
+                            else -> "Section"
+                        }
+                        val amount = base + if (i == newTotalSections - 1) remainder else 0
+                        learnRepository.insertSection(
+                            LearnSectionEntity(
+                                learnItemId = item.id,
+                                orderIndex = i,
+                                title = "$chapNum ${i + 1}",
+                                amount = amount
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update learn item", e)
+            }
+        }
+    }
+
+    fun deleteLearnItem(item: LearnItemEntity) {
+        viewModelScope.launch {
+            try {
+                val sections = learnRepository.getSectionsForItemSync(item.id)
+                for (section in sections) {
+                    section.studyTaskId?.let { taskRepository.deleteTaskById(it) }
+                    section.reviewTaskId?.let { taskRepository.deleteTaskById(it) }
+                }
+                learnRepository.deleteItem(item)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete learn item", e)
+            }
+        }
+    }
+
+    fun deleteLearnItemWithUndo(item: LearnItemEntity) {
+        viewModelScope.launch {
+            try {
+                val sections = learnRepository.getSectionsForItemSync(item.id)
+                val studyTaskIds = sections.mapNotNull { it.studyTaskId }
+                val reviewTaskIds = sections.mapNotNull { it.reviewTaskId }
+                for (section in sections) {
+                    section.studyTaskId?.let { taskRepository.deleteTaskById(it) }
+                    section.reviewTaskId?.let { taskRepository.deleteTaskById(it) }
+                }
+                learnRepository.deleteItem(item)
+                pushUndo(
+                    UndoSnapshot.LearnItemSnapshot(item, sections, studyTaskIds, reviewTaskIds),
+                    item.title
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete learn item with undo", e)
+            }
+        }
+    }
+
+    fun applyLearningAlgorithm(
+        itemId: Long,
+        startDate: String,
+        sectionsPerDay: Int,
+        deadline: String? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                val item = learnRepository.getItemById(itemId) ?: return@launch
+                val sections = learnRepository.getSectionsForItemSync(itemId)
+                if (sections.isEmpty()) return@launch
+
+                val effectivePerDay = if (deadline != null && deadline.isNotBlank()) {
+                    val daysBetween = daysBetweenDates(startDate, deadline).coerceAtLeast(1)
+                    ceil(sections.size.toFloat() / daysBetween.toFloat()).toInt()
+                } else {
+                    sectionsPerDay.coerceAtLeast(1)
+                }
+
+                learnRepository.updateItem(item.copy(
+                    status = "ACTIVE",
+                    sectionsPerDay = effectivePerDay
+                ))
+
+                val perDay = effectivePerDay
+                for (i in sections.indices) {
+                    val section = sections[i]
+                    val dayOffset = i / perDay
+                    val taskDate = addDays(startDate, dayOffset)
+                    val shortTitle = if (item.title.length > 30) item.title.take(27) + "..." else item.title
+                    val task = TaskEntity(
+                        title = "📖 $shortTitle — ${section.title}",
+                        date = taskDate,
+                        type = "LEARN_STUDY",
+                        status = "PENDING",
+                        durationMinutes = section.amount,
+                        label = "Learn",
+                        labelColor = 0xFFFFB300,
+                        linkedLearnSectionId = section.id,
+                        priorityLevel = item.priorityLevel
+                    )
+                    val taskId = taskRepository.insertTask(task)
+                    learnRepository.updateSection(section.copy(studyTaskId = taskId))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to apply learning algorithm", e)
+            }
+        }
+    }
+
+    fun completeReviewWithRating(taskId: Long, sectionId: Long, rating: String) {
+        viewModelScope.launch {
+            try {
+                val section = learnRepository.getSectionById(sectionId) ?: return@launch
+                val task = taskRepository.getTaskById(taskId) ?: return@launch
+                val today = _todayDate.value
+
+                val newStage = if (rating == "HARD") {
+                    (section.reviewStage - 1).coerceAtLeast(0)
+                } else {
+                    (section.reviewStage + 1).coerceAtMost(5)
+                }
+
+                if (newStage >= 5) {
+                    learnRepository.updateSection(section.copy(
+                        status = "MASTERED",
+                        reviewStage = 5,
+                        lastReviewDate = today,
+                        nextReviewDate = null,
+                        reviewTaskId = null
+                    ))
+                } else {
+                    val nextDate = addDays(today, LEITNER_INTERVALS[newStage])
+                    val newReviewTaskId = taskRepository.insertTask(TaskEntity(
+                        title = task.title.replace("📖", "🔄"),
+                        date = nextDate,
+                        type = "LEARN_REVIEW",
+                        status = "PENDING",
+                        durationMinutes = section.amount,
+                        label = "Learn",
+                        labelColor = 0xFFFFB300,
+                        linkedLearnSectionId = section.id,
+                        priorityLevel = task.priorityLevel
+                    ))
+                    learnRepository.updateSection(section.copy(
+                        status = "IN_REVIEW",
+                        reviewStage = newStage,
+                        lastReviewDate = today,
+                        nextReviewDate = nextDate,
+                        reviewTaskId = newReviewTaskId
+                    ))
+                }
+
+                val updatedTask = task.copy(status = "COMPLETED")
+                taskRepository.updateTask(updatedTask)
+
+                _pendingReviewTask.value = null
+                _pendingReviewSection.value = null
+                _pendingReviewLearnItem.value = null
+                checkLearnItemCompletion(section.learnItemId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to complete review with rating", e)
+            }
+        }
+    }
+
+    fun dismissReviewRating() {
+        _pendingReviewTask.value = null
+        _pendingReviewSection.value = null
+        _pendingReviewLearnItem.value = null
+    }
+
+    private suspend fun handleLearnTaskCompletion(task: TaskEntity): Boolean {
+        // Returns true if normal flow should be blocked (pending review or un-complete blocked)
+        if (task.status == "COMPLETED" && (task.type == "LEARN_STUDY" || task.type == "LEARN_REVIEW")) {
+            return true
+        }
+        if (task.status != "COMPLETED" && task.type == "LEARN_REVIEW") {
+            val section = learnRepository.getSectionByReviewTaskId(task.id)
+            if (section != null) {
+                val item = learnRepository.getItemById(section.learnItemId)
+                _pendingReviewTask.value = task
+                _pendingReviewSection.value = section
+                _pendingReviewLearnItem.value = item
+                return true
+            }
+        }
+        return false
+    }
+
+    private suspend fun afterLearnTaskCompleted(task: TaskEntity) {
+        if (task.type == "LEARN_STUDY") {
+            val section = learnRepository.getSectionByStudyTaskId(task.id) ?: return
+            val today = _todayDate.value
+            val nextDate = addDays(today, LEITNER_INTERVALS[0])
+            val reviewTaskId = taskRepository.insertTask(TaskEntity(
+                title = task.title.replace("📖", "🔄"),
+                date = nextDate,
+                type = "LEARN_REVIEW",
+                status = "PENDING",
+                durationMinutes = section.amount,
+                label = "Learn",
+                labelColor = 0xFFFFB300,
+                linkedLearnSectionId = section.id,
+                priorityLevel = task.priorityLevel
+            ))
+            learnRepository.updateSection(section.copy(
+                status = "IN_REVIEW",
+                reviewStage = 0,
+                lastReviewDate = today,
+                nextReviewDate = nextDate,
+                reviewTaskId = reviewTaskId
+            ))
+            checkLearnItemCompletion(section.learnItemId)
+        }
+    }
+
+    private suspend fun checkLearnItemCompletion(itemId: Long) {
+        val sections = learnRepository.getSectionsForItemSync(itemId)
+        if (sections.all { it.status == "MASTERED" }) {
+            learnRepository.getItemById(itemId)?.let {
+                learnRepository.updateItem(it.copy(status = "COMPLETED"))
+            }
+        }
+    }
+
+    private fun addDays(dateStr: String, days: Int): String {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        try {
+            val cal = java.util.Calendar.getInstance()
+            cal.time = fmt.parse(dateStr) ?: java.util.Calendar.getInstance().time
+            cal.add(java.util.Calendar.DAY_OF_YEAR, days)
+            return fmt.format(cal.time)
+        } catch (_: Exception) {
+            return dateStr
+        }
+    }
+
+    private fun daysBetweenDates(from: String, to: String): Int {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        return try {
+            val fromCal = java.util.Calendar.getInstance().apply { time = fmt.parse(from) ?: return 1 }
+            val toCal = java.util.Calendar.getInstance().apply { time = fmt.parse(to) ?: return 1 }
+            ((toCal.timeInMillis - fromCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
+        } catch (_: Exception) { 1 }
+    }
+
     // === Diary CRUD ===
     val diaryAllDates: StateFlow<List<String>> = diaryRepository.getAllDates()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -3735,6 +4211,30 @@ class MainViewModel(
         }
     }
 
+    fun updateLearnReviewReminderTime(time: String) {
+        val normalized = time.split(":").let { parts ->
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: 19
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            String.format(Locale.getDefault(), "%02d:%02d", h.coerceIn(0, 23), m.coerceIn(0, 59))
+        }
+        prefs.edit().putString("learn_review_reminder_time", normalized).apply()
+        _learnReviewReminderTime.value = normalized
+        if (_learnReviewReminderEnabled.value) {
+            cancelLearnReviewReminderAlarm(context)
+            scheduleLearnReviewReminderAlarm(context)
+        }
+    }
+
+    fun updateLearnReviewReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("learn_review_reminder_enabled", enabled).apply()
+        _learnReviewReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleLearnReviewReminderAlarm(context)
+        } else {
+            cancelLearnReviewReminderAlarm(context)
+        }
+    }
+
     private fun getOffsetMonthString(monthStr: String, offsetMonths: Int): String {
         val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
         val date = sdf.parse(monthStr) ?: java.util.Date()
@@ -3867,6 +4367,44 @@ class MainViewModel(
                         mottoRepository.insertMotto(snap.motto.copy(id = 0))
                         refreshTodayMotto()
                     }
+                    is UndoSnapshot.LearnItemSnapshot -> {
+                        val newItemId = learnRepository.insertItem(snap.item.copy(id = 0))
+                        val oldToNewSectionId = mutableMapOf<Long, Long>()
+                        for (section in snap.sections) {
+                            val newSectionId = learnRepository.insertSection(
+                                section.copy(id = 0, learnItemId = newItemId, studyTaskId = null, reviewTaskId = null)
+                            )
+                            oldToNewSectionId[section.id] = newSectionId
+                        }
+                        val oldToNewStudyTaskId = mutableMapOf<Long, Long>()
+                        for (oldTaskId in snap.studyTaskIds) {
+                            val task = taskRepository.getTaskById(oldTaskId) ?: continue
+                            val newLinkedSectionId = task.linkedLearnSectionId?.let { oldToNewSectionId[it] }
+                            val newTaskId = taskRepository.insertTask(
+                                task.copy(id = 0, linkedLearnSectionId = newLinkedSectionId)
+                            )
+                            oldToNewStudyTaskId[oldTaskId] = newTaskId
+                        }
+                        val oldToNewReviewTaskId = mutableMapOf<Long, Long>()
+                        for (oldTaskId in snap.reviewTaskIds) {
+                            val task = taskRepository.getTaskById(oldTaskId) ?: continue
+                            val newLinkedSectionId = task.linkedLearnSectionId?.let { oldToNewSectionId[it] }
+                            val newTaskId = taskRepository.insertTask(
+                                task.copy(id = 0, linkedLearnSectionId = newLinkedSectionId)
+                            )
+                            oldToNewReviewTaskId[oldTaskId] = newTaskId
+                        }
+                        for (section in snap.sections) {
+                            val newSectionId = oldToNewSectionId[section.id] ?: continue
+                            val newStudyTaskId = section.studyTaskId?.let { oldToNewStudyTaskId[it] }
+                            val newReviewTaskId = section.reviewTaskId?.let { oldToNewReviewTaskId[it] }
+                            val existing = learnRepository.getSectionById(newSectionId) ?: continue
+                            learnRepository.updateSection(existing.copy(
+                                studyTaskId = newStudyTaskId,
+                                reviewTaskId = newReviewTaskId
+                            ))
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to restore from undo", e)
@@ -3911,6 +4449,7 @@ class MainViewModelFactory(
     private val shopItemRepository: com.example.core.repository.ShopItemRepository,
     private val mottoRepository: com.example.core.repository.MottoRepository,
     private val dayReviewRepository: com.example.core.repository.DayReviewRepository,
+    private val learnRepository: com.example.core.repository.LearnRepository,
     private val context: android.content.Context
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -3920,7 +4459,7 @@ class MainViewModelFactory(
                 taskRepository, timerRepository, habitRepository, sleepLogRepository,
                 ideaRepository, todoRepository, diaryRepository,
                 shopItemRepository, mottoRepository, dayReviewRepository,
-                context
+                learnRepository, context
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
