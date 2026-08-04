@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +55,14 @@ import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.style.TextAlign
+import com.example.core.utils.PersianCalendarHelper
+import com.example.core.database.entity.TimerSessionEntity
 
 @Composable
 fun StatsScreen(viewModel: MainViewModel) {
@@ -66,8 +75,11 @@ fun StatsScreen(viewModel: MainViewModel) {
     val selectedDate by viewModel.selectedDate.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
     val allTimerSessions by viewModel.allTimerSessions.collectAsState()
+    val usePersianCalendar by viewModel.usePersianCalendar.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var heatmapYear by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianYear() else Calendar.getInstance().get(Calendar.YEAR)) }
+    var heatmapMonth by remember(usePersianCalendar) { mutableIntStateOf(if (usePersianCalendar) PersianCalendarHelper.getCurrentPersianMonth() else Calendar.getInstance().get(Calendar.MONTH) + 1) }
 
     // Trigger update on screen load
     LaunchedEffect(Unit) {
@@ -589,6 +601,44 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
+        // 5. Activity Heatmap
+        item {
+            ActivityHeatmapSection(
+                year = heatmapYear,
+                month = heatmapMonth,
+                isPersian = usePersianCalendar,
+                sessions = allTimerSessions,
+                onPrevMonth = {
+                    if (usePersianCalendar) {
+                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, -1)
+                        heatmapYear = y; heatmapMonth = m
+                    } else {
+                        if (heatmapMonth == 1) { heatmapYear--; heatmapMonth = 12 }
+                        else heatmapMonth--
+                    }
+                },
+                onNextMonth = {
+                    if (usePersianCalendar) {
+                        val (y, m) = PersianCalendarHelper.getOffsetPersianMonth(heatmapYear, heatmapMonth, 1)
+                        heatmapYear = y; heatmapMonth = m
+                    } else {
+                        if (heatmapMonth == 12) { heatmapYear++; heatmapMonth = 1 }
+                        else heatmapMonth++
+                    }
+                },
+                onToday = {
+                    if (usePersianCalendar) {
+                        heatmapYear = PersianCalendarHelper.getCurrentPersianYear()
+                        heatmapMonth = PersianCalendarHelper.getCurrentPersianMonth()
+                    } else {
+                        val now = Calendar.getInstance()
+                        heatmapYear = now.get(Calendar.YEAR)
+                        heatmapMonth = now.get(Calendar.MONTH) + 1
+                    }
+                },
+                onToggleCalendar = { viewModel.toggleUsePersianCalendar() }
+            )
+        }
 
         // 6. Activity Time of Day (24h Timeline) — from timer sessions
         item {
@@ -702,4 +752,212 @@ fun StatsScreen(viewModel: MainViewModel) {
     if (showSettingsDialog) {
         SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
+}
+
+private data class DayCell(
+    val seconds: Int,
+    val isCurrentMonth: Boolean
+)
+
+private data class GridData(
+    val cells: List<List<DayCell?>>,
+    val maxSeconds: Int,
+    val numWeeks: Int,
+    val monthLabel: String
+)
+
+@Composable
+private fun ActivityHeatmapSection(
+    year: Int,
+    month: Int,
+    isPersian: Boolean,
+    sessions: List<TimerSessionEntity>,
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onToday: () -> Unit,
+    onToggleCalendar: () -> Unit
+) {
+    val gridData = remember(year, month, isPersian, sessions) {
+        computeGridData(year, month, isPersian, sessions)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "ACTIVITY HEATMAP",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.5.sp
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                IconButton(onClick = onPrevMonth, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, contentDescription = "Previous month", tint = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    text = gridData.monthLabel,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+                IconButton(onClick = onNextMonth, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.AutoMirrored.Default.KeyboardArrowRight, contentDescription = "Next month", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onToday, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = "Today", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onToggleCalendar, modifier = Modifier.size(28.dp)) {
+                    Text(
+                        if (isPersian) "EN" else "FA",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            val dayLabels = if (isPersian) listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
+            else listOf("Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri")
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                dayLabels.forEach { label ->
+                    Text(
+                        label,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+
+            for (rowIdx in 0..6) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    for (colIdx in 0 until gridData.numWeeks) {
+                        val cell = gridData.cells[rowIdx][colIdx]
+                        val color = if (cell != null) {
+                            if (cell.isCurrentMonth) {
+                                if (cell.seconds > 0 && gridData.maxSeconds > 0) {
+                                    val ratio = cell.seconds.toFloat() / gridData.maxSeconds
+                                    val alpha = when {
+                                        ratio <= 0.20f -> 0.15f
+                                        ratio <= 0.40f -> 0.35f
+                                        ratio <= 0.60f -> 0.55f
+                                        ratio <= 0.80f -> 0.75f
+                                        else -> 1.0f
+                                    }
+                                    MaterialTheme.colorScheme.primary.copy(alpha = alpha)
+                                } else {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+                                }
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                            }
+                        } else Color.Transparent
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f)
+                                .padding(1.5.dp)
+                                .background(color = color, shape = RoundedCornerShape(3.dp))
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("Less", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf(0.05f, 0.15f, 0.35f, 0.55f, 0.75f, 1.0f).forEach { alpha ->
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha), RoundedCornerShape(2.dp))
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Text("More", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+private fun computeGridData(
+    year: Int,
+    month: Int,
+    isPersian: Boolean,
+    sessions: List<TimerSessionEntity>
+): GridData {
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val cal = Calendar.getInstance()
+
+    val (startDateStr, endDateStr) = if (isPersian) {
+        PersianCalendarHelper.getGregorianDateRange(year, month)
+    } else {
+        cal.set(year, month - 1, 1)
+        val start = sdf.format(cal.time)
+        cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+        val end = sdf.format(cal.time)
+        start to end
+    }
+
+    val perDaySeconds = mutableMapOf<String, Int>()
+    sessions.forEach { session ->
+        if (session.date >= startDateStr && session.date <= endDateStr) {
+            perDaySeconds[session.date] = (perDaySeconds[session.date] ?: 0) + session.durationSeconds
+        }
+    }
+    val maxSeconds = perDaySeconds.values.maxOrNull() ?: 0
+
+    cal.time = sdf.parse(startDateStr)!!
+    val firstDow = cal.get(Calendar.DAY_OF_WEEK) % 7
+    cal.add(Calendar.DAY_OF_MONTH, -firstDow)
+    val firstTime = cal.time.time
+
+    cal.time = sdf.parse(endDateStr)!!
+    val lastDow = cal.get(Calendar.DAY_OF_WEEK) % 7
+    cal.add(Calendar.DAY_OF_MONTH, (6 - lastDow) % 7)
+    val diffDays = ((cal.time.time - firstTime) / 86400000L).toInt()
+    val numWeeks = diffDays / 7 + 1
+
+    cal.timeInMillis = firstTime
+    val monthPrefix = startDateStr.substring(0, 7)
+    val cells = MutableList(7) { MutableList<DayCell?>(numWeeks) { null } }
+
+    for (w in 0 until numWeeks) {
+        for (d in 0..6) {
+            val dateStr = sdf.format(cal.time)
+            cells[d][w] = DayCell(
+                seconds = perDaySeconds[dateStr] ?: 0,
+                isCurrentMonth = dateStr.startsWith(monthPrefix)
+            )
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+    }
+
+    val monthLabel = if (isPersian) {
+        "${PersianCalendarHelper.monthNames[month - 1]} $year"
+    } else {
+        val names = arrayOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+        "${names[month - 1]} $year"
+    }
+
+    return GridData(cells, maxSeconds, numWeeks, monthLabel)
 }
