@@ -85,6 +85,7 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
@@ -2761,6 +2762,8 @@ private fun PersianYearOverviewView(
     }
 }
 
+private enum class MonthFilter { TOTAL, PENDING, DONE }
+
 @Composable
 fun MonthlyPlannerView(
     viewModel: MainViewModel,
@@ -2778,7 +2781,7 @@ fun MonthlyPlannerView(
     val monthlyTasks = if (filterLabel != null) rawMonthlyTasks.filter { it.label == filterLabel } else rawMonthlyTasks
 
     val mainTasks = monthlyTasks.filter { it.parentTaskId == null }
-    var showCompleted by remember { mutableStateOf(false) }
+    var monthFilter by remember { mutableStateOf(MonthFilter.PENDING) }
 
     Column(
         modifier = Modifier
@@ -2881,12 +2884,18 @@ fun MonthlyPlannerView(
                         )
                     }
                 } else {
-                    val activeTasks = mainTasks.filter { it.status != "COMPLETED" }
-                    val completedTasks = mainTasks.filter { it.status == "COMPLETED" }
                     val totalCount = mainTasks.size
-                    val activeCount = activeTasks.size
-                    val completedCount = completedTasks.size
+                    val pendingCount = mainTasks.count { it.status != "COMPLETED" }
+                    val completedCount = mainTasks.count { it.status == "COMPLETED" }
                     val completionProgress = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0f
+
+                    val filteredTasks = remember(monthFilter, mainTasks) {
+                        when (monthFilter) {
+                            MonthFilter.TOTAL -> mainTasks
+                            MonthFilter.PENDING -> mainTasks.filter { it.status != "COMPLETED" }
+                            MonthFilter.DONE -> mainTasks.filter { it.status == "COMPLETED" }
+                        }
+                    }
 
                     Column(
                         modifier = Modifier
@@ -2899,9 +2908,30 @@ fun MonthlyPlannerView(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("$totalCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.onSurface)
-                                Text("TOTAL", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { monthFilter = MonthFilter.TOTAL }
+                                    .background(
+                                        if (monthFilter == MonthFilter.TOTAL) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                        else Color.Transparent
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    "$totalCount",
+                                    fontSize = 22.sp,
+                                    fontWeight = if (monthFilter == MonthFilter.TOTAL) FontWeight.Bold else FontWeight.Light,
+                                    color = if (monthFilter == MonthFilter.TOTAL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "TOTAL",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (monthFilter == MonthFilter.TOTAL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    letterSpacing = 0.5.sp
+                                )
                             }
                             Box(
                                 modifier = Modifier
@@ -2909,9 +2939,30 @@ fun MonthlyPlannerView(
                                     .height(32.dp)
                                     .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                             )
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("$activeCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
-                                Text("PENDING", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { monthFilter = MonthFilter.PENDING }
+                                    .background(
+                                        if (monthFilter == MonthFilter.PENDING) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                        else Color.Transparent
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    "$pendingCount",
+                                    fontSize = 22.sp,
+                                    fontWeight = if (monthFilter == MonthFilter.PENDING) FontWeight.Bold else FontWeight.Light,
+                                    color = if (monthFilter == MonthFilter.PENDING) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "PENDING",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (monthFilter == MonthFilter.PENDING) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    letterSpacing = 0.5.sp
+                                )
                             }
                             Box(
                                 modifier = Modifier
@@ -2919,13 +2970,34 @@ fun MonthlyPlannerView(
                                     .height(32.dp)
                                     .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                             )
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("$completedCount", fontSize = 22.sp, fontWeight = FontWeight.Light, color = MaterialTheme.colorScheme.primary)
-                                Text("DONE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { monthFilter = MonthFilter.DONE }
+                                    .background(
+                                        if (monthFilter == MonthFilter.DONE) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                        else Color.Transparent
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    "$completedCount",
+                                    fontSize = 22.sp,
+                                    fontWeight = if (monthFilter == MonthFilter.DONE) FontWeight.Bold else FontWeight.Light,
+                                    color = if (monthFilter == MonthFilter.DONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "DONE",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (monthFilter == MonthFilter.DONE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    letterSpacing = 0.5.sp
+                                )
                             }
                         }
                         if (totalCount > 0) {
-                            androidx.compose.material3.LinearProgressIndicator(
+                            LinearProgressIndicator(
                                 progress = { completionProgress },
                                 color = MaterialTheme.colorScheme.primary,
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -2939,9 +3011,9 @@ fun MonthlyPlannerView(
                             .weight(1f)
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)
+                        contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
-                        items(activeTasks) { task ->
+                        items(filteredTasks) { task ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2956,7 +3028,7 @@ fun MonthlyPlannerView(
                                         text = task.title,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (task.status == "COMPLETED") MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
                                         text = "Target Date: ${task.date}",
@@ -2978,78 +3050,6 @@ fun MonthlyPlannerView(
                                         fontWeight = FontWeight.Bold,
                                         color = if (task.status == "COMPLETED") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-                            }
-                        }
-
-                        if (completedTasks.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                        .clickable { showCompleted = !showCompleted }
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Completed (${completedTasks.size})",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Icon(
-                                        imageVector = if (showCompleted) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Toggle Completed",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            if (showCompleted) {
-                                items(completedTasks) { task ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable { viewModel.selectDate(task.date) }
-                                            .padding(vertical = 8.dp, horizontal = 12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = task.title,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                            )
-                                            Text(
-                                                text = "Target Date: ${task.date}",
-                                                fontSize = 10.sp,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                            modifier = Modifier.padding(start = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = "COMPLETED",
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
