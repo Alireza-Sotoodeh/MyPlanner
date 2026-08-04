@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -26,6 +27,24 @@ import com.example.ui.screens.AlarmActivity
 import com.example.R
 
 class ReminderReceiver : BroadcastReceiver() {
+
+    private var receiverWakeLock: PowerManager.WakeLock? = null
+
+    private fun acquireWakeLock(context: Context) {
+        releaseWakeLock()
+        receiverWakeLock = try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyPlanner:ReminderReceiver")
+                .also { it.acquire(10000L) }
+        } catch (e: Exception) { null }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            receiverWakeLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) { }
+        receiverWakeLock = null
+    }
 
     private data class ReminderConfig(
         val prefsEnabledKey: String,
@@ -44,6 +63,7 @@ class ReminderReceiver : BroadcastReceiver() {
             action == Intent.ACTION_LOCALE_CHANGED) {
             
             val pendingResult = goAsync()
+            acquireWakeLock(context)
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
@@ -99,7 +119,10 @@ class ReminderReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
-                    pendingResult.finish()
+                    releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
                 }
             }
             return
@@ -153,6 +176,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
         if (isNightBefore) {
             val pendingResult = goAsync()
+            acquireWakeLock(context)
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -171,13 +195,17 @@ class ReminderReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
-                    pendingResult.finish()
+                    releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
                 }
             }
         } else {
             showNotification(context, title, message, vibrate, sound, taskId, true)
             if (title == "Habit Reminder") {
                 val pendingResult = goAsync()
+                acquireWakeLock(context)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val database = AppDatabase.getDatabase(context)
@@ -190,6 +218,9 @@ class ReminderReceiver : BroadcastReceiver() {
                     } catch (e: Exception) {
                         e.printStackTrace()
                     } finally {
+                        releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
                         pendingResult.finish()
                     }
                 }
@@ -199,6 +230,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
     private fun handleDayReview(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -244,13 +276,17 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
 
     private fun handleSleepReminder(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -288,13 +324,17 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
 
     private fun handleDiaryReminder(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -333,13 +373,17 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
 
     private fun handlePlannerReminder(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -390,13 +434,17 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
 
     private fun handleHabitsReminder(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -455,13 +503,17 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
 
     private fun handleTomorrowPlannerReminder(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -515,13 +567,17 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
 
     private fun handleLearnReviewReminder(context: Context) {
         val pendingResult = goAsync()
+        acquireWakeLock(context)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -576,7 +632,10 @@ class ReminderReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                pendingResult.finish()
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
             }
         }
     }
