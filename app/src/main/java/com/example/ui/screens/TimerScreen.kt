@@ -250,8 +250,8 @@ private fun PomodoroTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Task/Note Selector
         TaskSelector(
@@ -283,12 +283,12 @@ private fun PomodoroTab(
 
             // Mark complete on finish toggle
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
                     checked = markCompleteOnFinish,
-                    onCheckedChange = onMarkCompleteOnFinishChange
+                    onCheckedChange = onMarkCompleteOnFinishChange,
+                    modifier = Modifier.height(32.dp)
                 )
                 Text(
                     text = "Mark task complete when done",
@@ -371,11 +371,11 @@ private fun PomodoroTab(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
                 enabled = selectedTask != null || selectedTaskId != null
             ) {
-                Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Start Focus", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -684,10 +684,10 @@ private fun TaskSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedTask = availableTasks.find { it.id == selectedTaskId }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Box(modifier = Modifier.weight(1f)) {
                 OutlinedTextField(
@@ -710,11 +710,12 @@ private fun TaskSelector(
             if (selectedTask != null && selectedTask.status != "COMPLETED") {
                 FilledTonalButton(
                     onClick = { viewModel.markTaskCompleteFromTimer(selectedTask.id) },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp)
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Complete", fontSize = 11.sp)
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text("Done", fontSize = 11.sp)
                 }
             }
         }
@@ -770,7 +771,7 @@ private fun TemplateSelector(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(modifier = Modifier.weight(1f)) {
             OutlinedTextField(
@@ -790,9 +791,12 @@ private fun TemplateSelector(
                 )
             )
         }
-        IconButton(onClick = onManageClick) {
-            Icon(Icons.Default.Settings, contentDescription = "Manage templates")
-        }
+            Box(
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onManageClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = "Manage templates", modifier = Modifier.size(18.dp))
+            }
 
         DropdownMenu(
             expanded = expanded,
@@ -821,18 +825,26 @@ private fun TemplateSelector(
 @Composable
 private fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValueChange: (Int) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(onClick = { if (value > min) onValueChange(value - 5) }) {
-                Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(20.dp))
+        Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Box(
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(enabled = value > min) { onValueChange(value - 5) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(18.dp),
+                    tint = if (value > min) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
-            Text(text = "$value min", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            IconButton(onClick = { if (value < max) onValueChange(value + 5) }) {
-                Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(20.dp))
+            Text(text = "$value min", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Box(
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable(enabled = value < max) { onValueChange(value + 5) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp),
+                    tint = if (value < max) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
             }
         }
     }
@@ -842,33 +854,42 @@ private fun TimeControlRow(label: String, value: Int, min: Int, max: Int, onValu
 private fun TimeControlRowNullable(label: String, value: Int?, min: Int, max: Int, onValueChange: (Int?) -> Unit) {
     val currentValue = value ?: 0
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             if (value != null && value > 0) {
-                IconButton(onClick = {
-                    val newVal = if (currentValue - 5 <= 0) 0 else currentValue - 5
-                    onValueChange(if (newVal == 0) null else newVal)
-                }) {
-                    Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable {
+                        val newVal = if (currentValue - 5 <= 0) 0 else currentValue - 5
+                        onValueChange(if (newVal == 0) null else newVal)
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(18.dp))
                 }
             }
             Text(
                 text = if (value != null && value > 0) "$value min" else "Off",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (value != null && value > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (value == null || value == 0) {
-                IconButton(onClick = { onValueChange(5) }) {
-                    Icon(Icons.Default.Add, contentDescription = "Enable", modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(5) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Enable", modifier = Modifier.size(18.dp))
                 }
             } else if (currentValue < max) {
-                IconButton(onClick = { onValueChange(currentValue + 5) }) {
-                    Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(currentValue + 5) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -878,31 +899,40 @@ private fun TimeControlRowNullable(label: String, value: Int?, min: Int, max: In
 @Composable
 private fun TargetSessionsControl(value: Int?, onValueChange: (Int?) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(32.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = "Target Sessions", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = "Target Sessions", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             if (value != null) {
-                IconButton(onClick = { if (value > 1) onValueChange(value - 1) }) {
-                    Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable(enabled = value > 1) { onValueChange(value - 1) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(18.dp),
+                        tint = if (value > 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
                 }
             }
             Text(
                 text = if (value != null) "$value session${if (value > 1) "s" else ""}" else "∞",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             if (value != null) {
-                IconButton(onClick = { onValueChange(value + 1) }) {
-                    Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onValueChange(value + 1) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(18.dp))
                 }
             }
-            TextButton(onClick = {
-                onValueChange(if (value == null) 1 else null)
-            }) {
+            TextButton(
+                onClick = { onValueChange(if (value == null) 1 else null) },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                modifier = Modifier.height(28.dp)
+            ) {
                 Text(if (value == null) "Set" else "∞", fontSize = 11.sp)
             }
         }
