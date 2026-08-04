@@ -4218,7 +4218,10 @@ private fun TodoItem(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         todo.title,
                         fontSize = 14.sp,
@@ -4227,20 +4230,20 @@ private fun TodoItem(
                         else MaterialTheme.colorScheme.onSurface,
                         textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PriorityBadge(todo.priority)
-                        if (todo.linkedTaskId != null) {
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                linkedItemTitle ?: "Linked to planner",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    Spacer(Modifier.width(6.dp))
+                    PriorityBadge(todo.priority)
+                    if (todo.linkedTaskId != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            linkedItemTitle ?: "Linked to planner",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
                 if (todo.linkedTaskId != null) {
