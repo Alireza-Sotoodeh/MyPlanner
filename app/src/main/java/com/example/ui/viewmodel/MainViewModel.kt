@@ -135,6 +135,9 @@ class MainViewModel(
     private val _autoSortEnabled = MutableStateFlow(prefs.getBoolean("auto_sort_enabled", false))
     val autoSortEnabled: StateFlow<Boolean> = _autoSortEnabled.asStateFlow()
 
+    private val _mottoEnabled = MutableStateFlow(prefs.getBoolean("motto_enabled", true))
+    val mottoEnabled: StateFlow<Boolean> = _mottoEnabled.asStateFlow()
+
     private fun loadCustomLabels(): List<Pair<String, Long>> {
         val serialized = prefs.getString("custom_labels", "") ?: ""
         if (serialized.isBlank()) return emptyList()
@@ -178,6 +181,11 @@ class MainViewModel(
     fun updateAutoSortEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("auto_sort_enabled", enabled).apply()
         _autoSortEnabled.value = enabled
+    }
+
+    fun updateMottoEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("motto_enabled", enabled).apply()
+        _mottoEnabled.value = enabled
     }
 
     fun triggerReorderByPriority() {

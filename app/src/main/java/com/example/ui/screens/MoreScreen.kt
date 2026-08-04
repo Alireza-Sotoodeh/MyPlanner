@@ -101,34 +101,35 @@ fun MoreScreen(
                 }
             }
 
-            val allMottos by viewModel.allMottos.collectAsState()
-            val todayMotto by viewModel.todayMotto.collectAsState()
+            val mottoEnabled by viewModel.mottoEnabled.collectAsState()
 
-            if (allMottos.isNotEmpty()) {
-                MottoCard(motto = todayMotto, visible = true)
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clickable { currentScreen = MoreSubScreen.Mottos },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.FormatQuote,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "No mottos saved \u2014 tap to add",
-                        fontSize = 13.sp,
-                        fontStyle = FontStyle.Italic,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        textAlign = TextAlign.Center
-                    )
+            if (mottoEnabled) {
+                if (allMottos.isNotEmpty()) {
+                    MottoCard(motto = todayMotto, visible = true)
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable { currentScreen = MoreSubScreen.Mottos },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.FormatQuote,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "No mottos saved \u2014 tap to add",
+                            fontSize = 13.sp,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
 
