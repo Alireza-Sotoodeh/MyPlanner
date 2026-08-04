@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,7 +70,7 @@ fun TimerScreen(viewModel: MainViewModel) {
     var showStopConfirm by remember { mutableStateOf(false) }
 
     var historyDateRange by remember { mutableStateOf("today") }
-    var selectedCategory by remember { mutableStateOf("TASKS") }
+    var selectedCategory by remember { mutableStateOf("ALL") }
     var hasAutoSwitched by remember { mutableStateOf(false) }
 
     // Consume pre-selected task from Planner
@@ -295,6 +294,7 @@ private fun PomodoroTab(
                 "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
                 "NOTES" -> t.parentTaskId == null && t.type == "NOTE" && t.id !in parentIds
                 "SUB_NOTES" -> t.parentTaskId != null && t.type == "NOTE"
+                "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
                 else -> false
             }
         }
@@ -551,6 +551,7 @@ private fun CronometerTab(
                 "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
                 "NOTES" -> t.parentTaskId == null && t.type == "NOTE" && t.id !in parentIds
                 "SUB_NOTES" -> t.parentTaskId != null && t.type == "NOTE"
+                "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
                 else -> false
             }
         }
@@ -899,12 +900,11 @@ private fun TaskSelectorSection(
 
             // Category filter chips
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 listOf(
+                    "ALL" to "All",
                     "TASKS" to "Tasks",
                     "SUBTASKS" to "Subtasks",
                     "NOTES" to "Notes",
@@ -913,8 +913,8 @@ private fun TaskSelectorSection(
                     FilterChip(
                         selected = selectedCategory == key,
                         onClick = { onCategoryChange(key) },
-                        label = { Text(label, fontSize = 11.sp) },
-                        modifier = Modifier.height(28.dp)
+                        label = { Text(label, fontSize = 10.sp) },
+                        modifier = Modifier.height(26.dp)
                     )
                 }
             }
@@ -941,12 +941,14 @@ private fun TaskSelectorSection(
                             "SUBTASKS" -> "No subtasks available"
                             "NOTES" -> "No notes available"
                             "SUB_NOTES" -> "No sub notes available"
+                            "ALL" -> "No items available"
                             else -> "No tasks available"
                         }
                         val emptyHint = when (selectedCategory) {
                             "SUBTASKS" -> "Create a task with subtasks in the planner first"
                             "NOTES" -> "Create a note in the planner first"
                             "SUB_NOTES" -> "Create a note with subtasks in the planner first"
+                            "ALL" -> "Create tasks or notes in the planner first"
                             else -> "Create a task in the planner first"
                         }
                         Text(
