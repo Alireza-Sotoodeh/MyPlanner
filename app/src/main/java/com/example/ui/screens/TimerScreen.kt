@@ -57,12 +57,17 @@ fun TimerScreen(viewModel: MainViewModel) {
     val tabTitles = listOf("Pomodoro", "Cronometer", "History")
 
     var selectedTaskId by remember { mutableStateOf<Long?>(null) }
+    var markCompleteOnFinish by remember { mutableStateOf(false) }
+    var focusMinutes by remember { mutableIntStateOf(25) }
+    var shortBreakMinutes by remember { mutableStateOf<Int?>(null) }
+    var longBreakMinutes by remember { mutableStateOf<Int?>(null) }
+    var targetSessions by remember { mutableStateOf<Int?>(null) }
+    var selectedTemplateId by remember { mutableStateOf<Long?>(null) }
 
     var showManageTemplates by remember { mutableStateOf(false) }
     var showChronoSummary by remember { mutableStateOf(false) }
     var chronoSummaryDuration by remember { mutableIntStateOf(0) }
     var showStopConfirm by remember { mutableStateOf(false) }
-    var showFastSetup by remember { mutableStateOf(false) }
 
     var historyDateRange by remember { mutableStateOf("today") }
     val todayStr = remember {
@@ -166,9 +171,22 @@ fun TimerScreen(viewModel: MainViewModel) {
                 context = context,
                 selectedTaskId = selectedTaskId,
                 onSelectedTaskIdChange = { selectedTaskId = it },
+                markCompleteOnFinish = markCompleteOnFinish,
+                onMarkCompleteOnFinishChange = { markCompleteOnFinish = it },
+                focusMinutes = focusMinutes,
+                onFocusMinutesChange = { focusMinutes = it },
+                shortBreakMinutes = shortBreakMinutes,
+                onShortBreakMinutesChange = { shortBreakMinutes = it },
+                longBreakMinutes = longBreakMinutes,
+                onLongBreakMinutesChange = { longBreakMinutes = it },
+                targetSessions = targetSessions,
+                onTargetSessionsChange = { targetSessions = it },
+                selectedTemplateId = selectedTemplateId,
+                onSelectedTemplateIdChange = { selectedTemplateId = it },
+                showManageTemplates = showManageTemplates,
+                onShowManageTemplatesChange = { showManageTemplates = it },
                 showStopConfirm = showStopConfirm,
-                onShowStopConfirmChange = { showStopConfirm = it },
-                onOpenFastSetup = { showFastSetup = true }
+                onShowStopConfirmChange = { showStopConfirm = it }
             )
             1 -> CronometerTab(
                 viewModel = viewModel,
@@ -192,37 +210,6 @@ fun TimerScreen(viewModel: MainViewModel) {
                 tasks = tasks
             )
         }
-
-        // Fast Setup Dialog
-        if (showFastSetup) {
-            FastSetupDialog(
-                templates = templates,
-                viewModel = viewModel,
-                tasks = tasks,
-                selectedTaskId = selectedTaskId,
-                onDismiss = { showFastSetup = false },
-                onStartChronometer = { taskId ->
-                    if (taskId != null) {
-                        viewModel.startChronometer(taskId)
-                    }
-                    tabIndex = 1
-                    showFastSetup = false
-                },
-                onManageTemplates = {
-                    showFastSetup = false
-                    showManageTemplates = true
-                }
-            )
-        }
-
-        // Manage Templates Dialog
-        if (showManageTemplates) {
-            ManageTemplatesDialog(
-                templates = templates,
-                viewModel = viewModel,
-                onDismiss = { showManageTemplates = false }
-            )
-        }
     }
 }
 
@@ -240,9 +227,22 @@ private fun PomodoroTab(
     context: android.content.Context,
     selectedTaskId: Long?,
     onSelectedTaskIdChange: (Long?) -> Unit,
+    markCompleteOnFinish: Boolean,
+    onMarkCompleteOnFinishChange: (Boolean) -> Unit,
+    focusMinutes: Int,
+    onFocusMinutesChange: (Int) -> Unit,
+    shortBreakMinutes: Int?,
+    onShortBreakMinutesChange: (Int?) -> Unit,
+    longBreakMinutes: Int?,
+    onLongBreakMinutesChange: (Int?) -> Unit,
+    targetSessions: Int?,
+    onTargetSessionsChange: (Int?) -> Unit,
+    selectedTemplateId: Long?,
+    onSelectedTemplateIdChange: (Long?) -> Unit,
+    showManageTemplates: Boolean,
+    onShowManageTemplatesChange: (Boolean) -> Unit,
     showStopConfirm: Boolean,
-    onShowStopConfirmChange: (Boolean) -> Unit,
-    onOpenFastSetup: () -> Unit
+    onShowStopConfirmChange: (Boolean) -> Unit
 ) {
     val isTimerActive = activeTask != null
     val minutes = secondsLeft / 60
@@ -266,33 +266,129 @@ private fun PomodoroTab(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (!isTimerActive) {
-            // Task selector
+            // Timer Setup Card (matches StatsScreen card pattern)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    // Template selector
+                    TemplateSelector(
+                        templates = templates,
+                        selectedTemplateId = selectedTemplateId,
+                        onSelectedTemplateIdChange = { templateId ->
+                            onSelectedTemplateIdChange(templateId)
+                            templateId?.let { id ->
+                                val template = templates.find { it.id == id }
+                                if (template != null) {
+                                    onFocusMinutesChange(template.focusMinutes)
+                                    onShortBreakMinutesChange(template.shortBreakMinutes)
+                                    onLongBreakMinutesChange(template.longBreakMinutes)
+                                    onTargetSessionsChange(template.targetSessions)
+                                }
+                            }
+                        },
+                        onManageClick = { onShowManageTemplatesChange(true) },
+                        focusMinutes = focusMinutes,
+                        shortBreakMinutes = shortBreakMinutes,
+                        longBreakMinutes = longBreakMinutes,
+                        targetSessions = targetSessions
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Mark complete on finish toggle
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            onClick = { onMarkCompleteOnFinishChange(!markCompleteOnFinish) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (markCompleteOnFinish)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.height(24.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            ) {
+                                if (markCompleteOnFinish) {
+                                    Icon(
+                                        Icons.Default.CheckCircleOutline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = "Auto-complete",
+                                    fontSize = 10.sp,
+                                    color = if (markCompleteOnFinish)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // Custom time controls
+                    TimeControlRow("Focus", focusMinutes, 5, 120, onFocusMinutesChange)
+                    TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
+                    TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
+                    TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Start button
+                    Button(
+                        onClick = {
+                            val task = selectedTask
+                            if (task != null) {
+                                viewModel.startPomodoro(
+                                    context = context,
+                                    task = task,
+                                    focusMinutes = focusMinutes,
+                                    targetSessions = targetSessions,
+                                    shortBreakMinutes = shortBreakMinutes,
+                                    longBreakMinutes = longBreakMinutes,
+                                    markCompleteOnFinish = markCompleteOnFinish,
+                                    templateName = templates.find { it.id == selectedTemplateId }?.name
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        enabled = selectedTask != null || selectedTaskId != null
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             TaskSelectorSection(
                 availableTasks = availableTasks,
                 selectedTaskId = selectedTaskId,
                 onSelectedTaskIdChange = onSelectedTaskIdChange,
                 viewModel = viewModel
             )
-
-            // Start Focus button
-            Button(
-                onClick = onOpenFastSetup,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                ),
-                enabled = selectedTask != null
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
         }
 
         // Timer Display & Controls (active state)
@@ -371,173 +467,14 @@ private fun PomodoroTab(
             )
         }
     }
-}
 
-@Composable
-private fun FastSetupDialog(
-    templates: List<TimerTemplateEntity>,
-    viewModel: MainViewModel,
-    tasks: List<TaskEntity>,
-    selectedTaskId: Long?,
-    onDismiss: () -> Unit,
-    onStartChronometer: (Long?) -> Unit,
-    onManageTemplates: () -> Unit
-) {
-    val context = LocalContext.current
-    val selectedTask = remember(selectedTaskId, tasks) {
-        tasks.find { it.id == selectedTaskId }
+    if (showManageTemplates) {
+        ManageTemplatesDialog(
+            templates = templates,
+            viewModel = viewModel,
+            onDismiss = { onShowManageTemplatesChange(false) }
+        )
     }
-
-    var localFocusMinutes by remember { mutableIntStateOf(25) }
-    var localShortBreakMinutes by remember { mutableStateOf<Int?>(null) }
-    var localLongBreakMinutes by remember { mutableStateOf<Int?>(null) }
-    var localTargetSessions by remember { mutableStateOf<Int?>(null) }
-    var localSelectedTemplateId by remember { mutableStateOf<Long?>(null) }
-    var localMarkCompleteOnFinish by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Fast Set Up",
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (selectedTask != null) {
-                    Text(
-                        text = selectedTask.title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    HorizontalDivider()
-                }
-
-                TemplateSelector(
-                    templates = templates,
-                    selectedTemplateId = localSelectedTemplateId,
-                    onSelectedTemplateIdChange = { templateId ->
-                        localSelectedTemplateId = templateId
-                        templateId?.let { id ->
-                            templates.find { it.id == id }?.let { template ->
-                                localFocusMinutes = template.focusMinutes
-                                localShortBreakMinutes = template.shortBreakMinutes
-                                localLongBreakMinutes = template.longBreakMinutes
-                                localTargetSessions = template.targetSessions
-                            }
-                        }
-                    },
-                    onManageClick = onManageTemplates,
-                    focusMinutes = localFocusMinutes,
-                    shortBreakMinutes = localShortBreakMinutes,
-                    longBreakMinutes = localLongBreakMinutes,
-                    targetSessions = localTargetSessions
-                )
-
-                HorizontalDivider()
-
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        onClick = { localMarkCompleteOnFinish = !localMarkCompleteOnFinish },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (localMarkCompleteOnFinish)
-                            MaterialTheme.colorScheme.primaryContainer
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.height(24.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            if (localMarkCompleteOnFinish) {
-                                Icon(
-                                    Icons.Default.CheckCircleOutline,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                            }
-                            Text(
-                                text = "Auto-complete",
-                                fontSize = 10.sp,
-                                color = if (localMarkCompleteOnFinish)
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                TimeControlRow("Focus", localFocusMinutes, 5, 120, onValueChange = { localFocusMinutes = it })
-                TimeControlRowNullable("Short Break", localShortBreakMinutes, 0, 30, onValueChange = { localShortBreakMinutes = it })
-                TimeControlRowNullable("Long Break", localLongBreakMinutes, 0, 30, onValueChange = { localLongBreakMinutes = it })
-                TimeControlRowNullable("Target Sessions", localTargetSessions, 0, 99, onValueChange = { localTargetSessions = it }, step = 1, valueSuffix = "session")
-            }
-        },
-        confirmButton = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val task = selectedTask
-                        if (task != null) {
-                            viewModel.startPomodoro(
-                                context = context,
-                                task = task,
-                                focusMinutes = localFocusMinutes,
-                                targetSessions = localTargetSessions,
-                                shortBreakMinutes = localShortBreakMinutes,
-                                longBreakMinutes = localLongBreakMinutes,
-                                markCompleteOnFinish = localMarkCompleteOnFinish,
-                                templateName = templates.find { it.id == localSelectedTemplateId }?.name
-                            )
-                        }
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = selectedTask != null
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Start Focus", fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
-                    onClick = { onStartChronometer(selectedTaskId) },
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Timer, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Start Chronometer", fontWeight = FontWeight.Bold)
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-        shape = RoundedCornerShape(16.dp)
-    )
 }
 
 @Composable
@@ -1339,8 +1276,7 @@ private fun TimerControls(
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = "Reset",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
