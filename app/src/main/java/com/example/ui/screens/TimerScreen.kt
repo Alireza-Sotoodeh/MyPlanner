@@ -315,7 +315,7 @@ private fun PomodoroTab(
     selectedCategory: String,
     onCategoryChange: (String) -> Unit
 ) {
-    val isTimerActive = activeTask != null
+    val isTimerActive = activeTask != null || isRunning
     val minutes = secondsLeft / 60
     val seconds = secondsLeft % 60
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)

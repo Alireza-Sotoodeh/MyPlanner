@@ -1431,6 +1431,7 @@ class MainViewModel(
 
     private var timerServiceJob: Job? = null
     private var _pomodoroProcessedCompletion = false
+    private var _pomodoroWaitingForService = false
 
     // Timer Templates
     val timerTemplates: StateFlow<List<TimerTemplateEntity>> = timerRepository.getAllTemplates()
@@ -2998,6 +2999,7 @@ class MainViewModel(
         _pomodoroPhase.value = "FOCUS"
         _pomodoroSecondsLeft.value = focusMinutes * 60
         _pomodoroRunning.value = true
+        _pomodoroWaitingForService = true
 
         if (task != null) {
             val updatedTask = task.copy(
@@ -3064,6 +3066,7 @@ class MainViewModel(
         _pomodoroRunning.value = false
         _activePomodoroTask.value = null
         _pomodoroSecondsLeft.value = 0
+        _pomodoroWaitingForService = false
         if (_dndEnabled.value) {
             restoreDndState(context)
         }
@@ -3090,6 +3093,7 @@ class MainViewModel(
             TimerForegroundService.state.collect { s ->
                 when (s.mode) {
                     TimerMode.POMODORO -> {
+                        _pomodoroWaitingForService = false
                         _pomodoroSecondsLeft.value = s.secondsLeft
                         _pomodoroRunning.value = s.running && !s.paused
                         _pomodoroPhase.value = s.phase
@@ -3127,18 +3131,20 @@ class MainViewModel(
                         }
                     }
                     null -> {
-                        if (_pomodoroRunning.value || _activePomodoroTask.value != null) {
-                            if (!_pomodoroProcessedCompletion) {
-                                _activePomodoroTask.value = null
-                                _pomodoroRunning.value = false
-                                _pomodoroSecondsLeft.value = 0
+                        if (!_pomodoroWaitingForService) {
+                            if (_pomodoroRunning.value || _activePomodoroTask.value != null) {
+                                if (!_pomodoroProcessedCompletion) {
+                                    _activePomodoroTask.value = null
+                                    _pomodoroRunning.value = false
+                                    _pomodoroSecondsLeft.value = 0
+                                }
                             }
-                        }
-                        if (_chronoRunning.value) {
-                            _chronoRunning.value = false
-                            _chronoElapsed.value = 0L
-                            _chronoPaused.value = false
-                            _chronoSelectedTaskId.value = null
+                            if (_chronoRunning.value) {
+                                _chronoRunning.value = false
+                                _chronoElapsed.value = 0L
+                                _chronoPaused.value = false
+                                _chronoSelectedTaskId.value = null
+                            }
                         }
                         restoreDndState(context)
                     }
@@ -3263,6 +3269,7 @@ class MainViewModel(
         }
         _pomodoroCompletionState.value = null
         _pomodoroRunning.value = true
+        _pomodoroWaitingForService = true
         cancelPomodoroNotification(context)
 
         val intent = Intent(context, TimerForegroundService::class.java).apply {
