@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.TaskEntity
@@ -253,14 +254,6 @@ private fun PomodoroTab(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Task/Note Selector
-        TaskSelector(
-            availableTasks = availableTasks,
-            selectedTaskId = selectedTaskId,
-            onSelectedTaskIdChange = onSelectedTaskIdChange,
-            viewModel = viewModel
-        )
-
         if (!isTimerActive) {
             // Template selector
             TemplateSelector(
@@ -302,6 +295,16 @@ private fun PomodoroTab(
             TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
             TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
             TargetSessionsControl(targetSessions, onTargetSessionsChange)
+        }
+
+        // Task selector section (below controls, above start button)
+        if (!isTimerActive) {
+            TaskSelectorSection(
+                availableTasks = availableTasks,
+                selectedTaskId = selectedTaskId,
+                onSelectedTaskIdChange = onSelectedTaskIdChange,
+                viewModel = viewModel
+            )
         }
 
             // Timer Display & Controls
@@ -350,6 +353,15 @@ private fun PomodoroTab(
                 isDiscardConfirm = showStopConfirm,
                 onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
                 onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
+            )
+
+            // Task selector (locked while timer runs)
+            TaskSelectorSection(
+                availableTasks = availableTasks,
+                selectedTaskId = selectedTaskId,
+                onSelectedTaskIdChange = onSelectedTaskIdChange,
+                viewModel = viewModel,
+                isLocked = true
             )
         } else {
             // Start button when timer is not active
@@ -417,53 +429,64 @@ private fun CronometerTab(
 
     var chronoNote by remember { mutableStateOf("") }
 
+    val chronoIsLocked = chronoRunning || chronoPaused
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        TaskSelector(
+        // Timer section - centered in remaining space
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = timeStr,
+                fontSize = 72.sp,
+                fontWeight = FontWeight.Light,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            TimerControls(
+                isRunning = chronoRunning,
+                isPaused = chronoPaused,
+                onDiscard = { viewModel.discardChronometer() },
+                onStartPause = {
+                    if (!chronoRunning) {
+                        viewModel.startChronometer(selectedTaskId)
+                    } else {
+                        viewModel.pauseChronometer()
+                    }
+                },
+                onStop = {
+                    onChronoSummaryDurationChange(chronoElapsed.toInt())
+                    viewModel.stopChronometer()
+                    onShowChronoSummaryChange(true)
+                },
+                onMinusOne = { viewModel.adjustChronoMinusOne() },
+                isDiscardConfirm = false,
+                onDiscardConfirmDismiss = {},
+                onDiscardConfirmed = {}
+            )
+        }
+
+        // Task selector at bottom
+        TaskSelectorSection(
             availableTasks = availableTasks,
             selectedTaskId = selectedTaskId,
             onSelectedTaskIdChange = onSelectedTaskIdChange,
-            viewModel = viewModel
+            viewModel = viewModel,
+            isLocked = chronoIsLocked
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = timeStr,
-            fontSize = 72.sp,
-            fontWeight = FontWeight.Light,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        TimerControls(
-            isRunning = chronoRunning,
-            isPaused = chronoPaused,
-            onDiscard = { viewModel.discardChronometer() },
-            onStartPause = {
-                if (!chronoRunning) {
-                    viewModel.startChronometer(selectedTaskId)
-                } else {
-                    viewModel.pauseChronometer()
-                }
-            },
-            onStop = {
-                onChronoSummaryDurationChange(chronoElapsed.toInt())
-                viewModel.stopChronometer()
-                onShowChronoSummaryChange(true)
-            },
-            onMinusOne = { viewModel.adjustChronoMinusOne() },
-            isDiscardConfirm = false,
-            onDiscardConfirmDismiss = {},
-            onDiscardConfirmed = {}
-        )
+        Spacer(modifier = Modifier.height(8.dp))
     }
 
     if (showChronoSummary) {
@@ -675,84 +698,134 @@ private fun HistoryTab(
 }
 
 @Composable
-private fun TaskSelector(
+private fun TaskSelectorSection(
     availableTasks: List<TaskEntity>,
     selectedTaskId: Long?,
     onSelectedTaskIdChange: (Long?) -> Unit,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    isLocked: Boolean = false
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedTask = availableTasks.find { it.id == selectedTaskId }
-
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedTextField(
-                    value = selectedTask?.title ?: "Select task/note...",
-                    onValueChange = {},
-                    readOnly = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { expanded = true },
-                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                    singleLine = true,
-                    enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Task / Note",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        if (availableTasks.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(72.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No tasks or notes available",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (selectedTask != null && selectedTask.status != "COMPLETED") {
-                FilledTonalButton(
-                    onClick = { viewModel.markTaskCompleteFromTimer(selectedTask.id) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Text("Done", fontSize = 11.sp)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                availableTasks.forEach { task ->
+                    val isSelected = task.id == selectedTaskId
+                    TaskSelectorCard(
+                        task = task,
+                        isSelected = isSelected,
+                        isLocked = isLocked,
+                        onSelect = {
+                            if (!isLocked) {
+                                onSelectedTaskIdChange(task.id)
+                            }
+                        },
+                        onMarkComplete = { viewModel.markTaskCompleteFromTimer(task.id) }
+                    )
                 }
             }
         }
+    }
+}
 
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.heightIn(max = 300.dp)
+@Composable
+private fun TaskSelectorCard(
+    task: TaskEntity,
+    isSelected: Boolean,
+    isLocked: Boolean,
+    onSelect: () -> Unit,
+    onMarkComplete: () -> Unit
+) {
+    val containerColor = when {
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isSelected) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                else Modifier
+            )
+            .clickable(enabled = !isLocked) { onSelect() },
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            availableTasks.forEach { task ->
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(task.title, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            if (task.label.isNotEmpty()) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer
-                                ) {
-                                    Text(
-                                        text = task.label.uppercase(),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    onClick = {
-                        onSelectedTaskIdChange(task.id)
-                        expanded = false
-                    }
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .border(
+                        width = if (isSelected) 0.dp else 1.5.dp,
+                        color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = task.title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (task.label.isNotEmpty()) {
+                    Text(
+                        text = task.label,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = onMarkComplete,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.CheckCircleOutline,
+                    contentDescription = "Mark complete",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
