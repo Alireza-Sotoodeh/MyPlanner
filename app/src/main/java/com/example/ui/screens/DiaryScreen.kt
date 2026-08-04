@@ -201,8 +201,8 @@ fun DiaryScreen(
         val t = contentValue.text
         val sel = contentValue.selection
         val s = sel.start; val e = sel.end
-        val sb = StringBuilder(t).apply { insert(e, suffix); insert(s, prefix) }
-        val cursor = if (s == e) s + prefix.length else e + prefix.length + suffix.length
+        val sb = StringBuilder(t).apply { insert(s, prefix); insert(e + prefix.length, suffix) }
+        val cursor = if (s == e) s + prefix.length else t.length + prefix.length + suffix.length
         contentValue = TextFieldValue(text = sb.toString(), selection = TextRange(cursor))
         triggerAutoSave()
     }
@@ -336,24 +336,27 @@ fun DiaryScreen(
             )
             buttons.forEachIndexed { i, (label, desc, action) ->
                 if (i > 0) Spacer(Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-                        .clickable(onClick = action),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    onClick = action,
+                    modifier = Modifier.size(40.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
-                    Text(
-                        label,
-                        fontSize = 14.sp,
-                        fontWeight = when (label) {
-                            "B" -> FontWeight.ExtraBold
-                            "H" -> FontWeight.Bold
-                            else -> FontWeight.Normal
-                        },
-                        fontStyle = if (label == "I") FontStyle.Italic else FontStyle.Normal,
-                        textDecoration = if (label == "S") TextDecoration.LineThrough else TextDecoration.None
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            label,
+                            fontSize = 14.sp,
+                            fontWeight = when (label) {
+                                "B" -> FontWeight.ExtraBold
+                                "H" -> FontWeight.Bold
+                                else -> FontWeight.Normal
+                            },
+                            fontStyle = if (label == "I") FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (label == "S") TextDecoration.LineThrough else TextDecoration.None
+                        )
+                    }
                 }
             }
         }
