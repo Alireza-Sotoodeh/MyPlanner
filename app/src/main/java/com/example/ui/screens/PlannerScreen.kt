@@ -584,12 +584,6 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
             }
         }
 
-        val todayMotto by viewModel.todayMotto.collectAsState()
-        MottoCard(
-            motto = todayMotto,
-            visible = showHeaderExtras
-        )
-
         // Day Navigator Bar
         Row(
             modifier = Modifier

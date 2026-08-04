@@ -1,9 +1,11 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -11,10 +13,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.MottoCard
 import com.example.ui.viewmodel.MainViewModel
 
 sealed class MoreSubScreen(val label: String) {
@@ -102,6 +106,36 @@ fun MoreScreen(
                     )
                 }
             }
+
+            val allMottos by viewModel.allMottos.collectAsState()
+            val todayMotto by viewModel.todayMotto.collectAsState()
+
+            if (allMottos.isNotEmpty()) {
+                MottoCard(motto = todayMotto, visible = true)
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clickable { currentScreen = MoreSubScreen.Mottos },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        "Add your favorite quotes in Mottos \u2192",
+                        modifier = Modifier
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .fillMaxWidth(),
+                        fontSize = 13.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier
