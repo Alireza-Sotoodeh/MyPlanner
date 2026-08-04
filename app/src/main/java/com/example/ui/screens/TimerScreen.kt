@@ -38,7 +38,9 @@ import com.example.core.database.entity.TaskEntity
 import com.example.core.database.entity.TimerSessionEntity
 import com.example.core.database.entity.TimerTemplateEntity
 import com.example.ui.components.*
+import android.os.Build
 import com.example.ui.viewmodel.MainViewModel
+import com.example.ui.viewmodel.PomodoroCompletionState
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -52,6 +54,7 @@ fun TimerScreen(viewModel: MainViewModel) {
     val pomodoroPhase by viewModel.pomodoroPhase.collectAsState()
     val pomodoroCurrentSession by viewModel.pomodoroCurrentSession.collectAsState()
     val pomodoroTargetSessions by viewModel.pomodoroTargetSessions.collectAsState()
+    val pomodoroCompletionState by viewModel.pomodoroCompletionState.collectAsState()
 
     val chronoElapsed by viewModel.chronoElapsed.collectAsState()
     val chronoRunning by viewModel.chronoRunning.collectAsState()
@@ -174,6 +177,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                 pomodoroPhase = pomodoroPhase,
                 pomodoroCurrentSession = pomodoroCurrentSession,
                 pomodoroTargetSessions = pomodoroTargetSessions,
+                pomodoroCompletionState = pomodoroCompletionState,
                 tasks = tasks,
                 templates = templates,
                 context = context,
@@ -268,6 +272,7 @@ private fun PomodoroTab(
     pomodoroPhase: String,
     pomodoroCurrentSession: Int,
     pomodoroTargetSessions: Int?,
+    pomodoroCompletionState: PomodoroCompletionState?,
     tasks: List<TaskEntity>,
     templates: List<TimerTemplateEntity>,
     context: android.content.Context,
@@ -323,211 +328,371 @@ private fun PomodoroTab(
         tasks.find { it.id == selectedTaskId }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (!isTimerActive) {
-            // Timer Setup Card (matches StatsScreen card pattern)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    // Template selector
-                    TemplateSelector(
-                        templates = templates,
-                        selectedTemplateId = selectedTemplateId,
-                        onSelectedTemplateIdChange = { templateId ->
-                            onSelectedTemplateIdChange(templateId)
-                            templateId?.let { id ->
-                                val template = templates.find { it.id == id }
-                                if (template != null) {
-                                    onFocusMinutesChange(template.focusMinutes)
-                                    onShortBreakMinutesChange(template.shortBreakMinutes)
-                                    onLongBreakMinutesChange(template.longBreakMinutes)
-                                    onTargetSessionsChange(template.targetSessions)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (!isTimerActive) {
+                // Timer Setup Card (matches StatsScreen card pattern)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        // Template selector
+                        TemplateSelector(
+                            templates = templates,
+                            selectedTemplateId = selectedTemplateId,
+                            onSelectedTemplateIdChange = { templateId ->
+                                onSelectedTemplateIdChange(templateId)
+                                templateId?.let { id ->
+                                    val template = templates.find { it.id == id }
+                                    if (template != null) {
+                                        onFocusMinutesChange(template.focusMinutes)
+                                        onShortBreakMinutesChange(template.shortBreakMinutes)
+                                        onLongBreakMinutesChange(template.longBreakMinutes)
+                                        onTargetSessionsChange(template.targetSessions)
+                                    }
                                 }
-                            }
-                        },
-                        onManageClick = { onShowManageTemplatesChange(true) },
-                        focusMinutes = focusMinutes,
-                        shortBreakMinutes = shortBreakMinutes,
-                        longBreakMinutes = longBreakMinutes,
-                        targetSessions = targetSessions
-                    )
+                            },
+                            onManageClick = { onShowManageTemplatesChange(true) },
+                            focusMinutes = focusMinutes,
+                            shortBreakMinutes = shortBreakMinutes,
+                            longBreakMinutes = longBreakMinutes,
+                            targetSessions = targetSessions
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Mark complete on finish toggle
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Surface(
-                            onClick = { onMarkCompleteOnFinishChange(!markCompleteOnFinish) },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (markCompleteOnFinish)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.height(24.dp)
+                        // Mark complete on finish toggle
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp)
+                            Surface(
+                                onClick = { onMarkCompleteOnFinishChange(!markCompleteOnFinish) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (markCompleteOnFinish)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.height(24.dp)
                             ) {
-                                if (markCompleteOnFinish) {
-                                    Icon(
-                                        Icons.Default.CheckCircleOutline,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(12.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                ) {
+                                    if (markCompleteOnFinish) {
+                                        Icon(
+                                            Icons.Default.CheckCircleOutline,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = "Auto-complete",
+                                        fontSize = 10.sp,
+                                        color = if (markCompleteOnFinish)
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
-                                Text(
-                                    text = "Auto-complete",
-                                    fontSize = 10.sp,
-                                    color = if (markCompleteOnFinish)
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    else
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
-                    }
 
-                    // Custom time controls
-                    TimeControlRow("Focus", focusMinutes, 5, 120, onFocusMinutesChange)
-                    TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
-                    TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
-                    TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
+                        // Custom time controls
+                        TimeControlRow("Focus", focusMinutes, 5, 120, onFocusMinutesChange)
+                        TimeControlRowNullable("Short Break", shortBreakMinutes, 0, 30, onShortBreakMinutesChange)
+                        TimeControlRowNullable("Long Break", longBreakMinutes, 0, 30, onLongBreakMinutesChange)
+                        TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Start button
-                    Button(
-                        onClick = {
-                            val task = selectedTask
-                            if (task != null) {
-                                viewModel.startPomodoro(
-                                    context = context,
-                                    task = task,
-                                    focusMinutes = focusMinutes,
-                                    targetSessions = targetSessions,
-                                    shortBreakMinutes = shortBreakMinutes,
-                                    longBreakMinutes = longBreakMinutes,
-                                    markCompleteOnFinish = markCompleteOnFinish,
-                                    templateName = templates.find { it.id == selectedTemplateId }?.name
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        ),
-                        enabled = selectedTask != null || selectedTaskId != null
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        // Start button
+                        Button(
+                            onClick = {
+                                val task = selectedTask
+                                if (task != null) {
+                                    viewModel.startPomodoro(
+                                        context = context,
+                                        task = task,
+                                        focusMinutes = focusMinutes,
+                                        targetSessions = targetSessions,
+                                        shortBreakMinutes = shortBreakMinutes,
+                                        longBreakMinutes = longBreakMinutes,
+                                        markCompleteOnFinish = markCompleteOnFinish,
+                                        templateName = templates.find { it.id == selectedTemplateId }?.name
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            enabled = selectedTask != null || selectedTaskId != null
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start Focus", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
+
+                TaskSelectorSection(
+                    availableTasks = availableTasks,
+                    selectedTaskId = selectedTaskId,
+                    onSelectedTaskIdChange = onSelectedTaskIdChange,
+                    viewModel = viewModel,
+                    allTasks = allTasks,
+                    selectedCategory = selectedCategory,
+                    onCategoryChange = onCategoryChange
+                )
             }
 
-            TaskSelectorSection(
-                availableTasks = availableTasks,
-                selectedTaskId = selectedTaskId,
-                onSelectedTaskIdChange = onSelectedTaskIdChange,
-                viewModel = viewModel,
-                allTasks = allTasks,
-                selectedCategory = selectedCategory,
-                onCategoryChange = onCategoryChange
-            )
+            // Timer Display & Controls (active state)
+            if (isTimerActive) {
+                // Timer Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Session info
+                        val sessionLabel = if (pomodoroPhase == "FOCUS") "FOCUS" else "BREAK"
+                        val targetLabel = pomodoroTargetSessions?.let { "/$it" } ?: "/∞"
+                        Text(
+                            text = "$sessionLabel · Session $pomodoroCurrentSession$targetLabel",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.5.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Timer
+                        Text(
+                            text = timeStr,
+                            fontSize = 72.sp,
+                            fontWeight = FontWeight.Light,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Controls
+                        TimerControls(
+                            isRunning = isRunning,
+                            isPaused = false,
+                            onDiscard = { onShowStopConfirmChange(true) },
+                            onStartPause = {
+                                if (isRunning) viewModel.pausePomodoro()
+                                else viewModel.resumePomodoro(context)
+                            },
+                            onStop = { viewModel.stopPomodoroEarly(context) },
+                            onMinusOne = { viewModel.adjustPomodoroPlusOne() },
+                            minusOneLabel = "+1m",
+                            onReset = { viewModel.resetPomodoro() },
+                            isDiscardConfirm = showStopConfirm,
+                            onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
+                            onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
+                        )
+                    }
+                }
+
+                // Task selector (locked while timer runs)
+                TaskSelectorSection(
+                    availableTasks = availableTasks,
+                    selectedTaskId = selectedTaskId,
+                    onSelectedTaskIdChange = onSelectedTaskIdChange,
+                    viewModel = viewModel,
+                    isLocked = true,
+                    allTasks = allTasks,
+                    selectedCategory = selectedCategory,
+                    onCategoryChange = onCategoryChange
+                )
+            }
         }
 
-        // Timer Display & Controls (active state)
-        if (isTimerActive) {
-            // Timer Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Session info
-                    val sessionLabel = if (pomodoroPhase == "FOCUS") "FOCUS" else "BREAK"
-                    val targetLabel = pomodoroTargetSessions?.let { "/$it" } ?: "/∞"
-                    Text(
-                        text = "$sessionLabel · Session $pomodoroCurrentSession$targetLabel",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.5.sp
-                    )
+        // In-app completion overlay
+        pomodoroCompletionState?.let { state ->
+            val vibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
+            var ringtoneRef = remember { mutableStateOf<android.media.Ringtone?>(null) }
+            var vibratorRef = remember { mutableStateOf<android.os.Vibrator?>(null) }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+            DisposableEffect(state, vibrateEnabled) {
+                val uri = viewModel.pomodoroRingtoneUri.value
+                val ringtoneUri = if (uri.isNotBlank()) android.net.Uri.parse(uri)
+                    else android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                        ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                try {
+                    val rt = android.media.RingtoneManager.getRingtone(context, ringtoneUri)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        rt.isLooping = true
+                    }
+                    rt.play()
+                    ringtoneRef.value = rt
+                } catch (e: Exception) {}
 
-                    // Timer
-                    Text(
-                        text = timeStr,
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.Light,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                if (vibrateEnabled) {
+                    val vb = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val vm = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                        vm?.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                    }
+                    vb?.let {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            it.vibrate(android.os.VibrationEffect.createWaveform(longArrayOf(0, 1000, 1000), 0))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            it.vibrate(longArrayOf(0, 1000, 1000), 0)
+                        }
+                        vibratorRef.value = it
+                    }
+                }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Controls
-                    TimerControls(
-                        isRunning = isRunning,
-                        isPaused = false,
-                        onDiscard = { onShowStopConfirmChange(true) },
-                        onStartPause = {
-                            if (isRunning) viewModel.pausePomodoro()
-                            else viewModel.resumePomodoro(context)
-                        },
-                        onStop = { viewModel.stopPomodoroEarly(context) },
-                        onMinusOne = { viewModel.adjustPomodoroPlusOne() },
-                        minusOneLabel = "+1m",
-                        onReset = { viewModel.resetPomodoro() },
-                        isDiscardConfirm = showStopConfirm,
-                        onDiscardConfirmDismiss = { onShowStopConfirmChange(false) },
-                        onDiscardConfirmed = { viewModel.discardPomodoro(context); onShowStopConfirmChange(false) }
-                    )
+                onDispose {
+                    ringtoneRef.value?.stop()
+                    vibratorRef.value?.cancel()
                 }
             }
 
-            // Task selector (locked while timer runs)
-            TaskSelectorSection(
-                availableTasks = availableTasks,
-                selectedTaskId = selectedTaskId,
-                onSelectedTaskIdChange = onSelectedTaskIdChange,
-                viewModel = viewModel,
-                isLocked = true,
-                allTasks = allTasks,
-                selectedCategory = selectedCategory,
-                onCategoryChange = onCategoryChange
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Phase icon
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (state.phase == "FOCUS") Color(0xFF4CAF50).copy(alpha = 0.15f)
+                                    else Color(0xFFFF9800).copy(alpha = 0.15f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (state.phase == "FOCUS") "✓" else "☕",
+                                fontSize = 40.sp,
+                                color = if (state.phase == "FOCUS") Color(0xFF4CAF50) else Color(0xFFFF9800)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = if (state.phase == "FOCUS") "Focus Complete!" else "Break Over!",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        val sessionStr = state.totalSessions?.let { "Session ${state.sessionNumber} of $it" }
+                            ?: "Session ${state.sessionNumber}"
+                        Text(
+                            text = sessionStr,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "\"${state.taskTitle}\"",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
+                        if (state.durationSeconds > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Completed ${state.durationSeconds / 60} minutes",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        if (state.canProceed && state.nextActionLabel.isNotBlank()) {
+                            Button(
+                                onClick = {
+                                    ringtoneRef.value?.stop()
+                                    vibratorRef.value?.cancel()
+                                    viewModel.continueFromPomodoroCompletion(context)
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (state.phase == "FOCUS") Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text(state.nextActionLabel, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                ringtoneRef.value?.stop()
+                                vibratorRef.value?.cancel()
+                                viewModel.endPomodoroChain(context)
+                            },
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(
+                                if (state.isFinal) "Finish" else "Done",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 

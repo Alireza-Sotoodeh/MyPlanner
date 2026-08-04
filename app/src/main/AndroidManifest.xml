@@ -33,6 +33,12 @@
             </intent-filter>
         </activity>
         <activity android:name=".ui.screens.AlarmActivity" android:exported="false" android:theme="@style/Theme.MyApplication" />
+        <activity
+            android:name=".ui.screens.PomodoroFinishActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MyApplication"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
         
         <receiver android:name=".core.receiver.ReminderReceiver" android:exported="true">
             <intent-filter>

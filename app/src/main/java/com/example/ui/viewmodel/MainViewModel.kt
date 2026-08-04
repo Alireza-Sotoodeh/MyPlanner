@@ -139,6 +139,20 @@ data class PendingSubTodoCompletion(
     val subTodos: List<TodoEntity>
 )
 
+data class PomodoroCompletionState(
+    val phase: String,
+    val sessionNumber: Int,
+    val totalSessions: Int?,
+    val taskTitle: String,
+    val taskId: Long,
+    val durationSeconds: Int,
+    val nextActionLabel: String,
+    val nextActionMinutes: Int,
+    val canProceed: Boolean,
+    val isFinal: Boolean,
+    val breakDuration: Int?
+)
+
 class MainViewModel(
     private val taskRepository: TaskRepository,
     private val timerRepository: TimerRepository,
@@ -184,6 +198,15 @@ class MainViewModel(
 
     private val _eventReminderSound = MutableStateFlow(prefs.getBoolean("event_reminder_sound", true))
     val eventReminderSound: StateFlow<Boolean> = _eventReminderSound.asStateFlow()
+
+    private val _pomodoroRingtoneUri = MutableStateFlow(prefs.getString("pomodoro_ringtone_uri", "") ?: "")
+    val pomodoroRingtoneUri: StateFlow<String> = _pomodoroRingtoneUri.asStateFlow()
+
+    private val _pomodoroVibrateEnabled = MutableStateFlow(prefs.getBoolean("pomodoro_vibrate_enabled", true))
+    val pomodoroVibrateEnabled: StateFlow<Boolean> = _pomodoroVibrateEnabled.asStateFlow()
+
+    private val _pomodoroCompletionState = MutableStateFlow<PomodoroCompletionState?>(null)
+    val pomodoroCompletionState: StateFlow<PomodoroCompletionState?> = _pomodoroCompletionState.asStateFlow()
 
     private val _defaultBreakMinutes = MutableStateFlow(prefs.getInt("default_break_minutes", 5))
     val defaultBreakMinutes: StateFlow<Int> = _defaultBreakMinutes.asStateFlow()
@@ -247,6 +270,27 @@ class MainViewModel(
     fun updateEventReminderSound(enabled: Boolean) {
         prefs.edit().putBoolean("event_reminder_sound", enabled).apply()
         _eventReminderSound.value = enabled
+    }
+
+    fun updatePomodoroRingtoneUri(uri: String) {
+        prefs.edit().putString("pomodoro_ringtone_uri", uri).apply()
+        _pomodoroRingtoneUri.value = uri
+    }
+
+    fun updatePomodoroVibrateEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("pomodoro_vibrate_enabled", enabled).apply()
+        _pomodoroVibrateEnabled.value = enabled
+    }
+
+    fun getCurrentRingtoneName(context: Context): String {
+        val uri = _pomodoroRingtoneUri.value
+        if (uri.isBlank()) return "Default ringtone"
+        return try {
+            val ringtone = RingtoneManager.getRingtone(context, android.net.Uri.parse(uri))
+            ringtone?.getTitle(context) ?: "Custom ringtone"
+        } catch (e: Exception) {
+            "Custom ringtone"
+        }
     }
 
     fun updateAutoSortEnabled(enabled: Boolean) {
@@ -1727,6 +1771,8 @@ class MainViewModel(
         val targetSess = _pomodoroTargetSessions.value
         val currentSess = _pomodoroCurrentSession.value
 
+        _pomodoroRunning.value = false
+
         if (currentPhase == "FOCUS") {
             viewModelScope.launch {
                 val relatedTask = taskRepository.getTaskById(task.id)
@@ -1762,50 +1808,160 @@ class MainViewModel(
                 }
             }
 
-            triggerSessionFeedback(
-                context,
-                "Focus Session Completed!",
-                "Great job! Focus session $currentSess for '${task.title}' is done."
-            )
+            val isTargetReached = targetSess != null && currentSess >= targetSess
+            val isLongBreak = currentSess % 4 == 0
+            val breakDuration = if (isLongBreak) longBreakMin else shortBreakMin
+            val hasBreak = breakDuration != null && breakDuration > 0
 
-            if (targetSess != null && currentSess >= targetSess) {
-                completeEntireChain(context, "Congratulations! You have finished all $targetSess focus sessions for '${task.title}'.")
+            if (isTargetReached) {
+                setCompletionStateAndNotify(context, task, "FOCUS", currentSess, targetSess, _pomodoroFocusMinutes.value * 60, "", 0, false, true, null)
             } else {
-                val isLongBreak = currentSess % 4 == 0
-                val breakDuration = if (isLongBreak) longBreakMin else shortBreakMin
-                if (breakDuration != null && breakDuration > 0) {
-                    _pomodoroPhase.value = "BREAK"
-                    _pomodoroSecondsLeft.value = breakDuration * 60
-                    startTimerJob(context)
+                val label: String
+                val minutes: Int
+                if (hasBreak) {
+                    label = "Start Break (${breakDuration}m)"
+                    minutes = breakDuration
                 } else {
-                    _pomodoroCurrentSession.value = currentSess + 1
-                    _pomodoroPhase.value = "FOCUS"
-                    _pomodoroSecondsLeft.value = _pomodoroFocusMinutes.value * 60
-                    startTimerJob(context)
+                    label = "Next Focus (${_pomodoroFocusMinutes.value}m)"
+                    minutes = _pomodoroFocusMinutes.value
                 }
+                setCompletionStateAndNotify(context, task, "FOCUS", currentSess, targetSess, _pomodoroFocusMinutes.value * 60, label, minutes, true, false, if (hasBreak) breakDuration else null)
             }
         } else {
-            triggerSessionFeedback(
-                context,
-                "Break Over! Time to Focus",
-                "Get ready! Focus session ${currentSess + 1} for '${task.title}' is starting."
-            )
-            _pomodoroCurrentSession.value = currentSess + 1
-            _pomodoroPhase.value = "FOCUS"
-            _pomodoroSecondsLeft.value = _pomodoroFocusMinutes.value * 60
-            startTimerJob(context)
+            val isTargetReached = targetSess != null && currentSess >= targetSess
+            if (isTargetReached) {
+                setCompletionStateAndNotify(context, task, "BREAK", currentSess, targetSess, 0, "", 0, false, true, null)
+            } else {
+                setCompletionStateAndNotify(context, task, "BREAK", currentSess, targetSess, 0, "Next Focus (${_pomodoroFocusMinutes.value}m)", _pomodoroFocusMinutes.value, true, false, null)
+            }
         }
     }
 
-    private fun completeEntireChain(context: Context, message: String) {
+    private fun setCompletionStateAndNotify(context: Context, task: TaskEntity, phase: String, sessionNumber: Int, totalSessions: Int?, durationSeconds: Int, nextActionLabel: String, nextActionMinutes: Int, canProceed: Boolean, isFinal: Boolean, breakDuration: Int?) {
+        val state = PomodoroCompletionState(
+            phase = phase,
+            sessionNumber = sessionNumber,
+            totalSessions = totalSessions,
+            taskTitle = task.title,
+            taskId = task.id,
+            durationSeconds = durationSeconds,
+            nextActionLabel = nextActionLabel,
+            nextActionMinutes = nextActionMinutes,
+            canProceed = canProceed,
+            isFinal = isFinal,
+            breakDuration = breakDuration
+        )
+        _pomodoroCompletionState.value = state
+        firePomodoroCompletionNotification(context, state)
+    }
+
+    fun continueFromPomodoroCompletion(context: Context) {
+        val state = _pomodoroCompletionState.value ?: return
+        val nextActionMinutes = state.nextActionMinutes
+        if (nextActionMinutes <= 0) return
+
+        if (state.phase == "FOCUS") {
+            if (state.breakDuration != null && state.breakDuration > 0) {
+                _pomodoroPhase.value = "BREAK"
+                _pomodoroSecondsLeft.value = state.breakDuration * 60
+            } else {
+                _pomodoroCurrentSession.value = state.sessionNumber + 1
+                _pomodoroPhase.value = "FOCUS"
+                _pomodoroSecondsLeft.value = _pomodoroFocusMinutes.value * 60
+            }
+        } else {
+            _pomodoroCurrentSession.value = state.sessionNumber + 1
+            _pomodoroPhase.value = "FOCUS"
+            _pomodoroSecondsLeft.value = _pomodoroFocusMinutes.value * 60
+        }
+        _pomodoroCompletionState.value = null
+        _pomodoroRunning.value = true
+        cancelPomodoroNotification(context)
+        startTimerJob(context)
+    }
+
+    fun endPomodoroChain(context: Context) {
         pomodoroJob?.cancel()
         _pomodoroRunning.value = false
         _activePomodoroTask.value = null
         _pomodoroSecondsLeft.value = 0
+        _pomodoroCompletionState.value = null
+        cancelPomodoroNotification(context)
         if (_dndEnabled.value) {
             setDndState(context, originalDndState)
         }
-        triggerSessionFeedback(context, "Chain Completed!", message)
+    }
+
+    fun handlePomodoroAction(context: Context, action: String) {
+        when (action) {
+            "continue" -> continueFromPomodoroCompletion(context)
+            "end" -> endPomodoroChain(context)
+        }
+    }
+
+    fun testPomodoroAlarm(context: Context) {
+        val uri = _pomodoroRingtoneUri.value
+        val ringtoneUri = if (uri.isNotBlank()) android.net.Uri.parse(uri)
+            else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        try {
+            val ringtone = RingtoneManager.getRingtone(context, ringtoneUri)
+            ringtone?.play()
+            viewModelScope.launch {
+                delay(2000)
+                ringtone?.stop()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "testPomodoroAlarm ringtone failed", e)
+        }
+        if (_pomodoroVibrateEnabled.value) {
+            try {
+                val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                    vibratorManager?.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? Vibrator
+                }
+                vibrator?.let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        it.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 300, 100, 300), -1))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        it.vibrate(1000)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "testPomodoroAlarm vibrate failed", e)
+            }
+        }
+        showPomodoroTestNotification(context)
+    }
+
+    private fun showPomodoroTestNotification(context: Context) {
+        try {
+            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "pomodoro_session_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(channelId, "Pomodoro Sessions", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Notifications for focus and break intervals"
+                    enableVibration(true)
+                    setBypassDnd(true)
+                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+            val notification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle("Pomodoro Alarm Test")
+                .setContentText("This is what you will see when a session completes.")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .build()
+            notificationManager.notify(4005, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "showPomodoroTestNotification failed", e)
+        }
     }
 
     // --- Chronometer ---
@@ -1963,46 +2119,6 @@ class MainViewModel(
     }
 
     private fun triggerSessionFeedback(context: Context, title: String, message: String) {
-        // 1. Play ringtone
-        try {
-            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            val ringtone = RingtoneManager.getRingtone(context, notificationUri)
-            ringtone?.play()
-            viewModelScope.launch {
-                delay(3000)
-                if (ringtone?.isPlaying == true) {
-                    ringtone.stop()
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        // 2. Vibrate
-        try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
-            
-            vibrator?.let {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val pattern = longArrayOf(0, 500, 200, 500)
-                    it.vibrate(VibrationEffect.createWaveform(pattern, -1))
-                } else {
-                    @Suppress("DEPRECATION")
-                    it.vibrate(1000)
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        // 3. Notification
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "pomodoro_session_channel"
@@ -2017,7 +2133,6 @@ class MainViewModel(
                 }
                 notificationManager.createNotificationChannel(channel)
             }
-
             val notification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle(title)
@@ -2026,10 +2141,74 @@ class MainViewModel(
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setAutoCancel(true)
                 .build()
-
             notificationManager.notify(4002, notification)
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun firePomodoroCompletionNotification(context: Context, state: PomodoroCompletionState) {
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "pomodoro_session_channel_fs"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                notificationManager.deleteNotificationChannel(channelId)
+                val channel = NotificationChannel(
+                    channelId,
+                    "Pomodoro Alarms",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Full-screen Pomodoro session completion alerts"
+                    enableVibration(true)
+                    setBypassDnd(true)
+                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val activityIntent = Intent(context, com.example.ui.screens.PomodoroFinishActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("phase", state.phase)
+                putExtra("sessionNumber", state.sessionNumber)
+                putExtra("totalSessions", state.totalSessions)
+                putExtra("taskTitle", state.taskTitle)
+                putExtra("taskId", state.taskId)
+                putExtra("durationSeconds", state.durationSeconds)
+                putExtra("nextActionLabel", state.nextActionLabel)
+                putExtra("nextActionMinutes", state.nextActionMinutes)
+                putExtra("canProceed", state.canProceed)
+                putExtra("isFinal", state.isFinal)
+                putExtra("breakDuration", state.breakDuration ?: -1)
+                putExtra("ringtoneUri", _pomodoroRingtoneUri.value)
+                putExtra("vibrateEnabled", _pomodoroVibrateEnabled.value)
+            }
+            val pendingIntent = PendingIntent.getActivity(context, 4003, activityIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+            val title = if (state.phase == "FOCUS") "Focus Session Completed!" else "Break Over!"
+            val message = "Session ${state.sessionNumber}${if (state.totalSessions != null) "/${state.totalSessions}" else ""} for '${state.taskTitle}' is done."
+
+            val notification = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setFullScreenIntent(pendingIntent, true)
+                .setAutoCancel(true)
+                .build()
+
+            notificationManager.notify(4003, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "firePomodoroCompletionNotification failed", e)
+        }
+    }
+
+    private fun cancelPomodoroNotification(context: Context) {
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(4003)
+        } catch (e: Exception) {
+            Log.e(TAG, "cancelPomodoroNotification failed", e)
         }
     }
 

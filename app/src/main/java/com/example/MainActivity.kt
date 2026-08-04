@@ -123,6 +123,9 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("open_day_review", false)) {
             viewModel.checkAndTriggerDayReviewPrompt()
         }
+        intent.getStringExtra("pomodoro_action")?.let { action ->
+            viewModel.handlePomodoroAction(this@MainActivity, action)
+        }
 
         setContent {
             MyApplicationTheme {
@@ -256,6 +259,9 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra("open_day_review", false)) {
             viewModel.checkAndTriggerDayReviewPrompt()
+        }
+        intent.getStringExtra("pomodoro_action")?.let { action ->
+            viewModel.handlePomodoroAction(this@MainActivity, action)
         }
     }
 }

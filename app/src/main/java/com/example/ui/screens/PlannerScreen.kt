@@ -161,6 +161,8 @@ import java.util.Locale
 import com.example.core.utils.PersianCalendarHelper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.media.RingtoneManager
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -3419,6 +3421,11 @@ fun SettingsDialog(
     var enteredReviewTime by remember { mutableStateOf(reviewReminderTime) }
     var enteredReviewEnabled by remember { mutableStateOf(reviewReminderEnabled) }
     var showReviewTimePicker by remember { mutableStateOf(false) }
+
+    val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
+    val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
+    var enteredPomodoroRingtoneUri by remember { mutableStateOf(pomodoroRingtoneUri) }
+    var enteredPomodoroVibrateEnabled by remember { mutableStateOf(pomodoroVibrateEnabled) }
     val reviewTimePickerState = rememberTimePickerState(
         initialHour = enteredReviewTime.substringBefore(":").toIntOrNull() ?: 21,
         initialMinute = enteredReviewTime.substringAfter(":").toIntOrNull() ?: 0,
@@ -3599,7 +3606,85 @@ fun SettingsDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
-                // Section 5: Event Reminders
+                // Section 5: Pomodoro Alarm
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "POMODORO ALARM",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.sp
+                    )
+                    // Ringtone selector
+                    val ringtoneName = if (enteredPomodoroRingtoneUri.isBlank()) "Default ringtone"
+                        else try {
+                            val rt = RingtoneManager.getRingtone(context, android.net.Uri.parse(enteredPomodoroRingtoneUri))
+                            rt?.getTitle(context) ?: "Custom ringtone"
+                        } catch (e: Exception) { "Custom ringtone" }
+                    val ringtoneLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.StartActivityForResult()
+                    ) { result ->
+                        result.data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)?.let { uri ->
+                            enteredPomodoroRingtoneUri = uri.toString()
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = ringtoneName,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        TextButton(onClick = {
+                            val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Pomodoro Alarm")
+                                if (enteredPomodoroRingtoneUri.isNotBlank()) {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(enteredPomodoroRingtoneUri))
+                                }
+                            }
+                            ringtoneLauncher.launch(intent)
+                        }) {
+                            Text("Change", fontSize = 12.sp)
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Vibrate on complete",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Switch(
+                            checked = enteredPomodoroVibrateEnabled,
+                            onCheckedChange = { enteredPomodoroVibrateEnabled = it }
+                        )
+                    }
+                    // Test button
+                    TextButton(onClick = {
+                        viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
+                        viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
+                        viewModel.testPomodoroAlarm(context)
+                    }) {
+                        Text("Test Alarm", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // Section 6: Event Reminders
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "EVENT REMINDERS",
@@ -3770,6 +3855,8 @@ fun SettingsDialog(
                     viewModel.updateDndEnabled(enteredDndEnabled)
                     viewModel.updateEventReminderVibrate(enteredEventVibrate)
                     viewModel.updateEventReminderSound(enteredEventSound)
+                    viewModel.updatePomodoroRingtoneUri(enteredPomodoroRingtoneUri)
+                    viewModel.updatePomodoroVibrateEnabled(enteredPomodoroVibrateEnabled)
                     viewModel.updateReviewReminderTime(enteredReviewTime)
                     viewModel.updateReviewReminderEnabled(enteredReviewEnabled)
                     onDismiss()
