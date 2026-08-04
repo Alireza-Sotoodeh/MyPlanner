@@ -6287,6 +6287,8 @@ private fun AddToPlannerDialog(
 fun LearnTab(viewModel: MainViewModel) {
     val learnItems by viewModel.learnItems.collectAsState()
     val learnGroups by viewModel.learnGroups.collectAsState()
+    val allTasks by viewModel.allTasks.collectAsState()
+    val todayDate by viewModel.todayDate.collectAsState()
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<LearnItemEntity?>(null) }
@@ -6488,6 +6490,8 @@ fun LearnTab(viewModel: MainViewModel) {
                                     LearnItemCard(
                                         item = item,
                                         viewModel = viewModel,
+                                        allTasks = allTasks,
+                                        todayDate = todayDate,
                                         onEdit = { itemToEdit = item },
                                         onStart = { itemToStart = item },
                                         onDelete = { viewModel.deleteLearnItemWithUndo(item) }
@@ -6571,6 +6575,8 @@ fun LearnTab(viewModel: MainViewModel) {
 fun LearnItemCard(
     item: LearnItemEntity,
     viewModel: MainViewModel,
+    allTasks: List<TaskEntity>,
+    todayDate: String,
     onEdit: () -> Unit,
     onStart: () -> Unit,
     onDelete: () -> Unit
@@ -6599,6 +6605,7 @@ fun LearnItemCard(
             ?: BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // === HEADER: icon + type badge + group badge + title + priority + status ===
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -6609,6 +6616,38 @@ fun LearnItemCard(
                     tint = Color(0xFFFFB300)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
+                val typeColor = if (item.type == "BOOK") Color(0xFFFFB300) else Color(0xFF2196F3)
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = typeColor.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = item.type,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = typeColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                if (item.groupId != null) {
+                    val group = learnGroups.find { it.id == item.groupId }
+                    if (group != null) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(group.color).copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = group.name,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(group.color),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                }
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.titleMedium,
@@ -6643,14 +6682,14 @@ fun LearnItemCard(
                     }
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            // === PROGRESS: mastered count + progress bar ===
             if (sections.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
+                val totalSections = sections.size
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    val totalSections = sections.size
                     Text(
                         text = "$masteredCount/$totalSections mastered",
                         style = MaterialTheme.typography.bodySmall,
@@ -6664,31 +6703,102 @@ fun LearnItemCard(
                         trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                     )
                 }
+                // === SECTION BREAKDOWN (ACTIVE only) ===
                 if (item.status == "ACTIVE") {
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val dotColors = listOf(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f) to notStartedCount,
-                            Color(0xFFFFB300).copy(alpha = 0.5f) to studiedCount,
-                            Color(0xFFFFB300) to inReviewCount,
-                            Color(0xFF4CAF50) to masteredCount
-                        )
-                        val dotLabels = listOf("•", "•", "•", "•")
-                        dotColors.forEachIndexed { index, (color, count) ->
-                            if (count > 0) {
+                        if (notStartedCount > 0) {
+                            Text(
+                                text = "$notStartedCount to study",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                            )
+                        }
+                        if (studiedCount > 0) {
+                            Text(
+                                text = "$studiedCount reviewing",
+                                fontSize = 10.sp,
+                                color = Color(0xFFFFB300).copy(alpha = 0.6f)
+                            )
+                        }
+                        if (inReviewCount > 0) {
+                            Text(
+                                text = "$inReviewCount to review",
+                                fontSize = 10.sp,
+                                color = Color(0xFFFFB300)
+                            )
+                        }
+                        if (masteredCount > 0) {
+                            Text(
+                                text = "$masteredCount mastered",
+                                fontSize = 10.sp,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                    val remaining = totalSections - masteredCount
+                    val daysEstimate = kotlin.math.ceil(remaining.toFloat() / item.sectionsPerDay.coerceAtLeast(1)).toInt()
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "~${daysEstimate}d remaining",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+                // === TODAY'S PENDING TASKS (ACTIVE only) ===
+                if (item.status == "ACTIVE") {
+                    val sectionIds = sections.map { it.id }.toSet()
+                    val pendingToday = allTasks.filter { task ->
+                        task.linkedLearnSectionId in sectionIds &&
+                        task.date == todayDate &&
+                        task.status == "PENDING"
+                    }
+                    val studyTasksToday = pendingToday.count { it.label == "Study" }
+                    val reviewTasksToday = pendingToday.count { it.label == "Review" }
+                    if (studyTasksToday > 0 || reviewTasksToday > 0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (studyTasksToday > 0) {
+                                Icon(
+                                    Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Color(0xFFFFB300)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "${dotLabels[index]} $count",
-                                    fontSize = 10.sp,
-                                    color = color
+                                    text = "$studyTasksToday study today",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFFFB300)
+                                )
+                            }
+                            if (studyTasksToday > 0 && reviewTasksToday > 0) {
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                            if (reviewTasksToday > 0) {
+                                Icon(
+                                    Icons.Default.Update,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Color(0xFF2196F3)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "$reviewTasksToday review today",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF2196F3)
                                 )
                             }
                         }
                     }
                 }
             }
+            // === ACTION BUTTONS ===
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -6740,7 +6850,7 @@ fun LearnItemCard(
         )
         if (item.status != "COMPLETED") {
             DropdownMenuItem(
-                text = { Text(if (item.status == "ACTIVE") "Archive" else "Archive") },
+                text = { Text("Archive") },
                 onClick = {
                     showMenu = false
                     viewModel.archiveLearnItem(item)
