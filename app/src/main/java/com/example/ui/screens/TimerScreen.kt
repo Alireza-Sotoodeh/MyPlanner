@@ -76,6 +76,7 @@ fun TimerScreen(viewModel: MainViewModel) {
     var selectedTemplateId by remember { mutableStateOf<Long?>(null) }
 
     var showManageTemplates by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var showChronoSummary by remember { mutableStateOf(false) }
     var chronoSummaryDuration by remember { mutableIntStateOf(0) }
     var showStopConfirm by remember { mutableStateOf(false) }
@@ -154,7 +155,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                 )
             }
             HeaderActions(
-                onSettingsClick = { showManageTemplates = true },
+                onSettingsClick = { showSettingsDialog = true },
                 onHomeClick = { viewModel.selectTab(0); viewModel.selectDate(viewModel.todayDate.value) }
             )
         }
@@ -272,6 +273,10 @@ fun TimerScreen(viewModel: MainViewModel) {
                 }
             }
         )
+    }
+
+    if (showSettingsDialog) {
+        SettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 }
 
