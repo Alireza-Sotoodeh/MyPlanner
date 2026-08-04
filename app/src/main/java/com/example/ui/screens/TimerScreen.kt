@@ -291,7 +291,11 @@ private fun PomodoroTab(
                                 }
                             }
                         },
-                        onManageClick = { onShowManageTemplatesChange(true) }
+                        onManageClick = { onShowManageTemplatesChange(true) },
+                        focusMinutes = focusMinutes,
+                        shortBreakMinutes = shortBreakMinutes,
+                        longBreakMinutes = longBreakMinutes,
+                        targetSessions = targetSessions
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -985,7 +989,11 @@ private fun TemplateSelector(
     templates: List<TimerTemplateEntity>,
     selectedTemplateId: Long?,
     onSelectedTemplateIdChange: (Long?) -> Unit,
-    onManageClick: () -> Unit
+    onManageClick: () -> Unit,
+    focusMinutes: Int,
+    shortBreakMinutes: Int?,
+    longBreakMinutes: Int?,
+    targetSessions: Int?
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1030,9 +1038,15 @@ private fun TemplateSelector(
                 modifier = Modifier.horizontalScroll(rememberScrollState())
             ) {
                 // Custom option
+                val customSubtitle = buildString {
+                    append("${focusMinutes}m")
+                    shortBreakMinutes?.let { append(" / ${it}m") } ?: append(" / —")
+                    longBreakMinutes?.let { append(" / ${it}m") } ?: append(" / —")
+                    append(" · ${targetSessions?.toString() ?: "∞"}")
+                }
                 TemplateChip(
                     label = "Custom",
-                    subtitle = null,
+                    subtitle = customSubtitle,
                     isSelected = selectedTemplateId == null,
                     onClick = { onSelectedTemplateIdChange(null) }
                 )
