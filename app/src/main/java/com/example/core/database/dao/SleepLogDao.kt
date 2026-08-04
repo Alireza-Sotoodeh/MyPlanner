@@ -9,6 +9,9 @@ interface SleepLogDao {
     @Query("SELECT * FROM sleep_logs ORDER BY date DESC")
     fun getAllSleepLogs(): Flow<List<SleepLogEntity>>
 
+    @Query("SELECT * FROM sleep_logs ORDER BY date DESC")
+    suspend fun getAllSleepLogsSync(): List<SleepLogEntity>
+
     @Query("SELECT * FROM sleep_logs WHERE date = :date LIMIT 1")
     suspend fun getSleepLogForDate(date: String): SleepLogEntity?
 

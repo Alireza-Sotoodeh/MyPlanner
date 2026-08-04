@@ -14,6 +14,9 @@ interface ShopItemDao {
     @Query("SELECT * FROM shop_items ORDER BY createdAt DESC")
     fun getAllItems(): Flow<List<ShopItemEntity>>
 
+    @Query("SELECT * FROM shop_items ORDER BY createdAt DESC")
+    suspend fun getAllItemsSync(): List<ShopItemEntity>
+
     @Query("SELECT * FROM shop_items WHERE isPurchased = 0 ORDER BY createdAt DESC")
     fun getUnpurchasedItems(): Flow<List<ShopItemEntity>>
 

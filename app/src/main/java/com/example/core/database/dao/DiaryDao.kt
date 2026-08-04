@@ -15,6 +15,9 @@ interface DiaryDao {
     @Query("SELECT * FROM diary_entries ORDER BY date DESC")
     fun getAllEntries(): Flow<List<DiaryEntryEntity>>
 
+    @Query("SELECT * FROM diary_entries ORDER BY date DESC")
+    suspend fun getAllEntriesSync(): List<DiaryEntryEntity>
+
     @Query("SELECT date FROM diary_entries")
     fun getAllDates(): Flow<List<String>>
 

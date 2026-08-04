@@ -14,6 +14,9 @@ interface MottoDao {
     @Query("SELECT * FROM mottos ORDER BY createdAt DESC")
     fun getAllMottos(): Flow<List<MottoEntity>>
 
+    @Query("SELECT * FROM mottos ORDER BY createdAt DESC")
+    suspend fun getAllMottosSync(): List<MottoEntity>
+
     @Query("SELECT * FROM mottos ORDER BY RANDOM() LIMIT 1")
     suspend fun getRandomMotto(): MottoEntity?
 

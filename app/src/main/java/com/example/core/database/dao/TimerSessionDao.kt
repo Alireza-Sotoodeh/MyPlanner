@@ -24,6 +24,9 @@ interface TimerSessionDao {
     @Query("SELECT * FROM timer_sessions ORDER BY timestamp DESC")
     fun getAll(): Flow<List<TimerSessionEntity>>
 
+    @Query("SELECT * FROM timer_sessions ORDER BY timestamp DESC")
+    suspend fun getAllSync(): List<TimerSessionEntity>
+
     @Query("SELECT * FROM timer_sessions WHERE date = :date ORDER BY timestamp DESC")
     fun getByDate(date: String): Flow<List<TimerSessionEntity>>
 

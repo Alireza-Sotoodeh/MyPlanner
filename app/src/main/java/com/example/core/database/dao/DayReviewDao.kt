@@ -15,6 +15,9 @@ interface DayReviewDao {
     @Query("SELECT * FROM day_reviews ORDER BY date DESC")
     fun getAllReviews(): Flow<List<DayReviewEntity>>
 
+    @Query("SELECT * FROM day_reviews ORDER BY date DESC")
+    suspend fun getAllReviewsSync(): List<DayReviewEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReview(review: DayReviewEntity): Long
 

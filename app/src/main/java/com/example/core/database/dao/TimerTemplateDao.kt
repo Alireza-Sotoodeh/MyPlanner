@@ -21,6 +21,9 @@ interface TimerTemplateDao {
     @Query("SELECT * FROM timer_templates ORDER BY name ASC")
     fun getAll(): Flow<List<TimerTemplateEntity>>
 
+    @Query("SELECT * FROM timer_templates ORDER BY name ASC")
+    suspend fun getAllSync(): List<TimerTemplateEntity>
+
     @Query("DELETE FROM timer_templates")
     suspend fun deleteAll()
 }

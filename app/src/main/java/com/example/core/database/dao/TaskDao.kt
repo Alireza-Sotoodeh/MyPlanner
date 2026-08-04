@@ -27,6 +27,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks ORDER BY id DESC")
     fun getAllTasks(): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks ORDER BY id DESC")
+    suspend fun getAllTasksSync(): List<TaskEntity>
+
     @Query("SELECT * FROM tasks WHERE type = 'EVENT' AND eventTime IS NOT NULL AND eventTime != ''")
     suspend fun getUpcomingEventsSync(): List<TaskEntity>
 
