@@ -74,12 +74,15 @@ fun TimerScreen(viewModel: MainViewModel) {
     var selectedCategory by remember { mutableStateOf("ALL") }
     var hasAutoSwitched by remember { mutableStateOf(false) }
 
-    // Consume pre-selected task from Planner
+    // Consume pre-selected task and preferred tab from Planner
     LaunchedEffect(Unit) {
         val preSelected = viewModel.consumePreSelectedTask()
         if (preSelected != null) {
             selectedTaskId = preSelected
-            tabIndex = viewModel.consumePreferredTimerTab() ?: 0
+        }
+        val preferredTab = viewModel.consumePreferredTimerTab()
+        if (preferredTab != null) {
+            tabIndex = preferredTab
         }
     }
 
