@@ -275,15 +275,6 @@ private fun PomodoroTab(
                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "TIMER SETUP",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
                     // Template selector
                     TemplateSelector(
                         templates = templates,
@@ -306,15 +297,27 @@ private fun PomodoroTab(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Mark complete on finish toggle
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Switch(
                             checked = markCompleteOnFinish,
                             onCheckedChange = onMarkCompleteOnFinishChange,
-                            modifier = Modifier.height(32.dp)
+                            modifier = Modifier.height(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.CheckCircleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = if (markCompleteOnFinish) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Mark task complete when done",
-                            fontSize = 13.sp,
+                            text = "Auto-complete",
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -326,15 +329,6 @@ private fun PomodoroTab(
                     TimeControlRowNullable("Target Sessions", targetSessions, 0, 99, onTargetSessionsChange, step = 1, valueSuffix = "session")
                 }
             }
-
-            // Section label for task selector
-            Text(
-                text = "TASK / NOTE",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 1.5.sp
-            )
 
             TaskSelectorSection(
                 availableTasks = availableTasks,
@@ -434,15 +428,6 @@ private fun PomodoroTab(
                     )
                 }
             }
-
-            // Section label for task selector
-            Text(
-                text = "TASK / NOTE",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 1.5.sp
-            )
 
             // Task selector (locked while timer runs)
             TaskSelectorSection(
