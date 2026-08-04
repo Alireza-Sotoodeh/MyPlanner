@@ -115,7 +115,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.TaskEntity
 import com.example.ui.components.ActivePomodoroWidget
-import com.example.ui.components.MottoCard
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
