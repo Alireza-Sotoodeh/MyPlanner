@@ -104,8 +104,23 @@ fun DiaryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopAppBar(
-            title = {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = 4.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { saveNow(); onBack() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "DIARY",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.5.sp
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { navigateDate(-1) }) {
                         Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
@@ -120,21 +135,13 @@ fun DiaryScreen(
                         Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
                     }
                 }
-            },
-            navigationIcon = {
-                IconButton(onClick = { saveNow(); onBack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+            if (entry != null || content.isNotBlank() || title.isNotBlank()) {
+                IconButton(onClick = { showDeleteConfirm = true }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete entry")
                 }
-            },
-            actions = {
-                if (entry != null || content.isNotBlank() || title.isNotBlank()) {
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete entry")
-                    }
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-        )
+            }
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

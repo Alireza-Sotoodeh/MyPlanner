@@ -772,3 +772,144 @@ if (currentScreen !is MoreSubScreen.None) {
 - `currentScreen` state reset is still handled by each sub-screen's `onBack` callback
 - No sub-screen references are broken — they all accept `viewModel` and `onBack`
 - Build verification: `.\gradlew.bat assembleDebug`
+
+---
+
+## TopAppBar → Custom Row Header Replacement (UI Consistency Fix)
+
+### Issue
+After the Day Review notification enhancement, the More tab and all its sub-screens use Material3 `TopAppBar`, while PlannerScreen and PomodoroScreen use custom two-line `Row` headers. This creates two problems:
+
+1. **Visual inconsistency** — other tabs use "small uppercase label + large light title" pattern, More uses a plain bold title
+2. **Double status bar padding** — `MainActivity` calls `enableEdgeToEdge()` (`:88`) and wraps all content in `Box(Modifier.fillMaxSize().padding(innerPadding))` (`:140-144`). The Scaffold's `innerPadding` already provides status bar top padding. `TopAppBar` internally adds its own `statusBarsPadding()` → **double padding** creates a visible `space → header` gap.
+
+### Fix
+Replace all `TopAppBar` composables with custom `Row` headers following the same two-line pattern used in PlannerScreen's `HeaderSection` (`:427-486`) and PomodoroScreen's header (`:83-104`).
+
+### Pattern Code
+
+**For sub-screens with back button + actions:**
+```kotlin
+Row(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(end = 16.dp, top = 12.dp, bottom = 12.dp),
+    verticalAlignment = Alignment.CenterVertically
+) {
+    IconButton(onClick = onBack) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    }
+    Column(modifier = Modifier.weight(1f)) {
+        Text(
+            text = "LABEL",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.5.sp
+        )
+        Text(
+            text = "Title",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Light,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
+    Spacer(Modifier.weight(1f))
+    // action buttons...
+}
+```
+
+**For MoreScreen main grid (no back button):**
+```kotlin
+Row(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 12.dp),
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Column {
+        Text(
+            text = "MORE FEATURES",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.5.sp
+        )
+        Text(
+            text = "More",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Light,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+```
+
+### Visual Before → After
+
+**More tab (main grid):**
+```
+[BEFORE]                              [AFTER]
+┌─────────────────────┐              ┌─────────────────────┐
+│  [status bar]       │              │  [status bar]       │
+│                     │◄─ double pad │  MORE FEATURES      │
+│  More           (1) │              │  More               │
+│  ┌──┬──┬──┐        │              │  ┌──┬──┬──┐         │
+│  │Id│To│Di│        │              │  │Id│To│Di│         │
+│  └──┴──┴──┘        │              │  └──┴──┴──┘         │
+└─────────────────────┘              └─────────────────────┘
+```
+
+**Sub-screen (e.g., Ideas):**
+```
+[BEFORE]                              [AFTER]
+┌─────────────────────┐              ┌─────────────────────┐
+│  [status bar]       │              │  [status bar]       │
+│                     │◄─ double pad │  ← IDEAS           │
+│  ← Ideas        +   │              │    Ideas       +   │
+│  GroupChipRow       │              │  GroupChipRow       │
+│  idea cards ...     │              │  idea cards ...     │
+└─────────────────────┘              └─────────────────────┘
+```
+
+### Files Modified (7 files)
+
+| File | TopAppBar Lines | New Header |
+|------|----------------|------------|
+| `MoreScreen.kt` | 83–88 | No back. Label: "MORE FEATURES", Title: "More" |
+| `IdeasScreen.kt` | 55–70 | Back + "IDEAS / Ideas" + Group btn |
+| `TodoScreen.kt` | 48–56 | Back + "TO-DO / To-Do List" |
+| `DiaryScreen.kt` | 107–137 | Back + "DIARY" + date navigator + Delete btn |
+| `ShopListScreen.kt` | 49–64 | Back + "SHOP LIST / Shop List" + Add btn |
+| `MottoManagementScreen.kt` | 36–51 | Back + "MOTTOS / Mottos" + Add btn |
+| `DayReviewScreen.kt` | 80–100 | Back + "DAY REVIEW" + date + Delete btn |
+
+### Label / Title Mapping
+
+| Screen | Label | Title |
+|--------|-------|-------|
+| More (grid) | `MORE FEATURES` | `More` |
+| Ideas | `IDEAS` | `Ideas` |
+| To-Do | `TO-DO` | `To-Do List` |
+| Diary | `DIARY` | Date navigator (chevrons + date + ●) |
+| Shop List | `SHOP LIST` | `Shop List` |
+| Mottos | `MOTTOS` | `Mottos` |
+| Day Review | `DAY REVIEW` | `formatDisplayDate(currentDate)` |
+
+### DiaryScreen Special Case
+DiaryScreen's title area contains a date navigator (ChevronLeft + date text + ● indicator + ChevronRight). The two-line pattern wraps this:
+- Line 1: small "DIARY" label
+- Line 2: date navigator row (preserves existing chevron + date + ● functionality)
+
+### DayReviewScreen Special Case
+The existing TopAppBar title is already two-line ("Day Review" + date), styled differently. Converted to:
+- Line 1: small "DAY REVIEW" label (11sp Bold primary)
+- Line 2: `formatDisplayDate(currentDate)` (24sp Light onBackground)
+
+### Affected Imports
+- `TopAppBar` and `TopAppBarDefaults` imports may become unused in modified files and should be removed where no longer needed
+- `Icons.AutoMirrored.Filled.ArrowBack` may already be imported but should be verified
+- No new imports needed beyond what's already present (all files already import `Row`, `Column`, `Text`, `Spacer`, etc.)
+
+### Build Verification
+`.\gradlew.bat assembleDebug` — BUILD SUCCESSFUL
