@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -61,6 +62,7 @@ fun StatsScreen(viewModel: MainViewModel) {
     val habitLogs by viewModel.habitLogs.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val allTasks by viewModel.allTasks.collectAsState()
+    val allTimerSessions by viewModel.allTimerSessions.collectAsState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -481,8 +483,76 @@ fun StatsScreen(viewModel: MainViewModel) {
             }
         }
 
+        // 5. Timer Sessions by Label
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "TIMER SESSIONS BY LABEL",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.5.sp
+                    )
 
-        // 5. Activity Time of Day (24h Timeline)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val labelGroups = allTimerSessions.groupBy {
+                        if (it.label.isBlank()) "Unlabeled" else it.label.uppercase()
+                    }
+                    val labelStats = labelGroups.map { (label, sessions) ->
+                        val totalSeconds = sessions.sumOf { it.durationSeconds }
+                        label to totalSeconds
+                    }.filter { it.second > 0 }.sortedByDescending { it.second }
+
+                    if (labelStats.isEmpty()) {
+                        Text(
+                            text = "Use the Timer to log Pomodoro and Chronometer sessions.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        labelStats.forEach { (label, totalSeconds) ->
+                            val hours = totalSeconds / 3600
+                            val minutes = (totalSeconds % 3600) / 60
+                            val timeString = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    text = timeString,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        }
+                        val totalSeconds = labelStats.sumOf { it.second }
+                        val totalHours = totalSeconds / 3600
+                        val totalMinutes = (totalSeconds % 3600) / 60
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Total: ${totalHours}h ${totalMinutes}m",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
+
+        // 6. Activity Time of Day (24h Timeline)
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

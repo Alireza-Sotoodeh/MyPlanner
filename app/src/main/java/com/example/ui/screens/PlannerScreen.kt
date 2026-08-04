@@ -148,7 +148,7 @@ import com.example.core.database.entity.TodoEntity
 import com.example.core.database.entity.IdeaEntity
 import com.example.core.database.entity.IdeaGroupEntity
 import com.example.core.database.entity.IdeaStageEntity
-import com.example.ui.components.ActivePomodoroWidget
+import com.example.ui.components.ActiveTimerWidget
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -227,7 +227,7 @@ fun PlannerScreen(viewModel: MainViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
 
         // Active widgets loaded inside planner screen for high utility context
-        ActivePomodoroWidget(viewModel)
+        ActiveTimerWidget(viewModel)
 
         val allTasks by viewModel.allTasks.collectAsState(initial = emptyList())
         val uniqueLabels = allTasks.mapNotNull { it.label.takeIf { label -> label.isNotBlank() } }.distinct().sorted()
@@ -488,19 +488,11 @@ fun PlannerScreen(viewModel: MainViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.startPomodoro(
-                            context = context,
-                            task = task,
-                            focusMinutes = focusMinutes,
-                            targetSessions = targetSessions,
-                            breakMinutes = breakMinutes,
-                            saveAsDefault = saveAsDefault
-                        )
+                        viewModel.setPreSelectedTaskForTimer(task.id)
                         viewModel.setTaskForPomodoroSetup(null)
-                        viewModel.selectTab(2) // Navigate to Pomodoro Screen (Tab index 2)
                     }
                 ) {
-                    Text("Start Focus")
+                    Text("Open Timer")
                 }
             },
             dismissButton = {
@@ -1109,17 +1101,15 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                             }
 
                             if (showInteractDialog) {
-                                val sessions by viewModel.getSessionsForTask(task.id).collectAsState(initial = emptyList())
                                 TaskInteractionDialog(
                                     task = task,
-                                    sessions = sessions,
                                     onDismiss = { showInteractDialog = false },
                                     onMarkAsDone = { viewModel.toggleTaskCompletion(task) },
                                     onMarkAsDoneWithDuration = { duration ->
                                         viewModel.completeTaskWithManualDuration(task, duration)
                                     },
                                     onStartPomodoro = {
-                                        viewModel.setTaskForPomodoroSetup(task)
+                                        viewModel.setPreSelectedTaskForTimer(task.id)
                                     }
                                 )
                             }
@@ -1194,17 +1184,15 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabel: String? = null, uniq
                                     }
                                     
                                     if (showInteractDialog) {
-                                        val sessions by viewModel.getSessionsForTask(task.id).collectAsState(initial = emptyList())
                                         TaskInteractionDialog(
                                             task = task,
-                                            sessions = sessions,
                                             onDismiss = { showInteractDialog = false },
                                             onMarkAsDone = { viewModel.toggleTaskCompletion(task) },
                                             onMarkAsDoneWithDuration = { duration ->
                                                 viewModel.completeTaskWithManualDuration(task, duration)
                                             },
                                             onStartPomodoro = {
-                                                viewModel.setTaskForPomodoroSetup(task)
+                                                viewModel.setPreSelectedTaskForTimer(task.id)
                                             }
                                         )
                                     }
@@ -3174,7 +3162,6 @@ fun MonthlyPlannerView(
 @Composable
 fun TaskInteractionDialog(
     task: TaskEntity,
-    sessions: List<com.example.core.database.entity.PomodoroSessionEntity>,
     onDismiss: () -> Unit,
     onMarkAsDone: () -> Unit,
     onMarkAsDoneWithDuration: (Int) -> Unit,
@@ -3283,76 +3270,6 @@ fun TaskInteractionDialog(
                         }
                     }
 
-                    if (sessions.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Session Logs (${sessions.size})",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 160.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                sessions.forEach { session ->
-                                    val formattedTime = remember(session.timestamp) {
-                                        java.text.SimpleDateFormat("MMM dd, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(session.timestamp))
-                                    }
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        val (iconColor, label) = when (session.status) {
-                                            "COMPLETED" -> Pair(MaterialTheme.colorScheme.primary, "Completed")
-                                            else -> Pair(MaterialTheme.colorScheme.error, "Interrupted")
-                                        }
-                                        Icon(
-                                            imageVector = if (session.status == "COMPLETED") Icons.Default.Check else Icons.Default.Update,
-                                            contentDescription = label,
-                                            tint = iconColor,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "${session.durationMinutes} min",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.weight(1f))
-                                        Text(
-                                            text = formattedTime,
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 } else {
                     // Logging custom duration view
                     Text(
@@ -3626,10 +3543,10 @@ fun SettingsDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
-                // Section 4: Pomodoro DND Integration
+                // Section 4: Timer DND Integration
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "POMODORO SETTINGS",
+                        text = "TIMER SETTINGS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -3648,7 +3565,7 @@ fun SettingsDialog(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Turn on DND when Pomodoro starts",
+                                text = "Turn on DND when Pomodoro or Chronometer starts",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

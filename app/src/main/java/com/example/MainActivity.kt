@@ -67,13 +67,14 @@ import com.example.core.repository.MottoRepository
 import com.example.core.repository.ShopItemRepository
 import com.example.core.repository.SleepLogRepository
 import com.example.core.repository.TaskRepository
+import com.example.core.repository.TimerRepository
 import com.example.core.repository.TodoRepository
 import com.example.ui.components.UndoBar
 import com.example.ui.screens.HabitsScreen
 import com.example.ui.screens.MoreScreen
 import com.example.ui.screens.PlannerScreen
 import com.example.ui.screens.StatsScreen
-import com.example.ui.screens.PomodoroScreen
+import com.example.ui.screens.TimerScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.MainViewModelFactory
@@ -92,7 +93,8 @@ class MainActivity : ComponentActivity() {
 
         // 1. Initialize local offline-first Database and Repositories
         val database = AppDatabase.getDatabase(applicationContext)
-        val taskRepository = TaskRepository(database.taskDao(), database.pomodoroSessionDao())
+        val taskRepository = TaskRepository(database.taskDao())
+        val timerRepository = TimerRepository(database.timerSessionDao(), database.timerTemplateDao())
         val habitRepository = HabitRepository(database.habitDao())
         val sleepLogRepository = SleepLogRepository(database.sleepLogDao())
         val ideaRepository = IdeaRepository(database.ideaGroupDao(), database.ideaDao(), database.ideaStageDao())
@@ -105,6 +107,7 @@ class MainActivity : ComponentActivity() {
         // 2. Initialize unified MainViewModel
         val viewModelFactory = MainViewModelFactory(
             taskRepository,
+            timerRepository,
             habitRepository,
             sleepLogRepository,
             ideaRepository,
@@ -162,7 +165,7 @@ class MainActivity : ComponentActivity() {
                             when (selectedTab) {
                                 0 -> PlannerScreen(viewModel = viewModel)
                                 1 -> HabitsScreen(viewModel = viewModel)
-                                2 -> PomodoroScreen(viewModel = viewModel)
+                                2 -> TimerScreen(viewModel = viewModel)
                                 3 -> StatsScreen(viewModel = viewModel)
                                 4 -> MoreScreen(
                                     viewModel = viewModel,
@@ -282,7 +285,7 @@ fun AestheticNavigationBar(
             val navItems = listOf(
                 NavigationItem("Planner", Icons.Default.Task, 0),
                 NavigationItem("Habits", Icons.Default.Favorite, 1),
-                NavigationItem("Pomodoro", Icons.Default.Timer, 2),
+                NavigationItem("Timer", Icons.Default.Timer, 2),
                 NavigationItem("Stats", Icons.Default.Leaderboard, 3),
                 NavigationItem("More", Icons.Default.MoreHoriz, 4)
             )

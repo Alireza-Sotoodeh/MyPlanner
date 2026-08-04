@@ -1,14 +1,11 @@
 package com.example.core.repository
 
 import com.example.core.database.dao.TaskDao
-import com.example.core.database.dao.PomodoroSessionDao
 import com.example.core.database.entity.TaskEntity
-import com.example.core.database.entity.PomodoroSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 class TaskRepository(
-    private val taskDao: TaskDao,
-    private val pomodoroSessionDao: PomodoroSessionDao
+    private val taskDao: TaskDao
 ) {
     fun getTasksForDate(date: String): Flow<List<TaskEntity>> = taskDao.getTasksForDate(date)
 
@@ -37,17 +34,4 @@ class TaskRepository(
     suspend fun updateTaskPriorities(tasks: List<TaskEntity>) = taskDao.updateTaskPriorities(tasks)
 
     suspend fun getSubtasks(parentId: Long): List<TaskEntity> = taskDao.getSubtasks(parentId)
-
-    // Pomodoro session history
-    fun getSessionsForTask(taskId: Long): Flow<List<PomodoroSessionEntity>> = 
-        pomodoroSessionDao.getSessionsForTask(taskId)
-
-    fun getAllSessions(): Flow<List<PomodoroSessionEntity>> = 
-        pomodoroSessionDao.getAllSessions()
-
-    suspend fun insertSession(session: PomodoroSessionEntity): Long = 
-        pomodoroSessionDao.insertSession(session)
-
-    suspend fun deleteSessionsForTask(taskId: Long) = 
-        pomodoroSessionDao.deleteSessionsForTask(taskId)
 }
