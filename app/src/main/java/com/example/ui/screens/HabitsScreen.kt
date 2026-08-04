@@ -468,101 +468,165 @@ fun HabitRowItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogSleepDialog(
     sleepLog: SleepLogEntity?,
     onDismiss: () -> Unit,
     onConfirm: (Float, Int, String, String, String) -> Unit
 ) {
-    var hours by remember { mutableFloatStateOf(sleepLog?.hoursSlept ?: 8f) }
     var quality by remember { mutableIntStateOf(sleepLog?.sleepQuality ?: 3) }
     var bedTime by remember { mutableStateOf(sleepLog?.sleepTime ?: "23:00") }
     var wakeTime by remember { mutableStateOf(sleepLog?.wakeTime ?: "07:30") }
     var notes by remember { mutableStateOf(sleepLog?.notes ?: "") }
 
+    fun calcHours(bed: String, wake: String): Float {
+        val bParts = bed.split(":"); val wParts = wake.split(":")
+        if (bParts.size != 2 || wParts.size != 2) return 0f
+        val bMin = bParts[0].toIntOrNull()?.let { it * 60 + (bParts[1].toIntOrNull() ?: 0) } ?: return 0f
+        val wMin = wParts[0].toIntOrNull()?.let { it * 60 + (wParts[1].toIntOrNull() ?: 0) } ?: return 0f
+        val diff = if (wMin >= bMin) wMin - bMin else (1440 - bMin) + wMin
+        return (diff / 60f * 10).let { kotlin.math.round(it) / 10f }
+    }
+
+    val hours = calcHours(bedTime, wakeTime)
+
+    var showTimePicker by remember { mutableStateOf(false) }
+    var timePickerTarget by remember { mutableStateOf("BED") } // "BED" or "WAKE"
+    val timePickerState = rememberTimePickerState(
+        initialHour = 12,
+        initialMinute = 0,
+        is24Hour = true
+    )
+
+    if (showTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(28.dp),
+            title = { Text(if (timePickerTarget == "BED") "Select Bed Time" else "Select Wake Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = timePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val t = String.format("%02d:%02d", timePickerState.hour, timePickerState.minute)
+                    if (timePickerTarget == "BED") bedTime = t else wakeTime = t
+                    showTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(28.dp),
         title = { Text("Log Daily Sleep", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Sleep hours slider
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "Hours Slept", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(text = String.format("%.1f hrs", hours), fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6750A4))
-                    }
-                    Slider(
-                        value = hours,
-                        onValueChange = { hours = it },
-                        valueRange = 0f..16f,
-                        steps = 31,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF6750A4),
-                            activeTrackColor = Color(0xFF6750A4)
-                        )
-                    )
-                }
+                // Bed & Wake time with clock icons
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .clickable { timePickerTarget = "BED"; timePickerState.hour = bedTime.substringBefore(":").toIntOrNull() ?: 23; timePickerState.minute = bedTime.substringAfter(":").toIntOrNull() ?: 0; showTimePicker = true }
+                                    .padding(12.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(imageVector = Icons.Default.Schedule, contentDescription = "Bed Time", tint = Color(0xFF6750A4), modifier = Modifier.size(28.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = "Bed Time", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(text = bedTime, fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .clickable { timePickerTarget = "WAKE"; timePickerState.hour = wakeTime.substringBefore(":").toIntOrNull() ?: 7; timePickerState.minute = wakeTime.substringAfter(":").toIntOrNull() ?: 30; showTimePicker = true }
+                                    .padding(12.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(imageVector = Icons.Default.Home, contentDescription = "Wake Time", tint = Color(0xFFFF9800), modifier = Modifier.size(28.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = "Wake Time", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(text = wakeTime, fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
 
-                // Quality star rating
-                Column {
-                    Text(text = "Sleep Quality", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        repeat(5) { index ->
-                            val starIndex = index + 1
-                            IconButton(onClick = { quality = starIndex }) {
-                                Icon(
-                                    imageVector = if (starIndex <= quality) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEADB3F),
-                                    modifier = Modifier.size(32.dp)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF6750A4).copy(alpha = 0.1f))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(text = "💤", fontSize = 20.sp)
+                                Text(
+                                    text = String.format("%.1f", hours),
+                                    fontSize = 32.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF6750A4)
                                 )
+                                Text(text = "hrs", fontSize = 14.sp, color = Color(0xFF6750A4), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                // Quality star rating
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    OutlinedTextField(
-                        value = bedTime,
-                        onValueChange = { bedTime = it },
-                        label = { Text("Bed Time") },
-                        modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            focusedLabelColor = Color(0xFF6750A4)
-                        )
-                    )
-
-                    OutlinedTextField(
-                        value = wakeTime,
-                        onValueChange = { wakeTime = it },
-                        label = { Text("Wake Time") },
-                        modifier = Modifier.weight(1f),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF6750A4),
-                            focusedLabelColor = Color(0xFF6750A4)
-                        )
-                    )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(text = "Sleep Quality", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            repeat(5) { index ->
+                                val starIndex = index + 1
+                                IconButton(onClick = { quality = starIndex }, modifier = Modifier.size(40.dp)) {
+                                    Icon(
+                                        imageVector = if (starIndex <= quality) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFB300),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Daily logs / dreams / notes") },
+                    label = { Text("Dreams / notes") },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF6750A4),
@@ -583,8 +647,7 @@ fun LogSleepDialog(
             TextButton(onClick = onDismiss) {
                 Text("CANCEL", color = Color(0xFF6750A4))
             }
-        },
-        shape = RoundedCornerShape(28.dp)
+        }
     )
 }
 
