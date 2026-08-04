@@ -4709,10 +4709,7 @@ private fun IdeaCard(
     onAddToPlanner: (IdeaEntity) -> Unit
 ) {
     val stages by viewModel.stagesForIdea(idea.id).collectAsState(initial = emptyList())
-    var showAddStage by remember { mutableStateOf(false) }
-    var newStageTitle by remember { mutableStateOf("") }
     var showIdeaMenu by remember { mutableStateOf(false) }
-    var addStageIdeaId by remember { mutableStateOf<Long?>(null) }
     val ideaGroup = remember(idea.groupId) {
         viewModel.ideaGroups.value.find { it.id == idea.groupId }
     }
@@ -4832,48 +4829,7 @@ private fun IdeaCard(
                         }
                     }
 
-                    if (showAddStage && addStageIdeaId == idea.id) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = newStageTitle,
-                                onValueChange = { newStageTitle = it },
-                                placeholder = { Text("Stage title", fontSize = 13.sp) },
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                )
-                            )
-                            IconButton(onClick = {
-                                if (newStageTitle.isNotBlank()) {
-                                    viewModel.addStage(idea.id, newStageTitle.trim())
-                                    newStageTitle = ""
-                                    addStageIdeaId = null
-                                    showAddStage = false
-                                }
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Check, contentDescription = "Save", modifier = Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = {
-                                newStageTitle = ""
-                                addStageIdeaId = null
-                                showAddStage = false
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    } else {
-                        TextButton(
-                            onClick = { showAddStage = true; addStageIdeaId = idea.id },
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Text("+ Add Stage", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
+
                 }
             }
         }
