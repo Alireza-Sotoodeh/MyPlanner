@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,40 +75,69 @@ fun MottoListItem(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                Icon(
+                    Icons.Default.FormatQuote,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 8.dp)
+            ) {
                 Text(
                     motto.text,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 20.sp
                 )
                 if (motto.author.isNotBlank()) {
                     Text(
-                        motto.author,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                        "\u2014 ${motto.author}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontStyle = FontStyle.Italic,
+                        modifier = Modifier.padding(top = 6.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Row {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
                 IconButton(onClick = { onEdit(motto) }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Icon(
+                        Icons.Default.Edit, contentDescription = "Edit",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
                 }
                 IconButton(onClick = { onDelete(motto) }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
+                    Icon(
+                        Icons.Default.Delete, contentDescription = "Delete",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                    )
                 }
             }
         }
