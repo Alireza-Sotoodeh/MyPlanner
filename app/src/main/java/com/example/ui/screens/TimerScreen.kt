@@ -978,7 +978,7 @@ private fun TaskSelectorSection(
             // Section header inside the card
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "TASKS / SUBTASKS / NOTES",
+                    text = "ITEMS",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
