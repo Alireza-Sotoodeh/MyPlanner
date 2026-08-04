@@ -126,6 +126,12 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("pomodoro_action")?.let { action ->
             viewModel.handlePomodoroAction(this@MainActivity, action)
         }
+        intent.getIntExtra("navigate_to_tab", -1).let { tab ->
+            if (tab >= 0) viewModel.selectTab(tab)
+        }
+        intent.getIntExtra("open_timer_subtab", -1).let { sub ->
+            if (sub >= 0) viewModel.setPreferredTimerTab(sub)
+        }
 
         setContent {
             MyApplicationTheme {
@@ -262,6 +268,12 @@ class MainActivity : ComponentActivity() {
         }
         intent.getStringExtra("pomodoro_action")?.let { action ->
             viewModel.handlePomodoroAction(this@MainActivity, action)
+        }
+        intent.getIntExtra("navigate_to_tab", -1).let { tab ->
+            if (tab >= 0) viewModel.selectTab(tab)
+        }
+        intent.getIntExtra("open_timer_subtab", -1).let { sub ->
+            if (sub >= 0) viewModel.setPreferredTimerTab(sub)
         }
     }
 }

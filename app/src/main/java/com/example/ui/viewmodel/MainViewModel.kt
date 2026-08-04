@@ -64,6 +64,8 @@ import java.util.Date
 import java.util.Locale
 import android.app.PendingIntent
 import kotlinx.coroutines.Dispatchers
+import com.example.core.service.TimerForegroundService
+import com.example.core.service.TimerMode
 
 data class AppUsageItem(
     val appName: String,
@@ -648,10 +650,11 @@ class MainViewModel(
     private val _chronoPaused = MutableStateFlow(false)
     val chronoPaused: StateFlow<Boolean> = _chronoPaused.asStateFlow()
 
-    private var chronoJob: Job? = null
-
     private var _chronoSelectedTaskId = MutableStateFlow<Long?>(null)
     val chronoSelectedTaskId: StateFlow<Long?> = _chronoSelectedTaskId.asStateFlow()
+
+    private var timerServiceJob: Job? = null
+    private var _pomodoroProcessedCompletion = false
 
     // Timer Templates
     val timerTemplates: StateFlow<List<TimerTemplateEntity>> = timerRepository.getAllTemplates()
@@ -895,7 +898,6 @@ class MainViewModel(
         }
     }
 
-    private var pomodoroJob: Job? = null
     private var originalDndState = false
 
     // App Usage Stats State
@@ -1120,6 +1122,8 @@ class MainViewModel(
 
         // Initialize today's motto
         refreshTodayMotto()
+
+        collectTimerServiceState()
     }
 
     fun refreshTodayMotto() {
@@ -1688,6 +1692,7 @@ class MainViewModel(
             taskRepository.updateTask(updatedTask)
         }
 
+        _pomodoroProcessedCompletion = false
         _activePomodoroTask.value = updatedTask
         _pomodoroFocusMinutes.value = focusMinutes
         _pomodoroTargetSessions.value = targetSessions
@@ -1704,49 +1709,43 @@ class MainViewModel(
             setDndState(context, true)
         }
 
-        startTimerJob(context)
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_START_POMODORO
+            putExtra(TimerForegroundService.EXTRA_FOCUS_MINUTES, focusMinutes)
+            putExtra(TimerForegroundService.EXTRA_TASK_TITLE, task.title)
+            putExtra(TimerForegroundService.EXTRA_TASK_ID, task.id)
+            putExtra(TimerForegroundService.EXTRA_SESSION_NUMBER, 1)
+        }
+        context.startService(intent)
     }
 
     fun pausePomodoro() {
-        pomodoroJob?.cancel()
-        _pomodoroRunning.value = false
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_TOGGLE_PAUSE
+        }
+        context.startService(intent)
     }
 
     fun resumePomodoro(context: Context) {
-        if (_pomodoroRunning.value) return
-        _pomodoroRunning.value = true
-        startTimerJob(context)
+        pausePomodoro()
     }
 
     fun stopPomodoroEarly(context: Context) {
-        val task = _activePomodoroTask.value
-        if (task != null && _pomodoroPhase.value == "FOCUS") {
-            val focusTotalSeconds = _pomodoroFocusMinutes.value * 60
-            val secondsElapsed = focusTotalSeconds - _pomodoroSecondsLeft.value
-            val minutesElapsed = (secondsElapsed / 60).coerceAtLeast(1)
-            viewModelScope.launch {
-                val relatedTask = taskRepository.getTaskById(task.id)
-                timerRepository.insertSession(
-                    TimerSessionEntity(
-                        type = "POMODORO",
-                        taskId = task.id,
-                        label = relatedTask?.label ?: task.label,
-                        durationSeconds = minutesElapsed * 60,
-                        date = getTodayDateString()
-                    )
-                )
-            }
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_STOP
         }
-        resetPomodoroState(context)
+        context.startService(intent)
     }
 
     fun discardPomodoro(context: Context) {
-        pomodoroJob?.cancel()
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_STOP
+        }
+        context.startService(intent)
         resetPomodoroState(context)
     }
 
     private fun resetPomodoroState(context: Context) {
-        pomodoroJob?.cancel()
         _pomodoroRunning.value = false
         _activePomodoroTask.value = null
         _pomodoroSecondsLeft.value = 0
@@ -1762,17 +1761,53 @@ class MainViewModel(
     }
 
     fun adjustPomodoroPlusOne() {
-        _pomodoroSecondsLeft.value += 60
+        _pomodoroSecondsLeft.value = (_pomodoroSecondsLeft.value + 60).coerceAtMost(7200)
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_ADJUST_POMODORO
+            putExtra(TimerForegroundService.EXTRA_ADJUST_SECONDS, 60)
+        }
+        context.startService(intent)
     }
 
-    private fun startTimerJob(context: Context) {
-        pomodoroJob?.cancel()
-        pomodoroJob = viewModelScope.launch {
-            while (_pomodoroSecondsLeft.value > 0) {
-                delay(1000)
-                _pomodoroSecondsLeft.value -= 1
+    private fun collectTimerServiceState() {
+        timerServiceJob?.cancel()
+        timerServiceJob = viewModelScope.launch {
+            TimerForegroundService.state.collect { s ->
+                when (s.mode) {
+                    TimerMode.POMODORO -> {
+                        _pomodoroSecondsLeft.value = s.secondsLeft
+                        _pomodoroRunning.value = s.running && !s.paused
+                        _pomodoroPhase.value = s.phase
+                        _pomodoroCurrentSession.value = s.sessionNumber
+
+                        if (s.completed && !_pomodoroProcessedCompletion) {
+                            _pomodoroProcessedCompletion = true
+                            handlePhaseCompletion(context)
+                            TimerForegroundService.clearCompletedFlag()
+                        }
+                    }
+                    TimerMode.CHRONOMETER -> {
+                        _chronoElapsed.value = s.elapsedSeconds
+                        _chronoRunning.value = s.running && !s.paused
+                        _chronoPaused.value = s.paused
+                    }
+                    null -> {
+                        if (_pomodoroRunning.value || _activePomodoroTask.value != null) {
+                            if (!_pomodoroProcessedCompletion) {
+                                _activePomodoroTask.value = null
+                                _pomodoroRunning.value = false
+                                _pomodoroSecondsLeft.value = 0
+                            }
+                        }
+                        if (_chronoRunning.value) {
+                            _chronoRunning.value = false
+                            _chronoElapsed.value = 0L
+                            _chronoPaused.value = false
+                            _chronoSelectedTaskId.value = null
+                        }
+                    }
+                }
             }
-            handlePhaseCompletion(context)
         }
     }
 
@@ -1865,13 +1900,14 @@ class MainViewModel(
             breakDuration = breakDuration
         )
         _pomodoroCompletionState.value = state
-        firePomodoroCompletionNotification(context, state)
     }
 
     fun continueFromPomodoroCompletion(context: Context) {
         val state = _pomodoroCompletionState.value ?: return
         val nextActionMinutes = state.nextActionMinutes
         if (nextActionMinutes <= 0) return
+
+        _pomodoroProcessedCompletion = false
 
         if (state.phase == "FOCUS") {
             if (state.breakDuration != null && state.breakDuration > 0) {
@@ -1890,16 +1926,30 @@ class MainViewModel(
         _pomodoroCompletionState.value = null
         _pomodoroRunning.value = true
         cancelPomodoroNotification(context)
-        startTimerJob(context)
+
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_START_POMODORO
+            putExtra(TimerForegroundService.EXTRA_FOCUS_MINUTES, _pomodoroFocusMinutes.value)
+            putExtra(TimerForegroundService.EXTRA_TASK_TITLE, _activePomodoroTask.value?.title ?: "")
+            putExtra(TimerForegroundService.EXTRA_TASK_ID, _activePomodoroTask.value?.id ?: -1L)
+            putExtra(TimerForegroundService.EXTRA_SESSION_NUMBER, _pomodoroCurrentSession.value)
+        }
+        context.startService(intent)
     }
 
     fun endPomodoroChain(context: Context) {
-        pomodoroJob?.cancel()
         _pomodoroRunning.value = false
         _activePomodoroTask.value = null
         _pomodoroSecondsLeft.value = 0
         _pomodoroCompletionState.value = null
+        _pomodoroProcessedCompletion = false
         cancelPomodoroNotification(context)
+
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_STOP
+        }
+        context.startService(intent)
+
         if (_dndEnabled.value) {
             setDndState(context, originalDndState)
         }
@@ -1959,7 +2009,7 @@ class MainViewModel(
     // --- Chronometer ---
     fun startChronometer(taskId: Long? = null) {
         if (_chronoRunning.value) return
-        if (pomodoroJob != null && _pomodoroRunning.value) return
+        if (_activePomodoroTask.value != null && _pomodoroRunning.value) return
         _chronoSelectedTaskId.value = taskId
         _chronoElapsed.value = 0L
         _chronoPaused.value = false
@@ -1968,24 +2018,26 @@ class MainViewModel(
             originalDndState = getDndState(context)
             setDndState(context, true)
         }
-        chronoJob?.cancel()
-        chronoJob = viewModelScope.launch {
-            while (true) {
-                delay(1000)
-                if (!_chronoPaused.value) {
-                    _chronoElapsed.value += 1
-                }
-            }
+
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_START_CHRONOMETER
+            putExtra(TimerForegroundService.EXTRA_CHRONO_TASK_ID, taskId ?: -1L)
         }
+        context.startService(intent)
     }
 
     fun pauseChronometer() {
-        _chronoPaused.value = !_chronoPaused.value
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_TOGGLE_PAUSE
+        }
+        context.startService(intent)
     }
 
     fun stopChronometer() {
-        chronoJob?.cancel()
-        _chronoRunning.value = false
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_STOP
+        }
+        context.startService(intent)
     }
 
     fun saveChronometerSession(durationSeconds: Int, taskId: Long?, note: String) {
@@ -2010,7 +2062,10 @@ class MainViewModel(
     }
 
     fun discardChronometer() {
-        chronoJob?.cancel()
+        val intent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_STOP
+        }
+        context.startService(intent)
         _chronoRunning.value = false
         _chronoPaused.value = false
         _chronoElapsed.value = 0L
