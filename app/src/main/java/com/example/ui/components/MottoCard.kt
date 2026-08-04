@@ -47,12 +47,12 @@ fun MottoCard(
                     lineHeight = 22.sp
                 )
                 if (it.author.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         "— ${it.author}",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.End,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
