@@ -2046,7 +2046,8 @@ fun BulletTaskItem(
                                     fontSize = 11.sp,
                                     color = if (subCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
                                     textDecoration = if (subCompleted) TextDecoration.LineThrough else null,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                             
