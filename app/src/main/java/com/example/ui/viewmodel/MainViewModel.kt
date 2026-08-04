@@ -2680,11 +2680,11 @@ private val mottoRepository: MottoRepository,
 
     fun logHabit(habitId: Long, value: Float, notes: String = "", date: String? = null) {
         viewModelScope.launch {
-            val targetDate = date ?: _selectedDate.value
+            val targetDate = date ?: _todayDate.value
             val currentLog = if (date != null) {
                 habitRepository.getLogsForDate(targetDate).first().find { it.habitId == habitId }
             } else {
-                habitLogs.value.find { it.habitId == habitId }
+                todayHabitLogs.value.find { it.habitId == habitId }
             }
             if (currentLog != null) {
                 if (value <= 0f) {

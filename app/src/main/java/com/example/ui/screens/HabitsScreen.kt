@@ -102,7 +102,7 @@ import java.util.Locale
 fun HabitsScreen(viewModel: MainViewModel) {
     val habits by viewModel.habits.collectAsState()
     val todayHabits by viewModel.todayHabits.collectAsState()
-    val logs by viewModel.habitLogs.collectAsState()
+    val logs by viewModel.todayHabitLogs.collectAsState()
     val sleepLog by viewModel.sleepLog.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val allHabitLogs by viewModel.allHabitLogs.collectAsState()
