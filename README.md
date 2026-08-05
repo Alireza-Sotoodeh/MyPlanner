@@ -4,6 +4,8 @@
 
 **No accounts, no cloud sync, no ads, no data collection.**
 
+[![Latest Release](https://img.shields.io/github/v/release/Alireza-Sotoodeh/MyPlanner?label=Download%20APK&logo=android&logoColor=green&color=blue)](https://github.com/Alireza-Sotoodeh/MyPlanner/releases/latest)
+
 ---
 
 ## Features
