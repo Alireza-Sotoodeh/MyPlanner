@@ -1012,12 +1012,10 @@ private val mottoRepository: MottoRepository,
         if (!_autoRescheduleUnfinished.value) return
         val today = getTodayDateString()
         val lastProcessed = prefs.getString("last_auto_reschedule_date", null)
-        if (lastProcessed != null && lastProcessed < today) {
-            var cursor = addDays(lastProcessed, 1)
-            while (cursor < today) {
-                autoRescheduleUnfinishedTasks(cursor, today)
-                cursor = addDays(cursor, 1)
-            }
+        var cursor = if (lastProcessed == null) addDays(today, -1) else lastProcessed
+        while (cursor < today) {
+            autoRescheduleUnfinishedTasks(cursor, today)
+            cursor = addDays(cursor, 1)
         }
         prefs.edit().putString("last_auto_reschedule_date", today).apply()
     }
@@ -2243,11 +2241,6 @@ private val mottoRepository: MottoRepository,
 
     // --- Date Navigation Methods ---
     fun selectDate(date: String) {
-        val fromDate = _selectedDate.value
-        val toDate = date
-        if (_autoRescheduleUnfinished.value && toDate == addDays(fromDate, 1) && fromDate <= getTodayDateString()) {
-            autoRescheduleUnfinishedTasks(fromDate, toDate)
-        }
         _selectedDate.value = date
         if (date.length >= 7) {
             _selectedMonth.value = date.substring(0, 7)
