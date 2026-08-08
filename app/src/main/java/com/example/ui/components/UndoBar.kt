@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,18 +35,18 @@ import kotlin.math.ceil
 @Composable
 fun UndoBar(
     message: String,
-    countdownSeconds: Int,
+    expiryTime: Long,
     totalSeconds: Int = 5,
     onRestore: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val startFraction = (countdownSeconds.toFloat() / totalSeconds.toFloat()).coerceIn(0f, 1f)
-    val progress = remember { Animatable(startFraction) }
+    val startFraction = ((expiryTime - System.currentTimeMillis()) / (totalSeconds * 1000L)).toFloat().coerceIn(0f, 1f)
+    val progress = remember(expiryTime) { Animatable(startFraction) }
     val progressValue by progress.asState()
 
-    LaunchedEffect(startFraction) {
-        val remainingMs = (startFraction * totalSeconds * 1000).toInt().coerceAtLeast(0)
+    LaunchedEffect(expiryTime) {
+        val remainingMs = (expiryTime - System.currentTimeMillis()).toInt().coerceAtLeast(0)
         if (remainingMs > 0) {
             progress.animateTo(
                 targetValue = 0f,
@@ -64,23 +63,22 @@ fun UndoBar(
 
     Card(
         modifier = modifier
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .fillMaxWidth()
-            .navigationBarsPadding(),
-        shape = RoundedCornerShape(14.dp),
+            .padding(start = 16.dp, top = 4.dp, end = 80.dp, bottom = 4.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
+                .padding(start = 8.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
@@ -92,7 +90,7 @@ fun UndoBar(
                 )
                 Text(
                     text = "$displaySeconds",
-                    fontSize = 9.sp,
+                    fontSize = 8.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -100,7 +98,7 @@ fun UndoBar(
             Spacer(Modifier.width(8.dp))
             Text(
                 text = message,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -109,11 +107,11 @@ fun UndoBar(
             Spacer(Modifier.width(4.dp))
             TextButton(
                 onClick = onRestore,
-                modifier = Modifier.height(32.dp)
+                modifier = Modifier.height(28.dp)
             ) {
                 Text(
                     "Restore",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
             }

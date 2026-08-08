@@ -76,15 +76,20 @@ import com.example.ui.screens.TimerScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.MainViewModelFactory
+import com.example.ui.viewmodel.UndoEntry
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableStateListOf
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
@@ -188,20 +193,35 @@ class MainActivity : ComponentActivity() {
                                     BackHandler(selectedTab != 0) {
                                         viewModel.selectTab(0)
                                     }
-                                    if (undoStack.isNotEmpty()) {
+                                    val renderedUndoEntries = remember { mutableStateListOf<UndoEntry>() }
+                                    LaunchedEffect(undoStack) {
+                                        if (undoStack.isNotEmpty()) {
+                                            renderedUndoEntries.clear()
+                                            renderedUndoEntries.addAll(undoStack)
+                                        } else {
+                                            delay(300)
+                                            renderedUndoEntries.clear()
+                                        }
+                                    }
+                                    AnimatedVisibility(
+                                        visible = undoStack.isNotEmpty(),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(bottom = 6.dp),
+                                        enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                                        exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+                                    ) {
                                         Column(
                                             modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .padding(bottom = 4.dp),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                                .fillMaxWidth()
+                                                .animateContentSize(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            undoStack.forEach { entry ->
-                                                val remaining = ((entry.expiryTime - System.currentTimeMillis()) / 1000)
-                                                    .toInt().coerceAtLeast(0)
+                                            renderedUndoEntries.forEach { entry ->
                                                 key(entry.id) {
                                                     UndoBar(
                                                         message = entry.message,
-                                                        countdownSeconds = remaining,
+                                                        expiryTime = entry.expiryTime,
                                                         onRestore = { viewModel.restoreFromUndo(entry.id) },
                                                         onDismiss = { viewModel.dismissUndo(entry.id) },
                                                         modifier = Modifier.fillMaxWidth()
