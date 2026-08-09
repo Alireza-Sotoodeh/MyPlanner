@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +69,7 @@ class ReminderReceiver : BroadcastReceiver() {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
+                    com.example.core.manager.ReminderManager.scheduleAutoBackup(context)
 
                     val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
                     val reminders = listOf(
@@ -165,6 +168,10 @@ class ReminderReceiver : BroadcastReceiver() {
                 return
             }
             "com.example.action.SNOOZE_ALARM" -> { showSnoozedAlarm(context, intent); return }
+            com.example.core.manager.ReminderManager.AUTO_BACKUP_ACTION -> {
+                handleAutoBackup(context)
+                return
+            }
         }
 
         val title = intent.getStringExtra("title") ?: "Event Reminder"
@@ -657,6 +664,23 @@ class ReminderReceiver : BroadcastReceiver() {
                     releaseWakeLock()
                         releaseWakeLock()
                         pendingResult.finish()
+            }
+        }
+    }
+
+    private fun handleAutoBackup(context: Context) {
+        val pendingResult = goAsync()
+        acquireWakeLock(context)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                com.example.core.manager.ReminderManager.scheduleAutoBackup(context)
+                val request = OneTimeWorkRequestBuilder<com.example.core.manager.BackupWorker>().build()
+                WorkManager.getInstance(context).enqueue(request)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                releaseWakeLock()
+                pendingResult.finish()
             }
         }
     }

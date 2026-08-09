@@ -14,6 +14,60 @@ import java.util.Calendar
 import java.util.Locale
 
 object ReminderManager {
+
+    const val AUTO_BACKUP_ACTION = "com.example.action.AUTO_BACKUP"
+    private const val AUTO_BACKUP_REQUEST_CODE = 13000
+
+    fun scheduleAutoBackup(context: Context) {
+        val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("backup_enabled", true)) return
+
+        val timeStr = prefs.getString("backup_time", "23:00") ?: "23:00"
+        val hour = timeStr.substringBefore(":").toIntOrNull() ?: 23
+        val minute = timeStr.substringAfter(":").toIntOrNull() ?: 0
+
+        val now = Calendar.getInstance()
+        val scheduled = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (before(now)) add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, ReminderReceiver::class.java).apply { action = AUTO_BACKUP_ACTION }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, AUTO_BACKUP_REQUEST_CODE, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, scheduled.timeInMillis, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, scheduled.timeInMillis, pendingIntent)
+                }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, scheduled.timeInMillis, pendingIntent)
+            }
+        } catch (e: SecurityException) {
+            Log.e("ReminderManager", "Exact alarm permission missing for auto backup", e)
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, scheduled.timeInMillis, pendingIntent)
+        }
+    }
+
+    fun cancelAutoBackup(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, ReminderReceiver::class.java).apply { action = AUTO_BACKUP_ACTION }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, AUTO_BACKUP_REQUEST_CODE, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        alarmManager.cancel(pendingIntent)
+    }
+
     fun scheduleReminders(context: Context, task: TaskEntity, vibrate: Boolean, sound: Boolean) {
         val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("event_reminder_enabled", true)) return

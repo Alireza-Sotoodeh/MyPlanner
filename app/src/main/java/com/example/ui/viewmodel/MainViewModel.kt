@@ -3601,34 +3601,27 @@ private val mottoRepository: MottoRepository,
             rescheduleAutoBackup(context)
         } else {
             androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_backup")
+            com.example.core.manager.ReminderManager.cancelAutoBackup(context)
         }
     }
 
     fun rescheduleAutoBackup(context: Context) {
+        // Clean up any periodic work scheduled by older builds.
+        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_backup")
+        com.example.core.manager.ReminderManager.cancelAutoBackup(context)
+
         val enabled = _backupEnabled.value
         if (!enabled) return
-        val timeStr = _backupTime.value
-        val hour = timeStr.substringBefore(":").toIntOrNull() ?: 23
-        val minute = timeStr.substringAfter(":").toIntOrNull() ?: 0
-        val now = java.util.Calendar.getInstance()
-        val scheduled = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, hour)
-            set(java.util.Calendar.MINUTE, minute)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-            if (before(now)) add(java.util.Calendar.DAY_OF_YEAR, 1)
+
+        com.example.core.manager.ReminderManager.scheduleAutoBackup(context)
+
+        // Catch up on missed scheduled runs (e.g. Doze deferral or force-stop while a run was due).
+        val lastSync = backupFileManager.getLastSyncTimestamp()
+        val stale = lastSync <= 0L || System.currentTimeMillis() - lastSync > 26L * 60L * 60L * 1000L
+        if (stale && backupFileManager.getBackupRootDir() != null) {
+            val request = androidx.work.OneTimeWorkRequestBuilder<com.example.core.manager.BackupWorker>().build()
+            androidx.work.WorkManager.getInstance(context).enqueue(request)
         }
-        val initialDelay = scheduled.timeInMillis - now.timeInMillis
-        val request = androidx.work.PeriodicWorkRequestBuilder<com.example.core.manager.BackupWorker>(24, java.util.concurrent.TimeUnit.HOURS)
-            .addTag("daily_backup")
-            .setInitialDelay(initialDelay, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .build()
-        androidx.work.WorkManager.getInstance(context).cancelAllWorkByTag("daily_backup")
-        androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "daily_backup",
-            androidx.work.ExistingPeriodicWorkPolicy.REPLACE,
-            request
-        )
     }
 
     private fun getCurrentInterruptionFilter(context: Context): Int {
