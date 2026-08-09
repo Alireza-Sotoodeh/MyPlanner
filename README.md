@@ -177,7 +177,12 @@ stateDiagram-v2
     Expired --> Idle: clearExpiredUndos()
     UndoBarVisible --> Idle: User dismisses
     
-    note right of SnapshotTaken: 11 snapshot types:<br/>Task, Todo, Idea, Habit, Diary<br/>DayReview, TimerTemplate<br/>TimerSession, ShopItem<br/>Motto, LearnItem
+    note right of SnapshotTaken
+        11 snapshot types:
+        Task, Todo, Idea, Habit, Diary
+        DayReview, TimerTemplate, TimerSession
+        ShopItem, Motto, LearnItem
+    end note
 ```
 
 ### Pomodoro Timer State Machine
@@ -197,7 +202,10 @@ stateDiagram-v2
     Aborted --> Idle
     Idle --> [*]
     
-    note right of Focusing: TimerForegroundService<br/>runs with ongoing notification
+    note right of Focusing
+        TimerForegroundService runs with
+        ongoing notification
+    end note
 ```
 
 ---
