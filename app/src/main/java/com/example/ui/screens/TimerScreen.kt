@@ -325,15 +325,14 @@ private fun PomodoroTab(
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
     val availableTasks = remember(tasks, selectedCategory, allTasks, selectedTaskId, activeTask) {
-        val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
         val parentPriority = tasks.associate { it.id to it.priority }
         val base = tasks.filter { t ->
             t.status != "COMPLETED" && when (selectedCategory) {
-                "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
+                "TASKS" -> t.parentTaskId == null && t.type == "TASK"
                 "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
-                "NOTES" -> t.parentTaskId == null && t.type == "NOTE" && t.id !in parentIds
+                "NOTES" -> t.parentTaskId == null && t.type == "NOTE"
                 "SUB_NOTES" -> t.parentTaskId != null && t.type == "NOTE"
-                "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
+                "ALL" -> t.type == "TASK" || t.type == "NOTE"
                 else -> false
             }
         }.sortedWith(compareBy<TaskEntity> {
@@ -705,15 +704,14 @@ private fun CronometerTab(
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
 
     val availableTasks = remember(tasks, selectedCategory, allTasks, selectedTaskId) {
-        val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
         val parentPriority = tasks.associate { it.id to it.priority }
         val base = tasks.filter { t ->
             t.status != "COMPLETED" && when (selectedCategory) {
-                "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
+                "TASKS" -> t.parentTaskId == null && t.type == "TASK"
                 "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
-                "NOTES" -> t.parentTaskId == null && t.type == "NOTE" && t.id !in parentIds
+                "NOTES" -> t.parentTaskId == null && t.type == "NOTE"
                 "SUB_NOTES" -> t.parentTaskId != null && t.type == "NOTE"
-                "ALL" -> (t.type == "TASK" || t.type == "NOTE") && (t.parentTaskId != null || t.id !in parentIds)
+                "ALL" -> t.type == "TASK" || t.type == "NOTE"
                 else -> false
             }
         }.sortedWith(compareBy<TaskEntity> {
@@ -1129,6 +1127,11 @@ private fun TaskSelectorSection(
             .toMap()
     }
 
+    val childCountMap = remember(allTasks) {
+        allTasks.filter { it.parentTaskId != null }
+            .groupingBy { it.parentTaskId!! }.eachCount()
+    }
+
     // Wrapped in a unified Card matching the TIMER SETUP card style
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1275,7 +1278,8 @@ private fun TaskSelectorSection(
                         },
                         onMarkComplete = { viewModel.markTaskCompleteFromTimer(task.id) },
                         parentTitleMap = parentTitleMap,
-                        parentColorMap = parentColorMap
+                        parentColorMap = parentColorMap,
+                        childCountMap = childCountMap
                     )
                     if (index < availableTasks.lastIndex) {
                         HorizontalDivider(
@@ -1298,7 +1302,8 @@ private fun TaskSectionItem(
     onSelect: () -> Unit,
     onMarkComplete: () -> Unit,
     parentTitleMap: Map<Long, String> = emptyMap(),
-    parentColorMap: Map<Long, Long> = emptyMap()
+    parentColorMap: Map<Long, Long> = emptyMap(),
+    childCountMap: Map<Long, Int> = emptyMap()
 ) {
     val alpha = if (isLocked && !isSelected) 0.5f else 1f
 
@@ -1352,8 +1357,25 @@ private fun TaskSectionItem(
             )
             Spacer(modifier = Modifier.height(3.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Type badge — 4-way: TASK / SUBTASK · Parent / NOTE / SUB NOTE · Parent
+                // Type badge — parent / child / leaf
                 when {
+                    task.id in childCountMap -> {
+                        val childCount = childCountMap[task.id] ?: 0
+                        val isMainNote = task.type == "NOTE"
+                        val badgeText = if (isMainNote) "MAIN NOTE · $childCount" else "MAIN TASK · $childCount"
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = (if (isMainNote) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = badgeText,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isMainNote) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     task.parentTaskId != null -> {
                         val parentTitle = parentTitleMap[task.parentTaskId] ?: "Unknown"
                         val groupColor = Color(parentColorMap[task.parentTaskId] ?: 0xFF4ECDC4)
