@@ -29,6 +29,7 @@ import com.example.core.database.entity.DayReviewEntity
 import com.example.core.database.entity.DiaryEntryEntity
 import com.example.core.database.entity.HabitEntity
 import com.example.core.database.entity.HabitLogEntity
+import com.example.core.database.entity.isActiveOn
 import com.example.core.database.entity.IdeaEntity
 import com.example.core.database.entity.IdeaGroupEntity
 import com.example.core.database.entity.LearnGroupEntity
@@ -1079,31 +1080,7 @@ private val mottoRepository: MottoRepository,
     // Habits filtered by recurrence for the current day
     val todayHabits: StateFlow<List<HabitEntity>> = combine(habits, _todayDate) { all, date ->
         if (date.isBlank()) return@combine all
-        try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val parsedDate = sdf.parse(date) ?: return@combine all
-            val cal = Calendar.getInstance().apply { time = parsedDate }
-            val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-            all.filter { habit ->
-                val beforeEnd = if (habit.recurrenceEndDate != null) {
-                    try {
-                        val endDate = sdf.parse(habit.recurrenceEndDate)
-                        !parsedDate.after(endDate)
-                    } catch (_: Exception) { true }
-                } else true
-                beforeEnd && when (habit.recurrenceMode) {
-                    "ALWAYS" -> true
-                    "WEEKLY" -> {
-                        val days = habit.recurrenceDaysOfWeek
-                            .split(",")
-                            .mapNotNull { it.trim().toIntOrNull() }
-                            .toSet()
-                        dayOfWeek in days
-                    }
-                    else -> false
-                }
-            }
-        } catch (_: Exception) { all }
+        all.filter { it.isActiveOn(date) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Habit Logs for currently selected date

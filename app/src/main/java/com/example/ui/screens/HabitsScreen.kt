@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.sp
 import com.example.core.database.entity.HabitEntity
 import com.example.core.database.entity.HabitLogEntity
 import com.example.core.database.entity.SleepLogEntity
+import com.example.core.database.entity.isActiveOn
 import com.example.ui.components.CalendarDatePickerDialog
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
@@ -1277,6 +1278,9 @@ private fun HabitsHistoryTab(
     val highlightedDates = remember(allLogs, allSleepLogs) {
         (allLogs.map { it.date } + allSleepLogs.map { it.date }).toSet()
     }
+    val dateHabits = remember(habits, selectedDate) {
+        habits.filter { it.isActiveOn(selectedDate) }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -1326,7 +1330,7 @@ private fun HabitsHistoryTab(
 
         // Summary
         Text(
-            text = "${dateLogs.size} logs · ${habits.size} habits",
+            text = "${dateLogs.size} logs · ${dateHabits.size} habits",
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1398,7 +1402,22 @@ private fun HabitsHistoryTab(
                     }
                 }
 
-                items(habits, key = { it.id }) { habit ->
+                if (dateHabits.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("No habits scheduled on this date.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Only habits set to repeat on this day appear here.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
+                }
+
+                items(dateHabits, key = { it.id }) { habit ->
                     val log = dateLogs.find { it.habitId == habit.id }
                     HistoryHabitRowItem(
                         habit = habit,
