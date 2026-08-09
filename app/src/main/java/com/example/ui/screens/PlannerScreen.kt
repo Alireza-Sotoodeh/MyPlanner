@@ -188,6 +188,7 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.RateReview
@@ -3981,6 +3982,12 @@ fun SettingsDialog(
     var enteredLearnReviewReminderEnabled by remember { mutableStateOf(learnReviewReminderEnabled) }
     var showLearnReviewReminderTimePicker by remember { mutableStateOf(false) }
 
+    val mottoReminderTime by viewModel.mottoReminderTime.collectAsState()
+    val mottoReminderEnabled by viewModel.mottoReminderEnabled.collectAsState()
+    var enteredMottoReminderTime by remember { mutableStateOf(mottoReminderTime) }
+    var enteredMottoReminderEnabled by remember { mutableStateOf(mottoReminderEnabled) }
+    var showMottoReminderTimePicker by remember { mutableStateOf(false) }
+
     val pomodoroRingtoneUri by viewModel.pomodoroRingtoneUri.collectAsState()
     val pomodoroRingtoneEnabled by viewModel.pomodoroRingtoneEnabled.collectAsState()
     val pomodoroVibrateEnabled by viewModel.pomodoroVibrateEnabled.collectAsState()
@@ -4024,6 +4031,12 @@ fun SettingsDialog(
     val learnReviewReminderTimePickerState = rememberTimePickerState(
         initialHour = enteredLearnReviewReminderTime.substringBefore(":").toIntOrNull() ?: 19,
         initialMinute = enteredLearnReviewReminderTime.substringAfter(":").toIntOrNull() ?: 0,
+        is24Hour = true
+    )
+
+    val mottoReminderTimePickerState = rememberTimePickerState(
+        initialHour = enteredMottoReminderTime.substringBefore(":").toIntOrNull() ?: 8,
+        initialMinute = enteredMottoReminderTime.substringAfter(":").toIntOrNull() ?: 0,
         is24Hour = true
     )
 
@@ -4101,6 +4114,8 @@ fun SettingsDialog(
             viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
             viewModel.updateLearnReviewReminderTime(enteredLearnReviewReminderTime)
             viewModel.updateLearnReviewReminderEnabled(enteredLearnReviewReminderEnabled)
+            viewModel.updateMottoReminderTime(enteredMottoReminderTime)
+            viewModel.updateMottoReminderEnabled(enteredMottoReminderEnabled)
             onDismiss()
         },
         sheetState = sheetState,
@@ -4922,6 +4937,18 @@ fun SettingsDialog(
                     onTimeClick = { showLearnReviewReminderTimePicker = true },
                     onTestClick = { viewModel.sendImmediateLearnReviewReminderNotification(context) }
                 )
+                ReminderDivider()
+                ReminderItem(
+                    icon = Icons.Default.FormatQuote,
+                    title = "Daily Motto",
+                    subtitle = "Random motivational quote",
+                    enabled = enteredMottoReminderEnabled,
+                    onEnabledChange = onReminderToggle { enteredMottoReminderEnabled = it },
+                    time = enteredMottoReminderTime,
+                    showDetails = enteredMottoReminderEnabled,
+                    onTimeClick = { showMottoReminderTimePicker = true },
+                    onTestClick = { viewModel.sendImmediateMottoReminderNotification(context) }
+                )
             }
 
             // 4. Event Notifications
@@ -5126,6 +5153,8 @@ fun SettingsDialog(
                         viewModel.updateTomorrowPlannerReminderEnabled(enteredTomorrowPlannerEnabled)
                         viewModel.updateLearnReviewReminderTime(enteredLearnReviewReminderTime)
                         viewModel.updateLearnReviewReminderEnabled(enteredLearnReviewReminderEnabled)
+                        viewModel.updateMottoReminderTime(enteredMottoReminderTime)
+                        viewModel.updateMottoReminderEnabled(enteredMottoReminderEnabled)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -5265,6 +5294,22 @@ fun SettingsDialog(
                 }) { Text("OK") }
             },
             dismissButton = { TextButton(onClick = { showLearnReviewReminderTimePicker = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showMottoReminderTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showMottoReminderTimePicker = false },
+            title = { Text("Select Reminder Time", fontWeight = FontWeight.Bold) },
+            text = { TimePicker(state = mottoReminderTimePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = mottoReminderTimePickerState.hour; val min = mottoReminderTimePickerState.minute
+                    enteredMottoReminderTime = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, min)
+                    showMottoReminderTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showMottoReminderTimePicker = false }) { Text("Cancel") } }
         )
     }
 

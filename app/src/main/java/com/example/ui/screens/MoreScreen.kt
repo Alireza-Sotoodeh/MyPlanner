@@ -57,6 +57,7 @@ fun MoreScreen(
         when (pendingMoreScreen) {
             "Diary" -> currentScreen = MoreSubScreen.Diary
             "DayReview" -> currentScreen = MoreSubScreen.DayReview
+            "Mottos" -> currentScreen = MoreSubScreen.Mottos
         }
     }
 

@@ -1025,6 +1025,8 @@ private val mottoRepository: MottoRepository,
         _tomorrowPlannerReminderEnabled.value = prefs.getBoolean("tomorrow_planner_reminder_enabled", false)
         _learnReviewReminderTime.value = prefs.getString("learn_review_reminder_time", "19:00") ?: "19:00"
         _learnReviewReminderEnabled.value = prefs.getBoolean("learn_review_reminder_enabled", false)
+        _mottoReminderTime.value = prefs.getString("motto_reminder_time", "08:00") ?: "08:00"
+        _mottoReminderEnabled.value = prefs.getBoolean("motto_reminder_enabled", false)
         _backupTime.value = prefs.getString("backup_time", "23:00") ?: "23:00"
         _backupFailureNotify.value = prefs.getBoolean("backup_failure_notify", true)
         _backupEnabled.value = prefs.getBoolean("backup_enabled", true)
@@ -1040,6 +1042,7 @@ private val mottoRepository: MottoRepository,
         if (_habitsReminderEnabled.value) scheduleHabitsReminderAlarm(context) else cancelHabitsReminderAlarm(context)
         if (_tomorrowPlannerReminderEnabled.value) scheduleTomorrowPlannerReminderAlarm(context) else cancelTomorrowPlannerReminderAlarm(context)
         if (_learnReviewReminderEnabled.value) scheduleLearnReviewReminderAlarm(context) else cancelLearnReviewReminderAlarm(context)
+        if (_mottoReminderEnabled.value) scheduleMottoReminderAlarm(context) else cancelMottoReminderAlarm(context)
     }
 
     // Date Navigation State
@@ -1734,6 +1737,12 @@ private val mottoRepository: MottoRepository,
     private val _learnReviewReminderEnabled = MutableStateFlow(prefs.getBoolean("learn_review_reminder_enabled", false))
     val learnReviewReminderEnabled: StateFlow<Boolean> = _learnReviewReminderEnabled.asStateFlow()
 
+    // === Daily Motto Reminder State ===
+    private val _mottoReminderTime = MutableStateFlow(prefs.getString("motto_reminder_time", "08:00") ?: "08:00")
+    val mottoReminderTime: StateFlow<String> = _mottoReminderTime.asStateFlow()
+    private val _mottoReminderEnabled = MutableStateFlow(prefs.getBoolean("motto_reminder_enabled", false))
+    val mottoReminderEnabled: StateFlow<Boolean> = _mottoReminderEnabled.asStateFlow()
+
     // === Deep-link More Screen State ===
     private val _pendingMoreScreen = MutableStateFlow<String?>(null)
     val pendingMoreScreen: StateFlow<String?> = _pendingMoreScreen.asStateFlow()
@@ -1996,6 +2005,14 @@ private val mottoRepository: MottoRepository,
         cancelReminderAlarm(context, "com.example.action.LEARN_REVIEW_REMINDER", 11000)
     }
 
+    fun scheduleMottoReminderAlarm(context: Context) {
+        scheduleReminderAlarm(context, "com.example.action.MOTTO_REMINDER", 12000, _mottoReminderTime.value)
+    }
+
+    fun cancelMottoReminderAlarm(context: Context) {
+        cancelReminderAlarm(context, "com.example.action.MOTTO_REMINDER", 12000)
+    }
+
     fun sendImmediateLearnReviewReminderNotification(context: Context) {
         if (!hasNotificationPermission(context)) return
         createLearnReviewReminderChannel(context)
@@ -2023,6 +2040,46 @@ private val mottoRepository: MottoRepository,
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply { description = "Daily reminder for pending learn reviews" }
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    private fun createMottoReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "motto_reminder",
+                "Daily Motto",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "Daily motivational quote" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+    }
+
+    fun sendImmediateMottoReminderNotification(context: Context) {
+        if (!hasNotificationPermission(context)) return
+        createMottoReminderChannel(context)
+        viewModelScope.launch {
+            val motto = mottoRepository.getRandomMotto()
+            if (motto == null) {
+                android.widget.Toast.makeText(context, "No mottos saved yet — add one in More > Mottos", android.widget.Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val body = if (motto.author.isBlank()) motto.text else "${motto.text}\n\n— ${motto.author}"
+            val intent = Intent(context, com.example.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("navigate_to_tab", 4)
+                putExtra("open_more_screen", "Mottos")
+            }
+            val pendingIntent = PendingIntent.getActivity(context, 12001, intent, getImmutableFlag())
+            val notification = NotificationCompat.Builder(context, "motto_reminder")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Daily Motto")
+                .setContentText(motto.text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(12001, notification)
         }
     }
 
@@ -5504,6 +5561,30 @@ private val mottoRepository: MottoRepository,
             scheduleLearnReviewReminderAlarm(context)
         } else {
             cancelLearnReviewReminderAlarm(context)
+        }
+    }
+
+    fun updateMottoReminderTime(time: String) {
+        val normalized = time.split(":").let { parts ->
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: 8
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            String.format(Locale.getDefault(), "%02d:%02d", h.coerceIn(0, 23), m.coerceIn(0, 59))
+        }
+        prefs.edit().putString("motto_reminder_time", normalized).apply()
+        _mottoReminderTime.value = normalized
+        if (_mottoReminderEnabled.value) {
+            cancelMottoReminderAlarm(context)
+            scheduleMottoReminderAlarm(context)
+        }
+    }
+
+    fun updateMottoReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("motto_reminder_enabled", enabled).apply()
+        _mottoReminderEnabled.value = enabled
+        if (enabled) {
+            scheduleMottoReminderAlarm(context)
+        } else {
+            cancelMottoReminderAlarm(context)
         }
     }
 

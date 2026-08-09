@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.example.core.database.AppDatabase
+import com.example.core.repository.MottoPicker
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -79,7 +80,8 @@ class ReminderReceiver : BroadcastReceiver() {
                         ReminderConfig("planner_reminder_enabled", "planner_reminder_time", "07:00", "com.example.action.PLANNER_REMINDER", 8000),
                         ReminderConfig("habits_reminder_enabled", "habits_reminder_time", "21:00", "com.example.action.HABITS_REMINDER", 9000),
                         ReminderConfig("tomorrow_planner_reminder_enabled", "tomorrow_planner_reminder_time", "20:00", "com.example.action.TOMORROW_PLANNER_REMINDER", 10000),
-                        ReminderConfig("learn_review_reminder_enabled", "learn_review_reminder_time", "19:00", "com.example.action.LEARN_REVIEW_REMINDER", 11000)
+                        ReminderConfig("learn_review_reminder_enabled", "learn_review_reminder_time", "19:00", "com.example.action.LEARN_REVIEW_REMINDER", 11000),
+                        ReminderConfig("motto_reminder_enabled", "motto_reminder_time", "08:00", "com.example.action.MOTTO_REMINDER", 12000)
                     )
                     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
                     for (cfg in reminders) {
@@ -165,6 +167,11 @@ class ReminderReceiver : BroadcastReceiver() {
             "com.example.action.LEARN_REVIEW_REMINDER" -> {
                 handleLearnReviewReminder(context)
                 rescheduleDailyReminder(context, action, 11000)
+                return
+            }
+            "com.example.action.MOTTO_REMINDER" -> {
+                handleMottoReminder(context)
+                rescheduleDailyReminder(context, action, 12000)
                 return
             }
             "com.example.action.SNOOZE_ALARM" -> { showSnoozedAlarm(context, intent); return }
@@ -668,6 +675,56 @@ class ReminderReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun handleMottoReminder(context: Context) {
+        val pendingResult = goAsync()
+        acquireWakeLock(context)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return@launch
+                }
+                val prefs = context.getSharedPreferences("bulletcoach_prefs", Context.MODE_PRIVATE)
+                val database = AppDatabase.getDatabase(context)
+                val motto = MottoPicker.pickNext(database, prefs) ?: return@launch
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(
+                        "motto_reminder", "Daily Motto",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    ).apply { description = "Daily motivational quote" }
+                    (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+                }
+
+                val body = if (motto.author.isBlank()) motto.text else "${motto.text}\n\n— ${motto.author}"
+
+                val openIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    putExtra("navigate_to_tab", 4)
+                    putExtra("open_more_screen", "Mottos")
+                }
+                val pendingIntent = PendingIntent.getActivity(context, 12000, openIntent, PendingIntent.FLAG_IMMUTABLE)
+
+                val notification = NotificationCompat.Builder(context, "motto_reminder")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("Daily Motto")
+                    .setContentText(motto.text)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build()
+                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(12000, notification)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                releaseWakeLock()
+                    releaseWakeLock()
+                        releaseWakeLock()
+                        pendingResult.finish()
+            }
+        }
+    }
+
     private fun handleAutoBackup(context: Context) {
         val pendingResult = goAsync()
         acquireWakeLock(context)
@@ -783,7 +840,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 "com.example.action.PLANNER_REMINDER" to Triple("planner_reminder_enabled", "planner_reminder_time", "07:00"),
                 "com.example.action.HABITS_REMINDER" to Triple("habits_reminder_enabled", "habits_reminder_time", "21:00"),
                 "com.example.action.TOMORROW_PLANNER_REMINDER" to Triple("tomorrow_planner_reminder_enabled", "tomorrow_planner_reminder_time", "20:00"),
-                "com.example.action.LEARN_REVIEW_REMINDER" to Triple("learn_review_reminder_enabled", "learn_review_reminder_time", "19:00")
+                "com.example.action.LEARN_REVIEW_REMINDER" to Triple("learn_review_reminder_enabled", "learn_review_reminder_time", "19:00"),
+                "com.example.action.MOTTO_REMINDER" to Triple("motto_reminder_enabled", "motto_reminder_time", "08:00")
             )
             val (enabledKey, timeKey, defaultTime) = configMap[action] ?: return
             if (!prefs.getBoolean(enabledKey, false)) return
