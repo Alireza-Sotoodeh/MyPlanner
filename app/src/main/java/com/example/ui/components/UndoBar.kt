@@ -64,9 +64,9 @@ fun UndoBar(
 
     Card(
         modifier = modifier
-            .padding(start = 16.dp, top = 4.dp, end = 80.dp, bottom = 4.dp)
+            .padding(start = 16.dp, top = 2.dp, end = 80.dp, bottom = 2.dp)
             .fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -75,44 +75,44 @@ fun UndoBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
                     progress = { progressValue },
                     modifier = Modifier.fillMaxSize(),
-                    strokeWidth = 2.dp,
+                    strokeWidth = 1.5.dp,
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
                 Text(
                     text = "$displaySeconds",
-                    fontSize = 8.sp,
+                    fontSize = 7.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = message,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(2.dp))
             TextButton(
                 onClick = onRestore,
-                modifier = Modifier.height(28.dp)
+                modifier = Modifier.height(24.dp)
             ) {
                 Text(
                     "Restore",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
