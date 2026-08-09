@@ -1168,6 +1168,11 @@ private val mottoRepository: MottoRepository,
     val allTasks: StateFlow<List<TaskEntity>> = taskRepository.getAllTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Tasks for the real current day (used by Timer ITEMS lists)
+    val todayTasks: StateFlow<List<TaskEntity>> = _todayDate.flatMapLatest { date ->
+        taskRepository.getTasksForDate(date)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Habits List
     val habits: StateFlow<List<HabitEntity>> = habitRepository.allHabits
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

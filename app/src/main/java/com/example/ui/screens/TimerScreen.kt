@@ -62,6 +62,7 @@ fun TimerScreen(viewModel: MainViewModel) {
     val chronoPaused by viewModel.chronoPaused.collectAsState()
 
     val tasks by viewModel.allTasks.collectAsState()
+    val todayTasks by viewModel.todayTasks.collectAsState()
     val templates by viewModel.timerTemplates.collectAsState()
     val allSessions by viewModel.allTimerSessions.collectAsState()
 
@@ -193,7 +194,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                 pomodoroCurrentSession = pomodoroCurrentSession,
                 pomodoroTargetSessions = pomodoroTargetSessions,
                 pomodoroCompletionState = pomodoroCompletionState,
-                tasks = tasks,
+                tasks = todayTasks,
                 templates = templates,
                 context = context,
                 selectedTaskId = selectedTaskId,
@@ -223,7 +224,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                 chronoElapsed = chronoElapsed,
                 chronoRunning = chronoRunning,
                 chronoPaused = chronoPaused,
-                tasks = tasks,
+                tasks = todayTasks,
                 context = context,
                 selectedTaskId = selectedTaskId,
                 onSelectedTaskIdChange = { selectedTaskId = it },
@@ -323,10 +324,10 @@ private fun PomodoroTab(
     val seconds = secondsLeft % 60
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
-    val availableTasks = remember(tasks, selectedCategory) {
+    val availableTasks = remember(tasks, selectedCategory, allTasks, selectedTaskId, activeTask) {
         val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
         val parentPriority = tasks.associate { it.id to it.priority }
-        tasks.filter { t ->
+        val base = tasks.filter { t ->
             t.status != "COMPLETED" && when (selectedCategory) {
                 "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
                 "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
@@ -343,9 +344,14 @@ private fun PomodoroTab(
         }.thenBy {
             if (it.parentTaskId != null) it.priority else -1
         })
+        val extras = listOfNotNull(
+            activeTask,
+            allTasks.find { it.id == selectedTaskId }
+        ).filter { it.status != "COMPLETED" && base.none { b -> b.id == it.id } }
+        base + extras
     }
-    val selectedTask = remember(selectedTaskId, tasks) {
-        tasks.find { it.id == selectedTaskId }
+    val selectedTask = remember(selectedTaskId, allTasks) {
+        allTasks.find { it.id == selectedTaskId }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -698,10 +704,10 @@ private fun CronometerTab(
     val seconds = (chronoElapsed % 60)
     val timeStr = String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
 
-    val availableTasks = remember(tasks, selectedCategory) {
+    val availableTasks = remember(tasks, selectedCategory, allTasks, selectedTaskId) {
         val parentIds = tasks.filter { t -> tasks.any { it.parentTaskId == t.id } }.map { it.id }.toSet()
         val parentPriority = tasks.associate { it.id to it.priority }
-        tasks.filter { t ->
+        val base = tasks.filter { t ->
             t.status != "COMPLETED" && when (selectedCategory) {
                 "TASKS" -> t.parentTaskId == null && t.type == "TASK" && t.id !in parentIds
                 "SUBTASKS" -> t.parentTaskId != null && t.type == "TASK"
@@ -718,6 +724,10 @@ private fun CronometerTab(
         }.thenBy {
             if (it.parentTaskId != null) it.priority else -1
         })
+        val extras = listOfNotNull(
+            allTasks.find { it.id == selectedTaskId }
+        ).filter { it.status != "COMPLETED" && base.none { b -> b.id == it.id } }
+        base + extras
     }
 
     var chronoNote by remember { mutableStateOf("") }
@@ -804,7 +814,7 @@ private fun CronometerTab(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-                    val selTask = tasks.find { it.id == selectedTaskId }
+                    val selTask = allTasks.find { it.id == selectedTaskId }
                     if (selTask != null) {
                         Text("Task: ${selTask.title}", fontSize = 14.sp)
                     }
