@@ -41,7 +41,8 @@ fun UndoBar(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val startFraction = ((expiryTime - System.currentTimeMillis()) / (totalSeconds * 1000L)).toFloat().coerceIn(0f, 1f)
+    val totalMs = totalSeconds * 1000L
+    val startFraction = ((expiryTime - System.currentTimeMillis()).toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
     val progress = remember(expiryTime) { Animatable(startFraction) }
     val progressValue by progress.asState()
 

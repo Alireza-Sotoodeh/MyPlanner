@@ -5728,6 +5728,10 @@ private val mottoRepository: MottoRepository,
             expiryTime = System.currentTimeMillis() + 5000
         )
         _undoStack.value = _undoStack.value + entry
+        viewModelScope.launch {
+            delay(5000)
+            _undoStack.value = _undoStack.value.filter { it.id != entry.id }
+        }
     }
 
     override fun onCleared() {
