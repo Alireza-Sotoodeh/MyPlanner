@@ -168,6 +168,7 @@ import com.example.ui.components.ActiveTimerWidget
 import com.example.ui.components.CalendarDatePickerDialog
 import com.example.ui.components.HeaderActions
 import com.example.ui.viewmodel.MainViewModel
+import com.example.ui.viewmodel.SeriesMode
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -568,6 +569,9 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
     var showAddTaskDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<TaskEntity?>(null) }
     var subtasksToEdit by remember { mutableStateOf<List<TaskEntity>>(emptyList()) }
+    var taskEditSeriesMode by remember { mutableStateOf(SeriesMode.THIS) }
+    var recurringTaskAction by remember { mutableStateOf<RecurringTaskAction?>(null) }
+    var recurringDeleteConfirm by remember { mutableStateOf<RecurringDeleteConfirm?>(null) }
     val expandAllItems by viewModel.expandAllItems.collectAsState()
     val expandAllSubtasks by viewModel.expandAllSubtasks.collectAsState()
     var showPendingDetailsDialog by remember { mutableStateOf(false) }
@@ -1049,7 +1053,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                     isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                     onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
                                     onMigrate = { targetDate -> viewModel.migrateTask(task, targetDate) },
-                                    onDelete = { viewModel.deleteTaskWithUndo(task) },
+                                    onDelete = {
+                                        if (isRecurringSeries(task)) {
+                                            recurringTaskAction = RecurringTaskAction(task, taskSubtasks, RecurringAction.DELETE)
+                                        } else {
+                                            viewModel.deleteTaskWithUndo(task)
+                                        }
+                                    },
                                     onStartPomodoro = { 
                                         viewModel.setTaskForPomodoroSetup(task)
                                     },
@@ -1058,9 +1068,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                     },
                                     onTaskClick = { showInteractDialog = true },
                                     onEdit = {
-                                        taskToEdit = task
-                                        subtasksToEdit = taskSubtasks
-                                        showAddTaskDialog = true
+                                        if (isRecurringSeries(task)) {
+                                            recurringTaskAction = RecurringTaskAction(task, taskSubtasks, RecurringAction.EDIT)
+                                        } else {
+                                            taskToEdit = task
+                                            subtasksToEdit = taskSubtasks
+                                            showAddTaskDialog = true
+                                        }
                                     },
                                     onSubtaskToggle = { subtask -> viewModel.toggleTaskCompletion(subtask, emptyList()) },
                                     onMigrateSubtask = { subtask, date -> viewModel.migrateTask(subtask, date) },
@@ -1209,7 +1223,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                             isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                             onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
                                             onMigrate = { targetDate -> viewModel.migrateTask(task, targetDate) },
-                                            onDelete = { viewModel.deleteTaskWithUndo(task) },
+                                            onDelete = {
+                                                if (isRecurringSeries(task)) {
+                                                    recurringTaskAction = RecurringTaskAction(task, taskSubtasks, RecurringAction.DELETE)
+                                                } else {
+                                                    viewModel.deleteTaskWithUndo(task)
+                                                }
+                                            },
                                             onStartPomodoro = { 
                                                 viewModel.setTaskForPomodoroSetup(task)
                                             },
@@ -1218,9 +1238,13 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                             },
                                             onTaskClick = { showInteractDialog = true },
                                             onEdit = {
-                                                taskToEdit = task
-                                                subtasksToEdit = taskSubtasks
-                                                showAddTaskDialog = true
+                                                if (isRecurringSeries(task)) {
+                                                    recurringTaskAction = RecurringTaskAction(task, taskSubtasks, RecurringAction.EDIT)
+                                                } else {
+                                                    taskToEdit = task
+                                                    subtasksToEdit = taskSubtasks
+                                                    showAddTaskDialog = true
+                                                }
                                             },
                                             onSubtaskToggle = { subtask -> viewModel.toggleTaskCompletion(subtask, emptyList()) },
                                             onMigrateSubtask = { subtask, date -> viewModel.migrateTask(subtask, date) },
@@ -1265,11 +1289,78 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
             initialDate = taskToEdit!!.date,
             taskToEdit = taskToEdit,
             initialSubtasks = subtasksToEdit,
+            seriesMode = taskEditSeriesMode,
             onDismiss = {
                 showAddTaskDialog = false
                 taskToEdit = null
                 subtasksToEdit = emptyList()
             }
+        )
+    }
+
+    recurringTaskAction?.let { pending ->
+        RecurringScopeDialog(
+            task = pending.task,
+            action = pending.action,
+            onThis = {
+                when (pending.action) {
+                    RecurringAction.EDIT -> {
+                        taskToEdit = pending.task
+                        subtasksToEdit = pending.subtasks
+                        taskEditSeriesMode = SeriesMode.THIS
+                        showAddTaskDialog = true
+                    }
+                    RecurringAction.DELETE -> viewModel.deleteTaskWithUndo(pending.task)
+                }
+                recurringTaskAction = null
+            },
+            onThisAndFollowing = {
+                when (pending.action) {
+                    RecurringAction.EDIT -> {
+                        taskToEdit = pending.task
+                        subtasksToEdit = pending.subtasks
+                        taskEditSeriesMode = SeriesMode.THIS_AND_FOLLOWING
+                        showAddTaskDialog = true
+                    }
+                    RecurringAction.DELETE -> recurringDeleteConfirm = RecurringDeleteConfirm(pending.task, SeriesMode.THIS_AND_FOLLOWING)
+                }
+                recurringTaskAction = null
+            },
+            onAll = {
+                when (pending.action) {
+                    RecurringAction.EDIT -> {
+                        taskToEdit = pending.task
+                        subtasksToEdit = pending.subtasks
+                        taskEditSeriesMode = SeriesMode.ALL
+                        showAddTaskDialog = true
+                    }
+                    RecurringAction.DELETE -> recurringDeleteConfirm = RecurringDeleteConfirm(pending.task, SeriesMode.ALL)
+                }
+                recurringTaskAction = null
+            },
+            onDismiss = { recurringTaskAction = null }
+        )
+    }
+
+    recurringDeleteConfirm?.let { confirm ->
+        val seriesMembers = allTasks.filter { it.seriesId == confirm.task.seriesId && it.recurrenceMode == "WEEKLY" }
+        val affectedCount = when (confirm.mode) {
+            SeriesMode.ALL -> seriesMembers.size
+            SeriesMode.THIS_AND_FOLLOWING -> seriesMembers.count { it.date >= confirm.task.date }
+            else -> 1
+        }
+        val message = when (confirm.mode) {
+            SeriesMode.ALL -> "Delete all $affectedCount occurrence(s) of this repeating task, including past and completed ones?"
+            SeriesMode.THIS_AND_FOLLOWING -> "Delete this occurrence and the following $affectedCount occurrence(s) of this repeating task?"
+            else -> "Delete this occurrence?"
+        }
+        RecurringDeleteConfirmDialog(
+            message = message,
+            onConfirm = {
+                viewModel.deleteSeriesWithUndo(confirm.task, confirm.mode)
+                recurringDeleteConfirm = null
+            },
+            onDismiss = { recurringDeleteConfirm = null }
         )
     }
 }
@@ -3213,6 +3304,107 @@ fun MonthlyPlannerView(
             }
         }
     }
+}
+
+enum class RecurringAction { EDIT, DELETE }
+
+data class RecurringTaskAction(
+    val task: TaskEntity,
+    val subtasks: List<TaskEntity>,
+    val action: RecurringAction
+)
+
+data class RecurringDeleteConfirm(
+    val task: TaskEntity,
+    val mode: SeriesMode
+)
+
+fun isRecurringSeries(task: TaskEntity): Boolean = task.seriesId != null && task.recurrenceMode == "WEEKLY"
+
+@Composable
+fun RecurringScopeDialog(
+    task: TaskEntity,
+    action: RecurringAction,
+    onThis: () -> Unit,
+    onThisAndFollowing: () -> Unit,
+    onAll: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (action == RecurringAction.EDIT) "Edit Repeating Task" else "Delete Repeating Task",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "'${task.title}' is part of a repeating series. What would you like to ${if (action == RecurringAction.EDIT) "edit" else "delete"}?",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                TextButton(
+                    onClick = onThis,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("This occurrence")
+                }
+                TextButton(
+                    onClick = onThisAndFollowing,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("This and following occurrences")
+                }
+                TextButton(
+                    onClick = onAll,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("All occurrences")
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+fun RecurringDeleteConfirmDialog(
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Confirm Delete", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Text(message, fontSize = 13.sp)
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -59,7 +59,7 @@ import com.example.core.database.entity.TodoEntity
         LearnItemEntity::class,
         LearnSectionEntity::class
     ],
-    version = 32,
+    version = 33,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -279,14 +279,25 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("ALTER TABLE todos ADD COLUMN labelColor INTEGER")
         }
 
+        private val MIGRATION_32_33 = Migration(32, 33) { db ->
+            if (!columnExists(db, "tasks", "seriesId")) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN seriesId INTEGER")
+            }
+            db.execSQL("CREATE TABLE IF NOT EXISTS `task_series_backfill` (`seriesId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `type` TEXT NOT NULL, `recurrenceInterval` INTEGER NOT NULL, `recurrenceDaysOfWeek` TEXT NOT NULL, `recurrenceEndDate` TEXT, `eventTime` TEXT)")
+            db.execSQL("INSERT INTO task_series_backfill (title, description, type, recurrenceInterval, recurrenceDaysOfWeek, recurrenceEndDate, eventTime) SELECT title, description, type, recurrenceInterval, recurrenceDaysOfWeek, recurrenceEndDate, eventTime FROM tasks WHERE recurrenceMode = 'WEEKLY' AND recurrenceDaysOfWeek IS NOT NULL AND recurrenceDaysOfWeek != '' AND seriesId IS NULL GROUP BY title, description, type, recurrenceInterval, recurrenceDaysOfWeek, recurrenceEndDate, eventTime")
+            db.execSQL("UPDATE tasks SET seriesId = (SELECT b.seriesId FROM task_series_backfill b WHERE b.title = tasks.title AND b.description = tasks.description AND b.type = tasks.type AND b.recurrenceInterval = tasks.recurrenceInterval AND b.recurrenceDaysOfWeek = tasks.recurrenceDaysOfWeek AND ((b.recurrenceEndDate IS NULL AND tasks.recurrenceEndDate IS NULL) OR b.recurrenceEndDate = tasks.recurrenceEndDate) AND ((b.eventTime IS NULL AND tasks.eventTime IS NULL) OR b.eventTime = tasks.eventTime)) WHERE recurrenceMode = 'WEEKLY' AND recurrenceDaysOfWeek IS NOT NULL AND recurrenceDaysOfWeek != '' AND seriesId IS NULL")
+            db.execSQL("DROP TABLE IF EXISTS task_series_backfill")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_tasks_seriesId ON tasks(seriesId)")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "bulletcoach_database"
+                    "bulletcoast_database"
                 )
-                    .addMigrations(MIGRATION_1_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32)
+                    .addMigrations(MIGRATION_1_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

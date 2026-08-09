@@ -48,6 +48,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId")
     suspend fun getSubtasks(parentId: Long): List<TaskEntity>
 
+    @Query("SELECT * FROM tasks WHERE seriesId = :seriesId ORDER BY date ASC, priority ASC, id ASC")
+    suspend fun getTasksBySeriesIdSync(seriesId: Long): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks WHERE seriesId = :seriesId ORDER BY date ASC, priority ASC, id ASC")
+    fun getTasksBySeriesId(seriesId: Long): Flow<List<TaskEntity>>
+
     @Query("DELETE FROM tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubtasks(parentId: Long)
 

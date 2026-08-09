@@ -96,6 +96,11 @@ sealed class UndoSnapshot(val typeLabel: String) {
             else -> "Task"
         }
     )
+    data class SeriesSnapshot(
+        val tasks: List<TaskEntity>,
+        val subtasksByParent: List<Pair<Long, List<TaskEntity>>>,
+        val linkedTodoIds: Map<Long, Long?>,
+    ) : UndoSnapshot("Series")
     data class TodoSnapshot(
         val todo: TodoEntity,
         val linkedTask: TaskEntity?,
@@ -167,6 +172,8 @@ data class PendingTaskCompletion(
     val endHour: Int? = null,
     val endMinute: Int? = null
 )
+
+enum class SeriesMode { THIS, THIS_AND_FOLLOWING, ALL }
 
 data class PendingSubTodoCompletion(
     val todo: TodoEntity,
@@ -2370,62 +2377,8 @@ private val mottoRepository: MottoRepository,
         priorityLevel: String = "Medium"
     ) {
         viewModelScope.launch {
-            val dates = mutableListOf<String>()
-            if (recurrenceMode != "WEEKLY") dates.add(date)
-            if (recurrenceMode == "WEEKLY") {
-                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                try {
-                    val currentDate = sdf.parse(date)
-                    val endDateParsed = recurrenceEndDate?.let { sdf.parse(it) }
-                    val cal = java.util.Calendar.getInstance()
-                    if (currentDate != null) {
-                        cal.time = currentDate
-                        val startDayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK)
-                        val targetDays = if (recurrenceDaysOfWeek.isNotBlank()) {
-                            recurrenceDaysOfWeek.split(",").mapNotNull { it.toIntOrNull() }
-                        } else {
-                            listOf(startDayOfWeek)
-                        }
-
-                        // Generate for next 1 year max or until endDate
-                        val endLimit = java.util.Calendar.getInstance().apply { 
-                            time = currentDate
-                            add(java.util.Calendar.YEAR, 1)
-                        }.time
-
-                        var currentWeekCal = java.util.Calendar.getInstance().apply { time = currentDate }
-                        
-                        // We check weeks up to 52
-                        for (weekOffset in 0..52 step recurrenceInterval) {
-                            for (day in targetDays) {
-                                val dayCal = java.util.Calendar.getInstance().apply {
-                                    time = currentWeekCal.time
-                                    set(java.util.Calendar.DAY_OF_WEEK, day)
-                                }
-                                // If day is before start date in the first week, skip it
-                                if (weekOffset == 0 && dayCal.time.before(currentDate) && day != startDayOfWeek) {
-                                    continue
-                                }
-                                
-                                if (endDateParsed != null && dayCal.time.after(endDateParsed)) {
-                                    continue
-                                }
-                                if (dayCal.time.after(endLimit)) {
-                                    continue
-                                }
-                                
-                                val dateStr = sdf.format(dayCal.time)
-                                if (!dates.contains(dateStr)) {
-                                    dates.add(dateStr)
-                                }
-                            }
-                            currentWeekCal.add(java.util.Calendar.WEEK_OF_YEAR, recurrenceInterval)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Date parsing error", e)
-                }
-            }
+            val dates = expandRecurrenceDates(date, recurrenceMode, recurrenceInterval, recurrenceDaysOfWeek, recurrenceEndDate)
+            val seriesId = if (recurrenceMode == "WEEKLY") (System.nanoTime() and java.lang.Long.MAX_VALUE) else null
 
             dates.forEach { taskDate ->
                 val newTask = TaskEntity(
@@ -2444,7 +2397,8 @@ private val mottoRepository: MottoRepository,
                     recurrenceEndDate = recurrenceEndDate,
                     eventTime = eventTime,
                     notifyNightBefore = notifyNightBefore,
-                    reminderMinutesBefore = reminderMinutesBefore
+                    reminderMinutesBefore = reminderMinutesBefore,
+                    seriesId = seriesId
                 )
                 val parentId = taskRepository.insertTask(newTask)
                 if (newTask.type == "EVENT") {
@@ -2467,13 +2421,79 @@ private val mottoRepository: MottoRepository,
                             label = label,
                             labelColor = labelColor,
                             parentTaskId = parentId,
-                            subtaskImportance = importance
+                            subtaskImportance = importance,
+                            seriesId = seriesId
                         )
                         taskRepository.insertTask(subTask)
                     }
                 }
             }
         }
+    }
+
+    private fun expandRecurrenceDates(
+        date: String,
+        recurrenceMode: String,
+        recurrenceInterval: Int,
+        recurrenceDaysOfWeek: String,
+        recurrenceEndDate: String?
+    ): List<String> {
+        val dates = mutableListOf<String>()
+        if (recurrenceMode != "WEEKLY") {
+            dates.add(date)
+            return dates
+        }
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        try {
+            val currentDate = sdf.parse(date)
+            val endDateParsed = recurrenceEndDate?.let { sdf.parse(it) }
+            if (currentDate != null) {
+                val cal = java.util.Calendar.getInstance()
+                cal.time = currentDate
+                val startDayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK)
+                val targetDays = if (recurrenceDaysOfWeek.isNotBlank()) {
+                    recurrenceDaysOfWeek.split(",").mapNotNull { it.toIntOrNull() }
+                } else {
+                    listOf(startDayOfWeek)
+                }
+
+                // Generate for next 1 year max or until endDate
+                val endLimit = java.util.Calendar.getInstance().apply {
+                    time = currentDate
+                    add(java.util.Calendar.YEAR, 1)
+                }.time
+
+                var currentWeekCal = java.util.Calendar.getInstance().apply { time = currentDate }
+
+                // We check weeks up to 52
+                for (weekOffset in 0..52 step recurrenceInterval) {
+                    for (day in targetDays) {
+                        val dayCal = java.util.Calendar.getInstance().apply {
+                            time = currentWeekCal.time
+                            set(java.util.Calendar.DAY_OF_WEEK, day)
+                        }
+                        // If day is before start date in the first week, skip it
+                        if (weekOffset == 0 && dayCal.time.before(currentDate) && day != startDayOfWeek) {
+                            continue
+                        }
+                        if (endDateParsed != null && dayCal.time.after(endDateParsed)) {
+                            continue
+                        }
+                        if (dayCal.time.after(endLimit)) {
+                            continue
+                        }
+                        val dateStr = sdf.format(dayCal.time)
+                        if (!dates.contains(dateStr)) {
+                            dates.add(dateStr)
+                        }
+                    }
+                    currentWeekCal.add(java.util.Calendar.WEEK_OF_YEAR, recurrenceInterval)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Date parsing error", e)
+        }
+        return dates
     }
 
     fun updateTaskWithSubtasks(
@@ -2492,14 +2512,246 @@ private val mottoRepository: MottoRepository,
         eventTime: String? = task.eventTime,
         notifyNightBefore: Boolean = task.notifyNightBefore,
         reminderMinutesBefore: Int? = task.reminderMinutesBefore,
-        priorityLevel: String = task.priorityLevel
+        priorityLevel: String = task.priorityLevel,
+        seriesMode: SeriesMode = SeriesMode.THIS
     ) {
         viewModelScope.launch {
-            val updatedTask = task.copy(
+            val isSeries = task.seriesId != null && task.recurrenceMode == "WEEKLY"
+            val patternChanged = recurrenceMode != task.recurrenceMode ||
+                recurrenceInterval != task.recurrenceInterval ||
+                recurrenceDaysOfWeek != task.recurrenceDaysOfWeek ||
+                recurrenceEndDate != task.recurrenceEndDate
+
+            if (seriesMode == SeriesMode.THIS || !isSeries) {
+                applyOccurrenceUpdate(
+                    row = task, title = title, description = description, date = date,
+                    type = type, label = label, labelColor = labelColor, subtasks = subtasks,
+                    recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                    recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                    eventTime = eventTime, notifyNightBefore = notifyNightBefore,
+                    reminderMinutesBefore = reminderMinutesBefore, priorityLevel = priorityLevel
+                )
+                return@launch
+            }
+
+            val seriesId = task.seriesId ?: return@launch
+            val seriesTasks = taskRepository.getTasksBySeriesIdSync(seriesId)
+            if (seriesTasks.isEmpty()) {
+                applyOccurrenceUpdate(
+                    row = task, title = title, description = description, date = date,
+                    type = type, label = label, labelColor = labelColor, subtasks = subtasks,
+                    recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                    recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                    eventTime = eventTime, notifyNightBefore = notifyNightBefore,
+                    reminderMinutesBefore = reminderMinutesBefore, priorityLevel = priorityLevel
+                )
+                return@launch
+            }
+
+            if (!patternChanged) {
+                val affected = when (seriesMode) {
+                    SeriesMode.THIS_AND_FOLLOWING -> seriesTasks.filter { it.date >= task.date }
+                    SeriesMode.ALL -> seriesTasks
+                    else -> listOf(task)
+                }
+                affected.forEach { row ->
+                    applyOccurrenceUpdate(
+                        row = row, title = title, description = description, date = row.date,
+                        type = type, label = label, labelColor = labelColor, subtasks = subtasks,
+                        recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                        recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                        eventTime = eventTime, notifyNightBefore = notifyNightBefore,
+                        reminderMinutesBefore = reminderMinutesBefore, priorityLevel = priorityLevel
+                    )
+                }
+                return@launch
+            }
+
+            // Pattern changed -> regenerate
+            if (seriesMode == SeriesMode.ALL) {
+                val anchorDate = seriesTasks.minByOrNull { it.date }?.date ?: task.date
+                deleteSeriesRows(seriesTasks)
+                val newDates = expandRecurrenceDates(anchorDate, recurrenceMode, recurrenceInterval, recurrenceDaysOfWeek, recurrenceEndDate)
+                createSeriesRows(
+                    seriesId = seriesId, anchorDate = anchorDate, dates = newDates,
+                    title = title, description = description, type = type, label = label, labelColor = labelColor,
+                    subtasks = subtasks, recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                    recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                    eventTime = eventTime, notifyNightBefore = notifyNightBefore,
+                    reminderMinutesBefore = reminderMinutesBefore, priorityLevel = priorityLevel
+                )
+            } else {
+                // THIS_AND_FOLLOWING: keep past rows, anchor at tapped occurrence, regenerate forward
+                val futureRows = seriesTasks.filter { it.date > task.date }
+                applyOccurrenceUpdate(
+                    row = task, title = title, description = description, date = task.date,
+                    type = type, label = label, labelColor = labelColor, subtasks = subtasks,
+                    recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                    recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                    eventTime = eventTime, notifyNightBefore = notifyNightBefore,
+                    reminderMinutesBefore = reminderMinutesBefore, priorityLevel = priorityLevel
+                )
+                deleteSeriesRows(futureRows)
+                val newDates = expandRecurrenceDates(task.date, recurrenceMode, recurrenceInterval, recurrenceDaysOfWeek, recurrenceEndDate)
+                    .filter { it > task.date }
+                createSeriesRows(
+                    seriesId = seriesId, anchorDate = task.date, dates = newDates,
+                    title = title, description = description, type = type, label = label, labelColor = labelColor,
+                    subtasks = subtasks, recurrenceMode = recurrenceMode, recurrenceInterval = recurrenceInterval,
+                    recurrenceDaysOfWeek = recurrenceDaysOfWeek, recurrenceEndDate = recurrenceEndDate,
+                    eventTime = eventTime, notifyNightBefore = notifyNightBefore,
+                    reminderMinutesBefore = reminderMinutesBefore, priorityLevel = priorityLevel
+                )
+            }
+        }
+    }
+
+    private suspend fun applyOccurrenceUpdate(
+        row: TaskEntity,
+        title: String,
+        description: String,
+        date: String,
+        type: String,
+        label: String,
+        labelColor: Long?,
+        subtasks: List<Pair<String, String>>,
+        recurrenceMode: String,
+        recurrenceInterval: Int,
+        recurrenceDaysOfWeek: String,
+        recurrenceEndDate: String?,
+        eventTime: String?,
+        notifyNightBefore: Boolean,
+        reminderMinutesBefore: Int?,
+        priorityLevel: String
+    ) {
+        val updatedRow = row.copy(
+            title = title,
+            description = description,
+            date = date,
+            type = type,
+            label = label,
+            labelColor = labelColor,
+            recurrenceMode = recurrenceMode,
+            recurrenceInterval = recurrenceInterval,
+            recurrenceDaysOfWeek = recurrenceDaysOfWeek,
+            recurrenceEndDate = recurrenceEndDate,
+            eventTime = eventTime,
+            notifyNightBefore = notifyNightBefore,
+            reminderMinutesBefore = reminderMinutesBefore,
+            priorityLevel = priorityLevel
+        )
+        taskRepository.updateTask(updatedRow)
+
+        updatedRow.linkedTodoId?.let { todoId ->
+            todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                if (linkedTodo.title != title || linkedTodo.description != description) {
+                    todoRepository.updateTodo(linkedTodo.copy(title = title, description = description))
+                }
+            }
+        }
+
+        if (updatedRow.type == "EVENT") {
+            com.example.core.manager.ReminderManager.cancelReminders(context, row) // Cancel old
+            com.example.core.manager.ReminderManager.scheduleReminders(
+                context = context,
+                task = updatedRow,
+                vibrate = _eventReminderVibrate.value,
+                sound = _eventReminderSound.value
+            )
+        } else if (row.type == "EVENT") {
+            // Was event, now something else
+            com.example.core.manager.ReminderManager.cancelReminders(context, row)
+        }
+
+        // Basic subtask sync: delete existing subtasks and re-insert
+        val existingSubtasks = allTasks.value.filter { it.parentTaskId == row.id }
+        existingSubtasks.forEach { taskRepository.deleteTask(it) }
+
+        subtasks.forEach { (subTitle, importance) ->
+            if (subTitle.isNotBlank()) {
+                val subTask = TaskEntity(
+                    title = subTitle,
+                    description = "",
+                    date = date,
+                    type = "TASK",
+                    durationMinutes = 0,
+                    priority = 0,
+                    label = label,
+                    labelColor = labelColor,
+                    parentTaskId = row.id,
+                    subtaskImportance = importance,
+                    seriesId = row.seriesId
+                )
+                taskRepository.insertTask(subTask)
+            }
+        }
+
+        // Sync linked todo's sub-todos with importance
+        updatedRow.linkedTodoId?.let { todoId ->
+            todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                val existingSubTodos = todoRepository.getSubTodosSync(todoId)
+                existingSubTodos.forEach { todoRepository.deleteTodo(it) }
+                subtasks.forEach { (subTitle, importance) ->
+                    if (subTitle.isNotBlank()) {
+                        todoRepository.insertTodo(
+                            TodoEntity(
+                                title = subTitle.trim(),
+                                description = "",
+                                priority = linkedTodo.priority,
+                                parentTodoId = todoId,
+                                status = "PENDING",
+                                subtaskImportance = importance,
+                                sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun deleteSeriesRows(rows: List<TaskEntity>) {
+        rows.forEach { row ->
+            if (row.type == "EVENT") {
+                com.example.core.manager.ReminderManager.cancelReminders(context, row)
+            }
+            row.linkedTodoId?.let { todoId ->
+                todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                    todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = null))
+                }
+            }
+            taskRepository.deleteTaskAndSubtasks(row)
+        }
+    }
+
+    private suspend fun createSeriesRows(
+        seriesId: Long,
+        anchorDate: String,
+        dates: List<String>,
+        title: String,
+        description: String,
+        type: String,
+        label: String,
+        labelColor: Long?,
+        subtasks: List<Pair<String, String>>,
+        recurrenceMode: String,
+        recurrenceInterval: Int,
+        recurrenceDaysOfWeek: String,
+        recurrenceEndDate: String?,
+        eventTime: String?,
+        notifyNightBefore: Boolean,
+        reminderMinutesBefore: Int?,
+        priorityLevel: String
+    ) {
+        dates.forEach { taskDate ->
+            val newTask = TaskEntity(
                 title = title,
                 description = description,
-                date = date,
+                date = taskDate,
                 type = type,
+                durationMinutes = 0,
+                priority = dailyTasks.value.size + 1,
+                priorityLevel = priorityLevel,
                 label = label,
                 labelColor = labelColor,
                 recurrenceMode = recurrenceMode,
@@ -2509,73 +2761,33 @@ private val mottoRepository: MottoRepository,
                 eventTime = eventTime,
                 notifyNightBefore = notifyNightBefore,
                 reminderMinutesBefore = reminderMinutesBefore,
-                priorityLevel = priorityLevel
+                seriesId = seriesId
             )
-            taskRepository.updateTask(updatedTask)
-
-            updatedTask.linkedTodoId?.let { todoId ->
-                todoRepository.getTodoById(todoId)?.let { linkedTodo ->
-                    if (linkedTodo.title != title || linkedTodo.description != description) {
-                        todoRepository.updateTodo(linkedTodo.copy(title = title, description = description))
-                    }
-                }
-            }
-
-            if (updatedTask.type == "EVENT") {
-                com.example.core.manager.ReminderManager.cancelReminders(context, task) // Cancel old
+            val parentId = taskRepository.insertTask(newTask)
+            if (newTask.type == "EVENT") {
                 com.example.core.manager.ReminderManager.scheduleReminders(
                     context = context,
-                    task = updatedTask,
+                    task = newTask.copy(id = parentId),
                     vibrate = _eventReminderVibrate.value,
                     sound = _eventReminderSound.value
                 )
-            } else if (task.type == "EVENT") {
-                // Was event, now something else
-                com.example.core.manager.ReminderManager.cancelReminders(context, task)
             }
-
-            // Basic subtask sync: delete existing subtasks and re-insert
-            val existingSubtasks = allTasks.value.filter { it.parentTaskId == task.id }
-            existingSubtasks.forEach { taskRepository.deleteTask(it) }
-            
             subtasks.forEach { (subTitle, importance) ->
                 if (subTitle.isNotBlank()) {
                     val subTask = TaskEntity(
                         title = subTitle,
                         description = "",
-                        date = date,
+                        date = taskDate,
                         type = "TASK",
                         durationMinutes = 0,
                         priority = 0,
                         label = label,
                         labelColor = labelColor,
-                        parentTaskId = task.id,
-                        subtaskImportance = importance
+                        parentTaskId = parentId,
+                        subtaskImportance = importance,
+                        seriesId = seriesId
                     )
                     taskRepository.insertTask(subTask)
-                }
-            }
-
-            // Sync linked todo's sub-todos with importance
-            updatedTask.linkedTodoId?.let { todoId ->
-                todoRepository.getTodoById(todoId)?.let { linkedTodo ->
-                    val existingSubTodos = todoRepository.getSubTodosSync(todoId)
-                    existingSubTodos.forEach { todoRepository.deleteTodo(it) }
-                    subtasks.forEach { (subTitle, importance) ->
-                        if (subTitle.isNotBlank()) {
-                            todoRepository.insertTodo(
-                                TodoEntity(
-                                    title = subTitle.trim(),
-                                    description = "",
-                                    priority = linkedTodo.priority,
-                                    parentTodoId = todoId,
-                                    status = "PENDING",
-                                    subtaskImportance = importance,
-                                    sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
-                                )
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -2644,6 +2856,42 @@ private val mottoRepository: MottoRepository,
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete task with undo", e)
+            }
+        }
+    }
+
+    fun deleteSeriesWithUndo(task: TaskEntity, mode: SeriesMode = SeriesMode.THIS) {
+        viewModelScope.launch {
+            try {
+                if (mode == SeriesMode.THIS || task.seriesId == null || task.recurrenceMode != "WEEKLY") {
+                    deleteTaskWithUndo(task)
+                    return@launch
+                }
+                val seriesTasks = taskRepository.getTasksBySeriesIdSync(task.seriesId)
+                val affected = when (mode) {
+                    SeriesMode.THIS_AND_FOLLOWING -> seriesTasks.filter { it.date >= task.date }
+                    SeriesMode.ALL -> seriesTasks
+                    else -> listOf(task)
+                }
+                if (affected.isEmpty()) {
+                    deleteTaskWithUndo(task)
+                    return@launch
+                }
+                val subtasksByParent = affected.map { row ->
+                    row.id to taskRepository.getSubtasks(row.id)
+                }
+                val linkedTodoIds = affected.associate { it.id to it.linkedTodoId }
+                deleteSeriesRows(affected)
+                pushUndo(
+                    UndoSnapshot.SeriesSnapshot(
+                        tasks = affected,
+                        subtasksByParent = subtasksByParent,
+                        linkedTodoIds = linkedTodoIds
+                    ),
+                    task.title
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete task series with undo", e)
             }
         }
     }
@@ -5322,6 +5570,36 @@ private val mottoRepository: MottoRepository,
                             com.example.core.manager.ReminderManager.scheduleReminders(
                                 context = context,
                                 task = snap.task.copy(id = newTaskId),
+                                vibrate = _eventReminderVibrate.value,
+                                sound = _eventReminderSound.value
+                            )
+                        }
+                    }
+                    is UndoSnapshot.SeriesSnapshot -> {
+                        val idMap = mutableMapOf<Long, Long>()
+                        for (snapTask in snap.tasks) {
+                            val newTaskId = taskRepository.insertTask(snapTask.copy(id = 0))
+                            idMap[snapTask.id] = newTaskId
+                        }
+                        snap.subtasksByParent.forEach { (parentId, subList) ->
+                            val newParentId = idMap[parentId] ?: return@forEach
+                            for (subtask in subList) {
+                                taskRepository.insertTask(subtask.copy(id = 0, parentTaskId = newParentId))
+                            }
+                        }
+                        snap.linkedTodoIds.forEach { (taskId, todoId) ->
+                            val newTaskId = idMap[taskId] ?: return@forEach
+                            if (todoId != null) {
+                                todoRepository.getTodoById(todoId)?.let { linkedTodo ->
+                                    todoRepository.updateTodo(linkedTodo.copy(linkedTaskId = newTaskId))
+                                }
+                            }
+                        }
+                        for (snapTask in snap.tasks.filter { it.type == "EVENT" }) {
+                            val newTaskId = idMap[snapTask.id] ?: continue
+                            com.example.core.manager.ReminderManager.scheduleReminders(
+                                context = context,
+                                task = snapTask.copy(id = newTaskId),
                                 vibrate = _eventReminderVibrate.value,
                                 sound = _eventReminderSound.value
                             )

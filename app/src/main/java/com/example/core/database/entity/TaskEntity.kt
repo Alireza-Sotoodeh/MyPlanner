@@ -54,6 +54,7 @@ data class TaskEntity(
     val linkedLearnSectionId: Long? = null,
     val postponed: Boolean = false,
     val postponeCount: Int = 0,
+    val seriesId: Long? = null, // Shared id linking all occurrences of one recurring series
     val isDeleted: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 ) {

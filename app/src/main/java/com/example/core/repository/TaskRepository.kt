@@ -36,4 +36,8 @@ class TaskRepository(
     suspend fun updateTaskPriorities(tasks: List<TaskEntity>) = taskDao.updateTaskPriorities(tasks)
 
     suspend fun getSubtasks(parentId: Long): List<TaskEntity> = taskDao.getSubtasks(parentId)
+
+    fun getTasksBySeriesId(seriesId: Long): Flow<List<TaskEntity>> = taskDao.getTasksBySeriesId(seriesId)
+
+    suspend fun getTasksBySeriesIdSync(seriesId: Long): List<TaskEntity> = taskDao.getTasksBySeriesIdSync(seriesId)
 }

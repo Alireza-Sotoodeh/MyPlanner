@@ -38,6 +38,7 @@ import com.example.core.database.entity.TodoEntity
 import com.example.core.database.entity.IdeaEntity
 import com.example.core.database.entity.IdeaStageEntity
 import com.example.core.database.entity.IdeaGroupEntity
+import com.example.ui.viewmodel.SeriesMode
 
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.layout.layout
@@ -69,6 +70,7 @@ fun TaskManagerDialog(
     ideaToEdit: IdeaEntity? = null,
     initialIdeaStages: List<IdeaStageEntity> = emptyList(),
     ideaGroups: List<IdeaGroupEntity> = emptyList(),
+    seriesMode: SeriesMode = SeriesMode.THIS,
     onDismiss: () -> Unit
 ) {
     val customLabels by viewModel.customLabels.collectAsState()
@@ -1257,7 +1259,8 @@ fun TaskManagerDialog(
                             eventTime = eventTime.takeIf { type == "EVENT" && enableReminder && it.isNotBlank() },
                             notifyNightBefore = if (type == "EVENT" && enableReminder) notifyNightBefore else false,
                             reminderMinutesBefore = if (type == "EVENT" && enableReminder) reminderMinutesBefore.toIntOrNull() else null,
-                            priorityLevel = priorityLevel
+                            priorityLevel = priorityLevel,
+                            seriesMode = seriesMode
                         )
                     } else if (todoToEdit != null) {
                         viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel, label = selectedLabel?.first ?: "", labelColor = selectedLabel?.second), subtasks.toList())
