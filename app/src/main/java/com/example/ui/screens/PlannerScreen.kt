@@ -3514,6 +3514,17 @@ fun getDaysOfWeek(dateStr: String, firstDayOfWeek: Int? = null): List<String> {
     return list
 }
 
+private fun backupDaysSummary(daysCsv: String): String {
+    val days = daysCsv.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+    if (days == (1..7).toSet()) return "Every day"
+    val weekdays = setOf(2, 3, 4, 5, 6)
+    val weekend = setOf(1, 7)
+    if (days == weekdays) return "Weekdays"
+    if (days == weekend) return "Weekend"
+    val labels = mapOf(1 to "Sun", 2 to "Mon", 3 to "Tue", 4 to "Wed", 5 to "Thu", 6 to "Fri", 7 to "Sat")
+    return days.sorted().joinToString(", ") { labels[it] ?: "" }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsDialog(
@@ -3525,6 +3536,7 @@ fun SettingsDialog(
     val lastBackupTimestamp by viewModel.lastBackupTimestamp.collectAsState()
     val backupEnabled by viewModel.backupEnabled.collectAsState()
     val backupTime by viewModel.backupTime.collectAsState()
+    val backupDaysOfWeek by viewModel.backupDaysOfWeek.collectAsState()
     val backupFailureNotify by viewModel.backupFailureNotify.collectAsState()
     val dndEnabled by viewModel.dndEnabled.collectAsState()
     val eventReminderVibrate by viewModel.eventReminderVibrate.collectAsState()
@@ -3534,6 +3546,7 @@ fun SettingsDialog(
 
     var enteredBackupEnabled by remember { mutableStateOf(backupEnabled) }
     var enteredBackupTime by remember { mutableStateOf(backupTime) }
+    var enteredBackupDaysOfWeek by remember { mutableStateOf(backupDaysOfWeek) }
     var enteredBackupFailureNotify by remember { mutableStateOf(backupFailureNotify) }
     var showBackupTimePicker by remember { mutableStateOf(false) }
     var enteredDndEnabled by remember { mutableStateOf(dndEnabled) }
@@ -3831,6 +3844,7 @@ fun SettingsDialog(
             viewModel.updateDndEnabled(enteredDndEnabled)
             viewModel.updateBackupEnabled(enteredBackupEnabled)
             viewModel.updateBackupTime(enteredBackupTime)
+            viewModel.updateBackupDaysOfWeek(enteredBackupDaysOfWeek)
             viewModel.updateBackupFailureNotify(enteredBackupFailureNotify)
             viewModel.updateEventReminderVibrate(enteredEventVibrate)
             viewModel.updateEventReminderSound(enteredEventSound)
@@ -4112,6 +4126,47 @@ fun SettingsDialog(
                             Text("Change", fontSize = 12.sp)
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Backup days", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        val daysList = listOf(
+                            Pair(Calendar.SUNDAY, "S"),
+                            Pair(Calendar.MONDAY, "M"),
+                            Pair(Calendar.TUESDAY, "T"),
+                            Pair(Calendar.WEDNESDAY, "W"),
+                            Pair(Calendar.THURSDAY, "T"),
+                            Pair(Calendar.FRIDAY, "F"),
+                            Pair(Calendar.SATURDAY, "S")
+                        )
+                        val currentDays = enteredBackupDaysOfWeek.split(",").filter { it.isNotBlank() }
+                        daysList.forEach { (dayVal, enLabel) ->
+                            val isSelected = currentDays.contains(dayVal.toString())
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(36.dp).clickable {
+                                    val mutableDays = currentDays.toMutableList()
+                                    if (isSelected) {
+                                        if (mutableDays.size > 1) mutableDays.remove(dayVal.toString())
+                                    } else {
+                                        mutableDays.add(dayVal.toString())
+                                    }
+                                    enteredBackupDaysOfWeek = mutableDays.joinToString(",")
+                                    dirty = true
+                                }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = enLabel, fontSize = 12.sp, color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        text = backupDaysSummary(enteredBackupDaysOfWeek),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -4813,6 +4868,7 @@ fun SettingsDialog(
                     onClick = {
                         viewModel.updateBackupEnabled(enteredBackupEnabled)
                         viewModel.updateBackupTime(enteredBackupTime)
+                        viewModel.updateBackupDaysOfWeek(enteredBackupDaysOfWeek)
                         viewModel.updateBackupFailureNotify(enteredBackupFailureNotify)
                         viewModel.updateDndEnabled(enteredDndEnabled)
                         viewModel.updateEventReminderVibrate(enteredEventVibrate)

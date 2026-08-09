@@ -26,13 +26,25 @@ object ReminderManager {
         val hour = timeStr.substringBefore(":").toIntOrNull() ?: 23
         val minute = timeStr.substringAfter(":").toIntOrNull() ?: 0
 
+        val allowedDays = prefs.getString("backup_days_of_week", "1,2,3,4,5,6,7")
+            ?.split(",")
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?.filter { it in 1..7 }
+            ?.toSet()
+            .takeIf { !it.isNullOrEmpty() }
+            ?: (1..7).toSet()
+
         val now = Calendar.getInstance()
         val scheduled = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            if (before(now)) add(Calendar.DAY_OF_YEAR, 1)
+            if (!after(now)) add(Calendar.DAY_OF_YEAR, 1)
+        }
+        for (i in 0..7) {
+            if (scheduled.get(Calendar.DAY_OF_WEEK) in allowedDays) break
+            scheduled.add(Calendar.DAY_OF_YEAR, 1)
         }
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

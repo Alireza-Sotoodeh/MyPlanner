@@ -3578,6 +3578,21 @@ private val mottoRepository: MottoRepository,
     private val _backupEnabled = MutableStateFlow(prefs.getBoolean("backup_enabled", true))
     val backupEnabled: StateFlow<Boolean> = _backupEnabled.asStateFlow()
 
+    private val _backupDaysOfWeek = MutableStateFlow(prefs.getString("backup_days_of_week", "1,2,3,4,5,6,7") ?: "1,2,3,4,5,6,7")
+    val backupDaysOfWeek: StateFlow<String> = _backupDaysOfWeek.asStateFlow()
+
+    fun updateBackupDaysOfWeek(days: String) {
+        val normalized = days.split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 1..7 }
+            .toSet()
+            .sorted()
+        val result = if (normalized.isEmpty()) "1,2,3,4,5,6,7" else normalized.joinToString(",")
+        prefs.edit().putString("backup_days_of_week", result).apply()
+        _backupDaysOfWeek.value = result
+        rescheduleAutoBackup(context)
+    }
+
     fun updateBackupTime(time: String) {
         val normalized = time.split(":").let { parts ->
             val h = parts.getOrNull(0)?.toIntOrNull() ?: 23
@@ -3616,9 +3631,14 @@ private val mottoRepository: MottoRepository,
         com.example.core.manager.ReminderManager.scheduleAutoBackup(context)
 
         // Catch up on missed scheduled runs (e.g. Doze deferral or force-stop while a run was due).
+        val todayAllowed = _backupDaysOfWeek.value
+            .split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .toSet()
+            .let { days -> days.isEmpty() || java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) in days }
         val lastSync = backupFileManager.getLastSyncTimestamp()
         val stale = lastSync <= 0L || System.currentTimeMillis() - lastSync > 26L * 60L * 60L * 1000L
-        if (stale && backupFileManager.getBackupRootDir() != null) {
+        if (stale && todayAllowed && backupFileManager.getBackupRootDir() != null) {
             val request = androidx.work.OneTimeWorkRequestBuilder<com.example.core.manager.BackupWorker>().build()
             androidx.work.WorkManager.getInstance(context).enqueue(request)
         }
