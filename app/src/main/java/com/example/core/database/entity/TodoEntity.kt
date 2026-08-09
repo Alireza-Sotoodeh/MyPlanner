@@ -23,6 +23,8 @@ data class TodoEntity(
     val title: String,
     val description: String = "",
     val priority: String = "Medium",
+    val label: String = "",
+    val labelColor: Long? = null,
     val linkedTaskId: Long? = null,
     val parentTodoId: Long? = null,
     val status: String = "PENDING",

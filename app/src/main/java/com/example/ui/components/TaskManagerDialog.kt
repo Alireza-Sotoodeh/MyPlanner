@@ -72,6 +72,7 @@ fun TaskManagerDialog(
     onDismiss: () -> Unit
 ) {
     val customLabels by viewModel.customLabels.collectAsState()
+    val todoCustomLabels by viewModel.todoCustomLabels.collectAsState()
 
     var title by remember { mutableStateOf(taskToEdit?.title ?: todoToEdit?.title ?: ideaToEdit?.title ?: "") }
     var titleError by remember { mutableStateOf(false) }
@@ -85,8 +86,14 @@ fun TaskManagerDialog(
         mutableStateOf<Pair<String, Long>?>(
             taskToEdit?.let { t -> 
                 if (t.label.isNotEmpty()) t.label to (t.labelColor ?: 0L) else null 
+            } ?: todoToEdit?.let { t ->
+                if (t.label.isNotEmpty()) t.label to (t.labelColor ?: 0L) else null
             }
         ) 
+    }
+    val activeLabels = if (type == "TODO") todoCustomLabels else customLabels
+    fun commitLabels(newLabels: List<Pair<String, Long>>) {
+        if (type == "TODO") viewModel.updateTodoCustomLabels(newLabels) else viewModel.updateCustomLabels(newLabels)
     }
 
     // Idea-specific state
@@ -223,7 +230,7 @@ fun TaskManagerDialog(
             confirmButton = {
                 TextButton(onClick = {
                     if (newLabelName.isNotBlank()) {
-                        viewModel.updateCustomLabels(customLabels + (newLabelName.trim() to selectedColor))
+                        commitLabels(activeLabels + (newLabelName.trim() to selectedColor))
                         selectedLabel = newLabelName.trim() to selectedColor
                     }
                     showNewLabelDialog = false
@@ -279,9 +286,9 @@ fun TaskManagerDialog(
             confirmButton = {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = {
-                        val newLabels = customLabels.toMutableList()
+                        val newLabels = activeLabels.toMutableList()
                         newLabels.remove(labelToEdit)
-                        viewModel.updateCustomLabels(newLabels)
+                        commitLabels(newLabels)
                         if (selectedLabel == labelToEdit) {
                             selectedLabel = null
                         }
@@ -292,12 +299,12 @@ fun TaskManagerDialog(
                         TextButton(onClick = { showEditLabelDialog = false }) { Text("CANCEL") }
                         TextButton(onClick = {
                             if (editLabelName.isNotBlank()) {
-                                val newLabels = customLabels.toMutableList()
+                                val newLabels = activeLabels.toMutableList()
                                 val index = newLabels.indexOf(labelToEdit)
                                 if (index != -1) {
                                     val newLabel = editLabelName.trim() to selectedColor
                                     newLabels[index] = newLabel
-                                    viewModel.updateCustomLabels(newLabels)
+                                    commitLabels(newLabels)
                                     if (selectedLabel == labelToEdit) {
                                         selectedLabel = newLabel
                                     }
@@ -1149,7 +1156,7 @@ fun TaskManagerDialog(
                 }
                 
                 HardwareAcceleratedVisibility(
-                    visible = type in listOf("TASK", "EVENT", "NOTE")
+                    visible = type in listOf("TASK", "EVENT", "NOTE", "TODO")
                 ) {
                 Column {
                     Text("Labels:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -1187,7 +1194,7 @@ fun TaskManagerDialog(
                                 }
                             }
                         }
-                        items(customLabels) { label ->
+                        items(activeLabels) { label ->
                             val isSelected = selectedLabel == label
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -1253,7 +1260,7 @@ fun TaskManagerDialog(
                             priorityLevel = priorityLevel
                         )
                     } else if (todoToEdit != null) {
-                        viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel), subtasks.toList())
+                        viewModel.updateTodoWithSubtodos(todoToEdit.copy(title = title.trim(), description = description.trim(), priority = priorityLevel, label = selectedLabel?.first ?: "", labelColor = selectedLabel?.second), subtasks.toList())
                     } else if (ideaToEdit != null) {
                         val mutableStages = stages.toMutableList()
                         val editIdx = editingStageIndex
@@ -1263,7 +1270,7 @@ fun TaskManagerDialog(
                         viewModel.updateIdea(ideaToEdit.copy(groupId = selectedGroupId, title = title.trim(), description = description.trim(), priority = priorityLevel), mutableStages)
                     } else {
                         when (type) {
-                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList())
+                            "TODO" -> viewModel.addTodo(title.trim(), description.trim(), priorityLevel, subtasks.toList(), label = selectedLabel?.first ?: "", labelColor = selectedLabel?.second)
                             "IDEA" -> {
                                 val mutableStages = stages.toMutableList()
                                 val editIdx = editingStageIndex

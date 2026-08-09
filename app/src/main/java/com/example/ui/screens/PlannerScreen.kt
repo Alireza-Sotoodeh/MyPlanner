@@ -5145,6 +5145,7 @@ private fun TodoTab(viewModel: MainViewModel) {
     val allTasks by viewModel.allTasks.collectAsState()
 
     var filter by remember { mutableStateOf(TodoTabFilter.UNLINKED) }
+    var labelFilter by remember { mutableStateOf<String?>(null) }
     var editingTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<TodoEntity?>(null) }
     var todoForLinking by remember { mutableStateOf<TodoEntity?>(null) }
@@ -5161,6 +5162,17 @@ private fun TodoTab(viewModel: MainViewModel) {
     val densityD = androidx.compose.ui.platform.LocalDensity.current
 
     val allRootTodos = allTodos.filter { it.parentTodoId == null }
+    val todoLabelInfos = allRootTodos
+        .filter { it.label.isNotBlank() }
+        .groupBy { it.label }
+        .map { (name, items) ->
+            LabelInfo(
+                name = name,
+                color = items.firstOrNull { it.labelColor != null }?.labelColor,
+                count = items.size
+            )
+        }
+        .sortedBy { it.name }
     var expandedSubTodosMap by remember { mutableStateOf(mapOf<Long, Boolean>()) }
 
     var showFilterChips by remember { mutableStateOf(true) }
@@ -5180,7 +5192,10 @@ private fun TodoTab(viewModel: MainViewModel) {
         TodoTabFilter.DONE -> allRootTodos.filter { it.status == "DONE" }
         TodoTabFilter.LINKED -> allRootTodos.filter { it.linkedTaskId != null }
         TodoTabFilter.UNLINKED -> allRootTodos.filter { it.linkedTaskId == null }
-    }).let { list -> draggedTodos ?: list }
+    }).let { list ->
+        val filtered = if (labelFilter == null) list else list.filter { it.label == labelFilter }
+        draggedTodos ?: filtered
+    }
 
     Column(
         modifier = Modifier
@@ -5193,18 +5208,44 @@ private fun TodoTab(viewModel: MainViewModel) {
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TodoTabFilter.entries.forEach { f ->
-                    FilterChip(
-                        selected = filter == f,
-                        onClick = { filter = f },
-                        label = { Text(f.name, fontSize = 10.sp) },
-                        modifier = Modifier.height(26.dp)
-                    )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TodoTabFilter.entries.forEach { f ->
+                        FilterChip(
+                            selected = filter == f,
+                            onClick = { filter = f },
+                            label = { Text(f.name, fontSize = 10.sp) },
+                            modifier = Modifier.height(26.dp)
+                        )
+                    }
+                }
+                if (todoLabelInfos.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = labelFilter == null,
+                                onClick = { labelFilter = null },
+                                label = { Text("All labels", fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                modifier = Modifier.height(26.dp)
+                            )
+                        }
+                        items(todoLabelInfos) { info ->
+                            FilterChip(
+                                selected = labelFilter == info.name,
+                                onClick = { labelFilter = if (labelFilter == info.name) null else info.name },
+                                label = { Text(info.name, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                modifier = Modifier.height(26.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -5720,6 +5761,21 @@ private fun TodoItem(
                             )
                     ) {
                         PriorityBadge(todo.priority)
+                        if (todo.label.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (todo.labelColor != null) Color(todo.labelColor).copy(alpha = 0.2f) else MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Text(
+                                    text = todo.label.uppercase(),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (todo.labelColor != null) Color(todo.labelColor) else MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         if (subTodos.isNotEmpty()) {
                                 Spacer(Modifier.width(6.dp))
                                 Surface(

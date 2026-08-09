@@ -410,6 +410,9 @@ private val mottoRepository: MottoRepository,
     private val _customLabels = MutableStateFlow(loadCustomLabels())
     val customLabels: StateFlow<List<Pair<String, Long>>> = _customLabels.asStateFlow()
 
+    private val _todoCustomLabels = MutableStateFlow(loadTodoCustomLabels())
+    val todoCustomLabels: StateFlow<List<Pair<String, Long>>> = _todoCustomLabels.asStateFlow()
+
     private val _autoSortEnabled = MutableStateFlow(prefs.getBoolean("auto_sort_enabled", false))
     val autoSortEnabled: StateFlow<Boolean> = _autoSortEnabled.asStateFlow()
 
@@ -456,6 +459,23 @@ private val mottoRepository: MottoRepository,
         val serialized = labels.joinToString(";") { "${it.first},${it.second}" }
         prefs.edit().putString("custom_labels", serialized).apply()
         _customLabels.value = labels
+    }
+
+    private fun loadTodoCustomLabels(): List<Pair<String, Long>> {
+        val serialized = prefs.getString("custom_labels_todo", "") ?: ""
+        if (serialized.isBlank()) return emptyList()
+        return serialized.split(";").mapNotNull {
+            val parts = it.split(",")
+            if (parts.size == 2) {
+                parts[0] to (parts[1].toLongOrNull() ?: 0L)
+            } else null
+        }
+    }
+
+    fun updateTodoCustomLabels(labels: List<Pair<String, Long>>) {
+        val serialized = labels.joinToString(";") { "${it.first},${it.second}" }
+        prefs.edit().putString("custom_labels_todo", serialized).apply()
+        _todoCustomLabels.value = labels
     }
 
     fun updateDefaultBreakMinutes(minutes: Int) {
@@ -3918,13 +3938,13 @@ private val mottoRepository: MottoRepository,
     }
 
     // === To-Do CRUD ===
-    fun addTodo(title: String, description: String = "", priority: String = "Medium", subtasks: List<Pair<String, String>> = emptyList()) {
+    fun addTodo(title: String, description: String = "", priority: String = "Medium", subtasks: List<Pair<String, String>> = emptyList(), label: String = "", labelColor: Long? = null) {
         if (title.isBlank()) return
         viewModelScope.launch {
             try {
                 val allTodos = todoRepository.getAllTodosSync()
                 val nextOrder = (allTodos.maxOfOrNull { it.sortOrder } ?: -1) + 1
-                val todoId = todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority, sortOrder = nextOrder))
+                val todoId = todoRepository.insertTodo(TodoEntity(title = title.trim(), description = description.trim(), priority = priority, sortOrder = nextOrder, label = label, labelColor = labelColor))
                 val filtered = subtasks.filter { it.first.isNotBlank() }
                 filtered.forEachIndexed { index, (subTitle, importance) ->
                     todoRepository.insertTodo(
