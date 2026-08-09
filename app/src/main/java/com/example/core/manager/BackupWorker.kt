@@ -127,6 +127,9 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             backupFileManager.writeEntityFile(permanentDir, "LearnSectionEntity.json", backupFileManager.toJson(learnSectionsList, LearnSectionEntity::class.java))
             backupFileManager.writeEntityFile(permanentDir, "TimerTemplateEntity.json", backupFileManager.toJson(timerTemplatesList, TimerTemplateEntity::class.java))
 
+            val prefs = applicationContext.getSharedPreferences("bulletcoach_prefs", android.content.Context.MODE_PRIVATE)
+            backupFileManager.writeSettingsFile(permanentDir, SettingsBackupHelper.capture(prefs))
+
             // Get or create month directory
             val monthDir = backupFileManager.getOrCreateDir(rootUri, currentMonth)
                 ?: throw IllegalStateException("Failed to create month directory: $currentMonth")
@@ -153,7 +156,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 @Suppress("DEPRECATION")
                 backupFileManager.writeBackupInfo(rootUri, BackupFileManager.BackupInfo(
                     appVersion = pkgInfo.longVersionCode.toInt(),
-                    schemaVersion = 31,
+                    schemaVersion = 32,
                     createdAt = now,
                     entityCount = totalEntities
                 ))

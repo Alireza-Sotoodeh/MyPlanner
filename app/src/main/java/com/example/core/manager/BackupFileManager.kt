@@ -443,6 +443,33 @@ class BackupFileManager(private val context: Context) {
         moshi.adapter(BackupInfo::class.java).indent("  ")
     }
 
+    private val settingsAdapter by lazy {
+        moshi.adapter(SettingsBackup::class.java).indent("  ")
+    }
+
+    fun writeSettingsFile(permanentDir: Uri, settings: SettingsBackup) {
+        writeEntityFile(permanentDir, "settings.json", settingsAdapter.toJson(settings))
+    }
+
+    fun readSettingsFile(root: Uri): SettingsBackup? {
+        return try {
+            val permanentDir = findChildUri(root, "_permanent") ?: return null
+            val json = if (useDirectFileAccess && (root.scheme == "file" || DocumentsContract.isTreeUri(root))) {
+                val file = uriToFile(permanentDir)?.let { File(it, "settings.json") }
+                file?.readText(Charsets.UTF_8) ?: return null
+            } else {
+                val fileUri = findChildUri(permanentDir, "settings.json") ?: return null
+                contentResolver.openInputStream(fileUri)?.use {
+                    it.reader(StandardCharsets.UTF_8).readText()
+                } ?: return null
+            }
+            settingsAdapter.fromJson(json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read settings.json", e)
+            null
+        }
+    }
+
     fun writeBackupInfo(root: Uri, info: BackupInfo) {
         val json = backupInfoAdapter.toJson(info)
         writeEntityFile(root, "backup_info.json", json)

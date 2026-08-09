@@ -44,6 +44,7 @@ import com.example.core.database.entity.TimerSessionEntity
 import com.example.core.database.entity.TimerTemplateEntity
 import com.example.core.database.entity.TodoEntity
 import com.example.core.manager.BackupFileManager
+import com.example.core.manager.SettingsBackupHelper
 import com.example.core.repository.DayReviewRepository
 import com.example.core.repository.DiaryRepository
 import com.example.core.repository.LearnRepository
@@ -684,6 +685,7 @@ private val mottoRepository: MottoRepository,
                 backupFileManager.writeEntityFile(permanentDir, "LearnItemEntity.json", backupFileManager.toJson(learnItemsList, LearnItemEntity::class.java))
                 backupFileManager.writeEntityFile(permanentDir, "LearnSectionEntity.json", backupFileManager.toJson(learnSectionsList, LearnSectionEntity::class.java))
                 backupFileManager.writeEntityFile(permanentDir, "TimerTemplateEntity.json", backupFileManager.toJson(timerTemplatesList, TimerTemplateEntity::class.java))
+                backupFileManager.writeSettingsFile(permanentDir, SettingsBackupHelper.capture(prefs))
 
                 // Get or create month directory
                 val monthDir = backupFileManager.getOrCreateDir(rootDir, currentMonth)
@@ -711,7 +713,7 @@ private val mottoRepository: MottoRepository,
                         appVersion = context.packageManager.getPackageInfo(context.packageName, 0).let {
                             @Suppress("DEPRECATION") it.longVersionCode.toInt()
                         },
-                        schemaVersion = 31,
+                        schemaVersion = 32,
                         createdAt = lastSync,
                         entityCount = totalEntities
                     ))
@@ -831,11 +833,27 @@ private val mottoRepository: MottoRepository,
                             backupFileManager.writeEntityFile(preRestoreDir, "LearnSectionEntity.json", backupFileManager.toJson(curLearnSections, LearnSectionEntity::class.java))
                             backupFileManager.writeEntityFile(preRestoreDir, "TimerSessionEntity.json", backupFileManager.toJson(curTimerSessions, TimerSessionEntity::class.java))
                             backupFileManager.writeEntityFile(preRestoreDir, "TimerTemplateEntity.json", backupFileManager.toJson(curTimerTemplates, TimerTemplateEntity::class.java))
+                            backupFileManager.writeSettingsFile(preRestoreDir, SettingsBackupHelper.capture(prefs))
                             Log.d(TAG, "Pre-restore snapshot saved to _pre_restore/")
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "Pre-restore snapshot failed (continuing with restore)", e)
                     }
+                }
+
+                // Restore settings + labels (tolerant of backups without settings.json)
+                val settingsRestored = try {
+                    val settingsBackup = backupFileManager.readSettingsFile(rootDir)
+                    if (settingsBackup != null) {
+                        SettingsBackupHelper.apply(prefs, settingsBackup)
+                        refreshSettingsState()
+                        true
+                    } else {
+                        false
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Settings restore failed (continuing with data restore)", e)
+                    false
                 }
 
                 val backupObj = BulletCoachBackup(
@@ -950,7 +968,12 @@ private val mottoRepository: MottoRepository,
                 }
                 com.example.core.manager.ReminderManager.rescheduleAllAlarms(context)
 
-                onResult(true, "Successfully restored from $month — ${tasks.size} tasks, ${habits.size} habits, ${todos.size} todos")
+                if (settingsRestored) {
+                    rescheduleDailyRemindersAfterRestore()
+                    rescheduleAutoBackup(context)
+                }
+
+                onResult(true, "Successfully restored from $month — ${tasks.size} tasks, ${habits.size} habits, ${todos.size} todos${if (settingsRestored) ", settings & labels" else ""}")
             } catch (e: Exception) {
                 Log.e(TAG, "Restore failed", e)
                 onResult(false, "Restore failed: ${e.localizedMessage}")
@@ -958,6 +981,58 @@ private val mottoRepository: MottoRepository,
                 _isSyncing.value = false
             }
         }
+    }
+
+    private fun refreshSettingsState() {
+        _customLabels.value = loadCustomLabels()
+        _todoCustomLabels.value = loadTodoCustomLabels()
+        _autoSortEnabled.value = prefs.getBoolean("auto_sort_enabled", false)
+        _mottoEnabled.value = prefs.getBoolean("motto_enabled", true)
+        _expandAllItems.value = prefs.getBoolean("daily_expand_all_items", true)
+        _expandAllSubtasks.value = prefs.getBoolean("daily_expand_all_subtasks", true)
+        _expandAllDescriptions.value = prefs.getBoolean("todo_expand_all_descriptions", false)
+        _expandAllIdeas.value = prefs.getBoolean("ideas_expand_all_ideas", true)
+        _expandAllLearnItems.value = prefs.getBoolean("learn_expand_all_items", true)
+        _autoRescheduleUnfinished.value = prefs.getBoolean("auto_reschedule_unfinished", false)
+        _defaultBreakMinutes.value = prefs.getInt("default_break_minutes", 5)
+        _usePersianCalendar.value = prefs.getBoolean("use_persian_calendar", false)
+        _dndEnabled.value = prefs.getBoolean("pomodoro_dnd_enabled", false)
+        _eventReminderVibrate.value = prefs.getBoolean("event_reminder_vibrate", true)
+        _eventReminderSound.value = prefs.getBoolean("event_reminder_sound", true)
+        _eventReminderEnabled.value = prefs.getBoolean("event_reminder_enabled", true)
+        _pomodoroRingtoneUri.value = prefs.getString("pomodoro_ringtone_uri", "") ?: ""
+        _pomodoroRingtoneEnabled.value = prefs.getBoolean("pomodoro_ringtone_enabled", true)
+        _pomodoroVibrateEnabled.value = prefs.getBoolean("pomodoro_vibrate_enabled", true)
+        _pomodoroVibratePattern.value = prefs.getString("pomodoro_vibrate_pattern", "heartbeat") ?: "heartbeat"
+        _reviewReminderTime.value = prefs.getString("review_reminder_time", "21:00") ?: "21:00"
+        _reviewReminderEnabled.value = prefs.getBoolean("review_reminder_enabled", false)
+        _sleepReminderTime.value = prefs.getString("sleep_reminder_time", "09:00") ?: "09:00"
+        _sleepReminderEnabled.value = prefs.getBoolean("sleep_reminder_enabled", false)
+        _diaryReminderTime.value = prefs.getString("diary_reminder_time", "20:00") ?: "20:00"
+        _diaryReminderEnabled.value = prefs.getBoolean("diary_reminder_enabled", false)
+        _plannerReminderTime.value = prefs.getString("planner_reminder_time", "07:00") ?: "07:00"
+        _plannerReminderEnabled.value = prefs.getBoolean("planner_reminder_enabled", false)
+        _habitsReminderTime.value = prefs.getString("habits_reminder_time", "21:00") ?: "21:00"
+        _habitsReminderEnabled.value = prefs.getBoolean("habits_reminder_enabled", false)
+        _tomorrowPlannerReminderTime.value = prefs.getString("tomorrow_planner_reminder_time", "20:00") ?: "20:00"
+        _tomorrowPlannerReminderEnabled.value = prefs.getBoolean("tomorrow_planner_reminder_enabled", false)
+        _learnReviewReminderTime.value = prefs.getString("learn_review_reminder_time", "19:00") ?: "19:00"
+        _learnReviewReminderEnabled.value = prefs.getBoolean("learn_review_reminder_enabled", false)
+        _backupTime.value = prefs.getString("backup_time", "23:00") ?: "23:00"
+        _backupFailureNotify.value = prefs.getBoolean("backup_failure_notify", true)
+        _backupEnabled.value = prefs.getBoolean("backup_enabled", true)
+        _backupDaysOfWeek.value = prefs.getString("backup_days_of_week", "1,2,3,4,5,6,7") ?: "1,2,3,4,5,6,7"
+        _backupMaxMonths.value = prefs.getInt("backup_max_months", 5)
+    }
+
+    private fun rescheduleDailyRemindersAfterRestore() {
+        if (_reviewReminderEnabled.value) scheduleDayReviewAlarm(context) else cancelDayReviewAlarm(context)
+        if (_sleepReminderEnabled.value) scheduleSleepReminderAlarm(context) else cancelSleepReminderAlarm(context)
+        if (_diaryReminderEnabled.value) scheduleDiaryReminderAlarm(context) else cancelDiaryReminderAlarm(context)
+        if (_plannerReminderEnabled.value) schedulePlannerReminderAlarm(context) else cancelPlannerReminderAlarm(context)
+        if (_habitsReminderEnabled.value) scheduleHabitsReminderAlarm(context) else cancelHabitsReminderAlarm(context)
+        if (_tomorrowPlannerReminderEnabled.value) scheduleTomorrowPlannerReminderAlarm(context) else cancelTomorrowPlannerReminderAlarm(context)
+        if (_learnReviewReminderEnabled.value) scheduleLearnReviewReminderAlarm(context) else cancelLearnReviewReminderAlarm(context)
     }
 
     // Date Navigation State
