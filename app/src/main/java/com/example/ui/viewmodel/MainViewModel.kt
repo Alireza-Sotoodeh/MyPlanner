@@ -3267,7 +3267,7 @@ private val mottoRepository: MottoRepository,
 
     fun discardPomodoro(context: Context) {
         val intent = Intent(context, TimerForegroundService::class.java).apply {
-            action = TimerForegroundService.ACTION_STOP
+            action = TimerForegroundService.ACTION_DISCARD
         }
         context.startService(intent)
         resetPomodoroState(context)
@@ -3380,17 +3380,6 @@ private val mottoRepository: MottoRepository,
 
         if (currentPhase == "FOCUS") {
             viewModelScope.launch {
-                val relatedTask = if (task != null) taskRepository.getTaskById(task.id) else null
-                timerRepository.insertSession(
-                    TimerSessionEntity(
-                        type = "POMODORO",
-                        taskId = task?.id,
-                        label = relatedTask?.label ?: task?.label ?: "",
-                        durationSeconds = _pomodoroFocusMinutes.value * 60,
-                        date = getTodayDateString()
-                    )
-                )
-
                 if (task != null) {
                     if (_pomodoroMarkCompleteOnFinish.value) {
                         val subtasks = allTasks.value.filter { it.parentTaskId == task.id }
@@ -3608,7 +3597,7 @@ private val mottoRepository: MottoRepository,
 
     fun discardChronometer() {
         val intent = Intent(context, TimerForegroundService::class.java).apply {
-            action = TimerForegroundService.ACTION_STOP
+            action = TimerForegroundService.ACTION_DISCARD
         }
         context.startService(intent)
         _chronoRunning.value = false

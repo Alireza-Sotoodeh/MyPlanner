@@ -235,7 +235,7 @@ class TimerForegroundService : Service() {
 
         when (current.mode) {
             TimerMode.POMODORO -> {
-                if (current.secondsLeft < current.focusMinutes * 60) {
+                if (!current.completed && current.secondsLeft < current.focusMinutes * 60) {
                     val secondsElapsed = (current.focusMinutes * 60) - current.secondsLeft
                     val minutesElapsed = (secondsElapsed / 60).coerceAtLeast(1)
                     serviceScope.launch {
@@ -249,7 +249,7 @@ class TimerForegroundService : Service() {
                 }
             }
             TimerMode.CHRONOMETER -> {
-                if (current.elapsedSeconds > 0) {
+                if (!isAppInForeground && current.elapsedSeconds > 0) {
                     serviceScope.launch {
                         saveTimerSession(
                             type = "CHRONOMETER",
@@ -319,10 +319,7 @@ class TimerForegroundService : Service() {
         clearTimerSnapshot()
 
         val isFg = isAppInForeground
-
-        if (!isFg) {
-            saveTimerSessionFromCompletion(current)
-        }
+        saveTimerSessionFromCompletion(current)
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         _state.update { it.copy(running = false, completed = true) }
