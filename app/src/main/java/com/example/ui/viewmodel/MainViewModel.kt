@@ -2720,51 +2720,115 @@ private val mottoRepository: MottoRepository,
             com.example.core.manager.ReminderManager.cancelReminders(context, row)
         }
 
-        // Basic subtask sync: delete existing subtasks and re-insert
-        val existingSubtasks = allTasks.value.filter { it.parentTaskId == row.id }
-        existingSubtasks.forEach { taskRepository.deleteTask(it) }
+        // Subtask sync preserving done status and per-subtask state of matching items
+        val existingSubtasks = taskRepository.getSubtasks(row.id)
+        syncTaskSubtasks(
+            parentId = row.id,
+            existing = existingSubtasks,
+            newSubtasks = subtasks,
+            date = date,
+            label = label,
+            labelColor = labelColor,
+            seriesId = row.seriesId
+        )
 
-        subtasks.forEach { (subTitle, importance) ->
-            if (subTitle.isNotBlank()) {
-                val subTask = TaskEntity(
-                    title = subTitle,
-                    description = "",
-                    date = date,
-                    type = "TASK",
-                    durationMinutes = 0,
-                    priority = 0,
-                    label = label,
-                    labelColor = labelColor,
-                    parentTaskId = row.id,
-                    subtaskImportance = importance,
-                    seriesId = row.seriesId
-                )
-                taskRepository.insertTask(subTask)
-            }
-        }
-
-        // Sync linked todo's sub-todos with importance
+        // Sync linked todo's sub-todos with importance, preserving done status
         updatedRow.linkedTodoId?.let { todoId ->
             todoRepository.getTodoById(todoId)?.let { linkedTodo ->
                 val existingSubTodos = todoRepository.getSubTodosSync(todoId)
-                existingSubTodos.forEach { todoRepository.deleteTodo(it) }
-                subtasks.forEach { (subTitle, importance) ->
-                    if (subTitle.isNotBlank()) {
-                        todoRepository.insertTodo(
-                            TodoEntity(
-                                title = subTitle.trim(),
-                                description = "",
-                                priority = linkedTodo.priority,
-                                parentTodoId = todoId,
-                                status = "PENDING",
-                                subtaskImportance = importance,
-                                sortOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
-                            )
+                syncTodoSubtodos(
+                    parentId = todoId,
+                    existing = existingSubTodos,
+                    newSubtasks = subtasks,
+                    priority = linkedTodo.priority
+                )
+            }
+        }
+    }
+
+    private suspend fun syncTaskSubtasks(
+        parentId: Long,
+        existing: List<TaskEntity>,
+        newSubtasks: List<Pair<String, String>>,
+        date: String,
+        label: String,
+        labelColor: Long?,
+        seriesId: Long?
+    ) {
+        val existingPool = existing.toMutableList()
+        newSubtasks.forEach { (subTitle, importance) ->
+            if (subTitle.isNotBlank()) {
+                val match = existingPool.firstOrNull { it.title == subTitle }
+                if (match != null) {
+                    existingPool.remove(match)
+                    taskRepository.updateTask(
+                        match.copy(
+                            title = subTitle,
+                            date = date,
+                            label = label,
+                            labelColor = labelColor,
+                            subtaskImportance = importance,
+                            seriesId = seriesId
                         )
-                    }
+                    )
+                } else {
+                    taskRepository.insertTask(
+                        TaskEntity(
+                            title = subTitle,
+                            description = "",
+                            date = date,
+                            type = "TASK",
+                            durationMinutes = 0,
+                            priority = 0,
+                            label = label,
+                            labelColor = labelColor,
+                            parentTaskId = parentId,
+                            subtaskImportance = importance,
+                            seriesId = seriesId
+                        )
+                    )
                 }
             }
         }
+        existingPool.forEach { taskRepository.deleteTask(it) }
+    }
+
+    private suspend fun syncTodoSubtodos(
+        parentId: Long,
+        existing: List<TodoEntity>,
+        newSubtasks: List<Pair<String, String>>,
+        priority: String
+    ) {
+        val existingPool = existing.toMutableList()
+        val baseOrder = (todoRepository.getAllTodosSync().maxOfOrNull { it.sortOrder } ?: -1) + 1
+        val cleaned = newSubtasks.filter { it.first.isNotBlank() }
+        cleaned.forEachIndexed { index, (subTitle, importance) ->
+            val match = existingPool.firstOrNull { it.title == subTitle }
+            if (match != null) {
+                existingPool.remove(match)
+                todoRepository.updateTodo(
+                    match.copy(
+                        title = subTitle.trim(),
+                        priority = priority,
+                        subtaskImportance = importance,
+                        sortOrder = baseOrder + index
+                    )
+                )
+            } else {
+                todoRepository.insertTodo(
+                    TodoEntity(
+                        title = subTitle.trim(),
+                        description = "",
+                        priority = priority,
+                        parentTodoId = parentId,
+                        status = "PENDING",
+                        subtaskImportance = importance,
+                        sortOrder = baseOrder + index
+                    )
+                )
+            }
+        }
+        existingPool.forEach { todoRepository.deleteTodo(it) }
     }
 
     private suspend fun deleteSeriesRows(rows: List<TaskEntity>) {
@@ -4392,44 +4456,25 @@ private val mottoRepository: MottoRepository,
                 val allTodos = todoRepository.getAllTodosSync()
                 todoRepository.updateTodo(todo)
                 val existingSubTodos = todoRepository.getSubTodosSync(todo.id)
-                existingSubTodos.forEach { todoRepository.deleteTodo(it) }
-                val allTodoEntities = todoRepository.getAllTodosSync()
-                val baseOrder = (allTodoEntities.maxOfOrNull { it.sortOrder } ?: -1) + 1
-                val filtered = subtasks.filter { it.first.isNotBlank() }
-                filtered.forEachIndexed { index, (subTitle, importance) ->
-                    todoRepository.insertTodo(
-                        TodoEntity(
-                            title = subTitle.trim(),
-                            description = "",
-                            priority = todo.priority,
-                            parentTodoId = todo.id,
-                            status = "PENDING",
-                            subtaskImportance = importance,
-                            sortOrder = baseOrder + index
-                        )
-                    )
-                }
+                syncTodoSubtodos(
+                    parentId = todo.id,
+                    existing = existingSubTodos,
+                    newSubtasks = subtasks,
+                    priority = todo.priority
+                )
                 // Sync to linked task's subtasks
                 todo.linkedTaskId?.let { taskId ->
                     taskRepository.getTaskById(taskId)?.let { linkedTask ->
                         val existingSubtasks = taskRepository.getSubtasks(taskId)
-                        existingSubtasks.forEach { taskRepository.deleteTask(it) }
-                        subtasks.filter { it.first.isNotBlank() }.forEach { (subTitle, importance) ->
-                            taskRepository.insertTask(
-                                TaskEntity(
-                                    title = subTitle.trim(),
-                                    description = "",
-                                    date = linkedTask.date,
-                                    type = "TASK",
-                                    durationMinutes = 0,
-                                    priority = 0,
-                                    label = linkedTask.label,
-                                    labelColor = linkedTask.labelColor,
-                                    parentTaskId = taskId,
-                                    subtaskImportance = importance
-                                )
-                            )
-                        }
+                        syncTaskSubtasks(
+                            parentId = taskId,
+                            existing = existingSubtasks,
+                            newSubtasks = subtasks,
+                            date = linkedTask.date,
+                            label = linkedTask.label,
+                            labelColor = linkedTask.labelColor,
+                            seriesId = linkedTask.seriesId
+                        )
                     }
                 }
             } catch (e: Exception) {
