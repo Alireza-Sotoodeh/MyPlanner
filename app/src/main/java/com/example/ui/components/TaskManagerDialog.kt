@@ -155,6 +155,7 @@ fun TaskManagerDialog(
         val targetDateStr = if (datePickerTarget == "START") selectedDate else (recurrenceEndDate ?: selectedDate)
         CalendarDatePickerDialog(
             initialSelectedDate = targetDateStr,
+            initialUsePersian = viewModel.usePersianCalendar.value,
             onDismiss = { datePickerTarget = "NONE" },
             onDateSelected = { gregorian ->
                 if (datePickerTarget == "START") selectedDate = gregorian else recurrenceEndDate = gregorian
