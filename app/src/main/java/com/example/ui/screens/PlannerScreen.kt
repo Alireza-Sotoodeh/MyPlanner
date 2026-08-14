@@ -1054,6 +1054,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                     isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                     onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
                                     onMigrate = { targetDate -> viewModel.migrateTask(task, targetDate) },
+                                    onReschedule = { targetDate -> viewModel.migrateTask(task, targetDate, postpone = false) },
                                     onDelete = {
                                         if (isRecurringSeries(task)) {
                                             recurringTaskAction = RecurringTaskAction(task, taskSubtasks, RecurringAction.DELETE)
@@ -1224,6 +1225,7 @@ fun DailyPlannerView(viewModel: MainViewModel, filterLabels: Set<String> = empty
                                             isSubtasksExpanded = expandedSubtasksMap[task.id] ?: expandAllSubtasks,
                                             onCheckToggle = { viewModel.toggleTaskCompletion(task, taskSubtasks) },
                                             onMigrate = { targetDate -> viewModel.migrateTask(task, targetDate) },
+                                            onReschedule = { targetDate -> viewModel.migrateTask(task, targetDate, postpone = false) },
                                             onDelete = {
                                                 if (isRecurringSeries(task)) {
                                                     recurringTaskAction = RecurringTaskAction(task, taskSubtasks, RecurringAction.DELETE)
@@ -1376,6 +1378,7 @@ fun BulletTaskItem(
     isSubtasksExpanded: Boolean = true,
     onCheckToggle: () -> Unit,
     onMigrate: (String) -> Unit,
+    onReschedule: (String) -> Unit = onMigrate,
     onDelete: () -> Unit,
     onStartPomodoro: () -> Unit,
     onTaskClick: () -> Unit,
@@ -2283,7 +2286,7 @@ fun BulletTaskItem(
             minDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
             onDismiss = { showRescheduleDialog = false },
             onDateSelected = { date ->
-                onMigrate(date)
+                onReschedule(date)
                 showRescheduleDialog = false
             }
         )
