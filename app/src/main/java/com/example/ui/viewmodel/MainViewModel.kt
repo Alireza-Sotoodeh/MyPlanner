@@ -3056,7 +3056,7 @@ private val mottoRepository: MottoRepository,
                         && !it.isDeleted
                         && it.parentTaskId == null }
             if (tasks.isNotEmpty()) {
-                tasks.forEach { migrateTask(it, toDate, postpone = false) }
+                tasks.forEach { migrateTask(it, toDate) }
                 _autoRescheduleMessage.value = "${tasks.size} tasks moved to $toDate"
             }
         }
