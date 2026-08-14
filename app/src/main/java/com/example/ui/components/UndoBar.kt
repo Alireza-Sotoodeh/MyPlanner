@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.offset
 import kotlin.math.ceil
 
 @Composable
@@ -92,8 +94,10 @@ fun UndoBar(
                 Text(
                     text = "$displaySeconds",
                     fontSize = 7.sp,
+                    lineHeight = 7.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.offset(y = (-0.5).dp)
                 )
             }
             Spacer(Modifier.width(6.dp))
@@ -108,7 +112,8 @@ fun UndoBar(
             Spacer(Modifier.width(2.dp))
             TextButton(
                 onClick = onRestore,
-                modifier = Modifier.height(24.dp)
+                modifier = Modifier.height(24.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
             ) {
                 Text(
                     "Restore",
