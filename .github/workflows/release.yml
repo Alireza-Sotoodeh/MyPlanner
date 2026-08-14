@@ -42,7 +42,11 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-release-key.jks
 
       - name: Build release APK
-        run: ./gradlew assembleRelease
+        run: |
+          echo "=== testing dl.google.com connectivity ==="
+          curl -sS -o /tmp/test.pom -w "HTTP %{http_code}\n" https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.1.1/gradle-9.1.1.pom || echo "curl failed"
+          head -c 300 /tmp/test.pom 2>/dev/null; echo
+          ./gradlew assembleRelease
         env:
           KEYSTORE_PATH: my-release-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
